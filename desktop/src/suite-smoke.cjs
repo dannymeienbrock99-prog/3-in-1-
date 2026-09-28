@@ -22,4 +22,5 @@ exports.run=async(window,diagnostics)=>{
  await window.webContents.insertCSS('.view{animation:none!important}');
  for(const view of ['jarvis','sensors','fans']){await window.webContents.executeJavaScript(`document.querySelector('[data-view="${view}"]').click()`);window.webContents.invalidate();await window.webContents.capturePage();await pause(300);fs.writeFileSync(path.join(dir,view+'.png'),(await window.webContents.capturePage()).toPNG());}
  fs.writeFileSync(path.join(dir,'result.json'),JSON.stringify({checks,answer,diagnostics,sensors:runtime.fan.snapshot.sensors},null,2));await runtime.close();
+ if(diagnostics.some(d=>d.includes('Uncaught')))throw Error('Uncaught renderer error: '+diagnostics.filter(d=>d.includes('Uncaught')).join('; '));
 };

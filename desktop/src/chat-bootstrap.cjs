@@ -198,7 +198,7 @@ app.whenReady().then(async () => {
     broadcast("chat:cleared", platform);
   });
 
-  const main = BrowserWindow.getAllWindows().find((win) => win.getTitle() === "Batto OBS Tool") || BrowserWindow.getAllWindows()[0] || null;
+  const main = BrowserWindow.getAllWindows().find((win) => win.getTitle() === "Batto 3-in-1") || BrowserWindow.getAllWindows()[0] || null;
   overlaySettings = { ...overlaySettings, ...(await readJson(overlaySettingsFile(), {})) };
   windows = new ChatWindowManager({ mainWindow: main, userDataFile: path.join(app.getPath("userData"), "multi-chat-window.json"), broadcast: (state) => broadcast("chat:window", state) });
   await windows.loadSettings();
@@ -216,7 +216,7 @@ app.whenReady().then(async () => {
   }
 
   const wireMain = () => {
-    const found = BrowserWindow.getAllWindows().find((win) => win.getTitle() === "Batto OBS Tool");
+    const found = BrowserWindow.getAllWindows().find((win) => win.getTitle() === "Batto 3-in-1");
     if (!found) return false;
     windows.mainWindow = found;
     if (!found.isDestroyed()) {

@@ -123,7 +123,7 @@ async function stateSnapshot() {
 
 function createMainWindow({ show = true, diagnostics = null } = {}) {
   mainWindow = new BrowserWindow({
-    title: "Batto OBS Tool",
+    title: "Batto 3-in-1",
     width: 1500,
     height: 940,
     minWidth: 1040,

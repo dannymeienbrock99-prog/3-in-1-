@@ -1,0 +1,12 @@
+{
+  "name": "@batto-obs-tool/encoder-monitoring-overlay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Transparentes, frei konfigurierbares OBS-Encoder- und Hardware-Monitoring-Overlay für Batto OBS Tool",
+  "main": "src/server.cjs",
+  "scripts": {
+    "start": "node src/cli.cjs",
+    "check": "node --check src/metric-catalog.cjs && node --check src/layout-engine.cjs && node --check src/telemetry.cjs && node --check src/server.cjs && node --check src/cli.cjs && node --check web/overlay.js && node --check web/editor.js",
+    "test": "node --test test/*.test.cjs"
+  }
+}

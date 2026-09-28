@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 720" role="img" aria-labelledby="title desc">
+  <title id="title">Crazy_Batto Multi Chat</title>
+  <desc id="desc">Skalierbare Übersicht für TikTok, Twitch, YouTube und CNG.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#080b11"/><stop offset=".55" stop-color="#111827"/><stop offset="1" stop-color="#07131d"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#ff2a4f"/><stop offset=".48" stop-color="#9f4cff"/><stop offset="1" stop-color="#20b8ff"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1600" height="720" rx="34" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="1597" height="717" rx="32" fill="none" stroke="#26364e" stroke-width="3"/>
+  <path d="M0 150 H1600" stroke="#17243a"/>
+  <text x="76" y="82" fill="#fff" font-family="Segoe UI,Arial,sans-serif" font-size="42" font-weight="700">Crazy_Batto Multi Chat</text>
+  <text x="76" y="122" fill="#91a5c1" font-family="Segoe UI,Arial,sans-serif" font-size="22">TikTok · Twitch · YouTube · CNG · OBS</text>
+  <rect x="1260" y="56" width="270" height="48" rx="24" fill="#101b2c" stroke="#28405f"/>
+  <circle cx="1294" cy="80" r="9" fill="#2ed37a" filter="url(#glow)"/><text x="1320" y="88" fill="#dbeafe" font-family="Segoe UI,Arial,sans-serif" font-size="20">LIVE-Quellen bereit</text>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <rect x="70" y="190" width="1040" height="450" rx="28" fill="#0c111b" stroke="#25354c"/>
+    <text x="110" y="240" fill="#dce8f8" font-size="24" font-weight="700">Live-Nachrichten</text>
+    <g transform="translate(105 280)">
+      <circle cx="28" cy="28" r="26" fill="#111" stroke="#25f4ee" stroke-width="3"/><text x="20" y="37" fill="#25f4ee" font-size="26">♪</text>
+      <text x="72" y="21" fill="#25f4ee" font-size="18" font-weight="700">TikTok · Viewer_01</text><text x="72" y="50" fill="#e8eef8" font-size="22">Das sieht richtig gut aus 🔥</text>
+    </g>
+    <g transform="translate(105 380)">
+      <circle cx="28" cy="28" r="26" fill="#201336" stroke="#9146ff" stroke-width="3"/><text x="18" y="36" fill="#b58cff" font-size="23">◉</text>
+      <text x="72" y="21" fill="#b58cff" font-size="18" font-weight="700">Twitch · Mod_Batto</text><text x="72" y="50" fill="#e8eef8" font-size="22">OBS und Chat sind verbunden.</text>
+    </g>
+    <g transform="translate(105 480)">
+      <circle cx="28" cy="28" r="26" fill="#351014" stroke="#ff3030" stroke-width="3"/><text x="18" y="36" fill="#ff5a5a" font-size="23">▶</text>
+      <text x="72" y="21" fill="#ff6666" font-size="18" font-weight="700">YouTube · CreatorFan</text><text x="72" y="50" fill="#e8eef8" font-size="22">Hallo aus dem YouTube-Livechat!</text>
+    </g>
+    <g transform="translate(105 580)">
+      <circle cx="28" cy="28" r="26" fill="#0d2940" stroke="#2f9cff" stroke-width="3"/><text x="18" y="36" fill="#62b6ff" font-size="23">◆</text>
+      <text x="72" y="21" fill="#62b6ff" font-size="18" font-weight="700">CNG · Community</text><text x="72" y="50" fill="#e8eef8" font-size="22">Alle Plattformen in einem Verlauf.</text>
+    </g>
+    <rect x="1150" y="190" width="380" height="450" rx="28" fill="#0c111b" stroke="#25354c"/>
+    <text x="1190" y="240" fill="#dce8f8" font-size="24" font-weight="700">Plattformen</text>
+    <g font-size="20"><rect x="1190" y="280" width="300" height="62" rx="16" fill="#101923"/><circle cx="1222" cy="311" r="9" fill="#2ed37a"/><text x="1250" y="319" fill="#eef5ff">TikTok / TikFinity</text>
+    <rect x="1190" y="360" width="300" height="62" rx="16" fill="#101923"/><circle cx="1222" cy="391" r="9" fill="#2ed37a"/><text x="1250" y="399" fill="#eef5ff">Twitch</text>
+    <rect x="1190" y="440" width="300" height="62" rx="16" fill="#101923"/><circle cx="1222" cy="471" r="9" fill="#2ed37a"/><text x="1250" y="479" fill="#eef5ff">YouTube</text>
+    <rect x="1190" y="520" width="300" height="62" rx="16" fill="#101923"/><circle cx="1222" cy="551" r="9" fill="#2ed37a"/><text x="1250" y="559" fill="#eef5ff">CNG</text></g>
+  </g>
+  <rect x="70" y="665" width="1460" height="4" rx="2" fill="url(#accent)" filter="url(#glow)"/>
+</svg>

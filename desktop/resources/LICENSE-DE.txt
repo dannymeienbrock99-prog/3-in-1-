@@ -1,0 +1,36 @@
+BATTO OBS TOOL – NUTZUNGS- UND LIZENZBEDINGUNGEN
+Version 2.0.0
+
+Copyright © 2026 Crazy_Batto / Team Alpha. Alle Rechte vorbehalten.
+
+1. Nutzungsrecht
+Der rechtmäßige Empfänger erhält ein einfaches, nicht ausschließliches und nicht übertragbares Recht, Batto OBS Tool auf eigenen Windows-Computern zu installieren und zu verwenden.
+
+2. Schutz des Programms
+Das Entfernen von Urheber-, Marken- oder Herkunftshinweisen, die unbefugte Weitergabe vollständiger Installationspakete sowie die Veröffentlichung privater Zugangsdaten, Produktschlüssel oder interner Projektdateien sind nicht gestattet.
+
+3. Drittanbieter und Plattformen
+OBS Studio, Twitch, YouTube, TikTok, Discord, Elgato, Corsair, Bambu Lab, Spotify, TikFinity, OBSBOT und weitere genannte Bezeichnungen sind Marken ihrer jeweiligen Inhaber. Batto OBS Tool ist kein offizielles Produkt dieser Anbieter. Plattform-, Konto-, OAuth- oder Gerätedienste können eigene Bedingungen und Berechtigungen verlangen.
+
+4. Lokale Datenverarbeitung
+Profile, Tastenbelegungen, Overlay-Layouts und Einstellungen werden grundsätzlich lokal gespeichert. Zugangsdaten werden – soweit technisch verfügbar – über die Windows-Verschlüsselung geschützt. Der Nutzer darf keine Zugangsdaten in Screenshots, öffentlichen Dateien oder unsicheren Freigaben veröffentlichen.
+
+5. Handy-Verbindung
+Die Handy-Verbindung arbeitet im lokalen Netzwerk. Der Nutzer ist für ein vertrauenswürdiges WLAN/LAN, eine sichere Kopplungs-PIN und die Bestätigung unbekannter Geräte verantwortlich.
+
+6. Hardware- und Belastungstests
+Belastungstests werden nur nach ausdrücklicher Bestätigung gestartet. Der Nutzer muss Temperaturen, Kühlung und Systemstabilität überwachen. Tests dürfen bei ungewöhnlichen Temperaturen, Geräuschen oder Instabilität sofort beendet werden.
+
+7. Overlays und Inhalte
+Der Nutzer ist für Texte, Bilder, Musik, Marken, Chatnachrichten und sonstige Inhalte verantwortlich, die er in Overlays oder Streams verwendet. Fremde geschützte Inhalte dürfen nur mit entsprechender Berechtigung verwendet werden.
+
+8. Verfügbarkeit externer Dienste
+Funktionen, die von Plattformen, APIs, Desktop-Anwendungen, Treibern oder Geräten abhängen, können sich durch Änderungen dieser Anbieter verändern oder ausfallen. Batto OBS Tool meldet fehlende Berechtigungen oder Laufzeiten, darf jedoch keine Unterstützung eines Drittanbieters vortäuschen.
+
+9. Haftung
+Die Software wird nach bestem Wissen bereitgestellt. Für Datenverlust, Streamausfälle, Kontosperren, Hardwareprobleme oder Schäden aus unsachgemäßer Konfiguration, unzulässigen Drittanbieter-Integrationen oder ignorierten Warnungen wird im gesetzlich zulässigen Umfang keine Haftung übernommen.
+
+10. Sicherungen und Deinstallation
+Vor Updates, Importen oder vollständiger Deinstallation sollen Profile und Konfigurationen gesichert werden. Lokale Nutzerdaten werden bei der normalen Deinstallation nicht automatisch gelöscht, damit Profile nicht versehentlich verloren gehen.
+
+Mit der Installation bestätigt der Nutzer, diese Bedingungen gelesen und akzeptiert zu haben.

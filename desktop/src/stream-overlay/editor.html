@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Batto OBS Tool – Stream-Overlay</title>
+  <link rel="stylesheet" href="./editor.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">Batto OBS Tool</span>
+      <h1>Stream-Overlay</h1>
+      <p>Lokale transparente OBS-Browserquelle – neues Monitoring bleibt unverändert.</p>
+    </div>
+    <div class="status-block"><span id="connection-status">Verbinden …</span><button id="close-button" type="button">Schließen</button></div>
+  </header>
+
+  <section class="toolbar">
+    <label>Ausrichtung
+      <select id="orientation-select">
+        <option value="1920x1080">Querformat · 1920 × 1080</option>
+        <option value="2560x1440">Querformat · 2560 × 1440</option>
+        <option value="3840x2160">Querformat · 3840 × 2160</option>
+        <option value="1080x1920">Hochformat · 1080 × 1920</option>
+        <option value="1440x2560">Hochformat · 1440 × 2560</option>
+      </select>
+    </label>
+    <label class="url-field">OBS-Browserquelle<input id="overlay-url" readonly></label>
+    <button id="copy-url" type="button">URL kopieren</button>
+    <button id="save-config" class="primary" type="button">Overlay speichern</button>
+  </section>
+
+  <main class="workspace">
+    <aside class="palette">
+      <h2>Elemente</h2>
+      <p>Anklicken und anschließend im Vorschaubereich verschieben.</p>
+      <div id="element-palette" class="palette-list"></div>
+    </aside>
+
+    <section class="preview-column">
+      <header class="preview-heading">
+        <div><h2>Live-Vorschau</h2><p>Elemente mit Maus oder Touch verschieben und an den Griffen skalieren.</p></div>
+        <div class="button-row"><button id="test-chat" type="button">Chat testen</button><button id="test-gift" type="button">Geschenk testen</button><button id="clear-events" type="button">Leeren</button></div>
+      </header>
+      <div id="canvas-shell" class="canvas-shell">
+        <div id="editor-canvas" class="editor-canvas"></div>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <h2>Element bearbeiten</h2>
+      <div id="empty-inspector" class="empty">Element in der Vorschau auswählen.</div>
+      <form id="inspector-form" hidden>
+        <label>Titel<input id="field-title" maxlength="180"></label>
+        <label>Text<textarea id="field-text" rows="3" maxlength="5000"></textarea></label>
+        <div class="two-columns"><label>Wert<input id="field-value" type="number"></label><label>Ziel<input id="field-target" type="number"></label></div>
+        <label>Schriftgröße <span class="range"><input id="field-font-size" type="range" min="8" max="160"><output id="font-size-output"></output></span></label>
+        <label>Schriftart<select id="field-font"><option>Inter, Segoe UI, Arial, sans-serif</option><option>Arial, sans-serif</option><option>Impact, sans-serif</option><option>Georgia, serif</option><option>Consolas, monospace</option></select></label>
+        <div class="three-colors"><label>Text<input id="field-text-color" type="color"></label><label>Akzent<input id="field-accent" type="color"></label><label>Fläche<input id="field-background" type="color"></label></div>
+        <label>Flächendeckkraft <span class="range"><input id="field-background-opacity" type="range" min="0" max="1" step=".01"><output id="background-opacity-output"></output></span></label>
+        <label>Rahmenfarbe<input id="field-border-color" type="color"></label>
+        <div class="two-columns"><label>Rahmen<input id="field-border-width" type="number" min="0" max="12"></label><label>Ecken<input id="field-radius" type="number" min="0" max="80"></label></div>
+        <div class="two-columns"><label>Breite %<input id="field-width" type="number" min="2" max="100" step=".1"></label><label>Höhe %<input id="field-height" type="number" min="2" max="100" step=".1"></label></div>
+        <label>Ausrichtung<select id="field-alignment"><option value="left">Links</option><option value="center">Mitte</option><option value="right">Rechts</option></select></label>
+        <label class="check"><input id="field-visible" type="checkbox"> Sichtbar</label>
+        <label class="check"><input id="field-locked" type="checkbox"> Position sperren</label>
+        <button id="delete-element" class="danger" type="button">Element löschen</button>
+      </form>
+      <hr>
+      <h2>Ereignis testen</h2>
+      <label>Typ<select id="test-type"><option value="chat">Chat-Nachricht</option><option value="gift">Geschenk</option><option value="like">Likes</option><option value="heartRate">Herzfrequenz</option><option value="coHost">Co-Host</option><option value="wheel">Glücksrad</option><option value="poll">Umfrage</option></select></label>
+      <label>Name<input id="test-name" value="Crazy_Batto"></label>
+      <label>Text / Geschenk<input id="test-text" value="Testnachricht"></label>
+      <label>Wert<input id="test-value" type="number" value="1"></label>
+      <button id="trigger-test" type="button">Test auslösen</button>
+    </aside>
+  </main>
+  <output id="toast" class="toast"></output>
+  <script src="./editor.js"></script>
+</body>
+</html>

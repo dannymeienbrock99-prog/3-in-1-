@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Team Alpha – Batto OBS Tool</title>
+  <desc id="desc">Blau-rotes Schild mit Blitz und Alpha-Zeichen</desc>
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#48dcff"/>
+      <stop offset="0.45" stop-color="#225cff"/>
+      <stop offset="1" stop-color="#ff3c44"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff9a8"/>
+      <stop offset="0.55" stop-color="#ff9d2f"/>
+      <stop offset="1" stop-color="#ff3b32"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="#070b13"/>
+  <path d="M256 36 434 96v133c0 120-73 205-178 247C151 434 78 349 78 229V96Z" fill="url(#shield)" stroke="#dffaff" stroke-width="10"/>
+  <path d="M256 66 406 116v112c0 97-56 169-150 210-94-41-150-113-150-210V116Z" fill="#081427" stroke="#4fdcff" stroke-width="5"/>
+  <path d="m281 105-97 174h67l-24 128 105-188h-69Z" fill="url(#bolt)" stroke="#fff5c4" stroke-width="8" stroke-linejoin="round" filter="url(#glow)"/>
+  <path d="M136 175c41-57 74-83 120-83 46 0 79 26 120 83-38-28-76-40-120-40s-82 12-120 40Z" fill="#dffaff" opacity=".9"/>
+  <text x="256" y="392" text-anchor="middle" fill="#f4fbff" font-family="Segoe UI,Arial,sans-serif" font-weight="900" font-size="44" letter-spacing="5">ALPHA</text>
+  <text x="256" y="430" text-anchor="middle" fill="#58ddff" font-family="Segoe UI,Arial,sans-serif" font-weight="700" font-size="21" letter-spacing="3">BATTO OBS TOOL</text>
+</svg>

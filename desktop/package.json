@@ -1,0 +1,104 @@
+{
+  "name": "batto-3-in-1",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Batto 3-in-1: OBS, Jarvis und PC-Messwerte",
+  "author": "Crazy_Batto / Team Alpha",
+  "main": "src/main-v2.cjs",
+  "scripts": {
+    "prepare:touchdeck-0802": "node scripts/prepare-original-touchdeck.cjs",
+    "prepare:integrated": "npm run prepare:touchdeck-0802 && node scripts/patch-overview-multichat.cjs && node scripts/prepare-runtime-support.cjs && node scripts/prepare-stream-overlay.cjs && node scripts/patch-cohost-runtime.cjs && node scripts/patch-cohost-ui.cjs && node scripts/patch-commercial-settings.cjs && node scripts/restore-full-ui.cjs && node scripts/patch-plugin-truth.cjs && node scripts/patch-tiktok-hybrid-direct-only.cjs && node scripts/fix-multichat-single-tikfinity.cjs && node scripts/verify-source-tree.cjs",
+    "check": "node scripts/verify-source-tree.cjs && node scripts/check-icon.cjs",
+    "test:core": "node --test test/commercial-settings.test.cjs test/hybrid-runtime.test.cjs test/cng-config.test.cjs test/platform-adapters-2.1.test.cjs test/overview-ui.test.cjs",
+    "test:modules": "node --test test/multi-chat.test.cjs modules/twitch-holo-chat/test/*.test.cjs",
+    "test": "npm run check && npm run test:core && npm run test:modules",
+    "test:legacy-2.0": "node scripts/check-2.0.0.cjs && node --test test/integrated-2.0.0.test.cjs",
+    "pack:win": "electron-builder --win --x64 --dir --publish never",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "test:jarvis": "node --test test/jarvis-core.test.cjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "tiktok-live-connector": "^2.4.4",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "de.crazybatto.suite",
+    "productName": "Batto 3-in-1",
+    "artifactName": "Batto-3-in-1-Setup-${version}.${ext}",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "!src/services/hardware.cjs",
+      "!src/services/hardware-enrichment-v2.cjs",
+      "!src/services/telemetry.cjs",
+      "!src/services/recommendation.cjs",
+      "modules/twitch-holo-chat/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/license.txt",
+        "to": "Nutzungs-und-Lizenzbedingungen.txt"
+      },
+      {
+        "from": "resources/cng-chat-config.example.json",
+        "to": "resources/cng-chat-config.example.json"
+      },
+      {
+        "from": "resources/touchdeck-0802",
+        "to": "touchdeck-0802"
+      },
+      {
+        "from": "../FanAtlas",
+        "to": "FanAtlas"
+      },
+      {
+        "from": "../jarvis",
+        "to": "jarvis",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../dist/Extras",
+        "to": "Extras"
+      }
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "requestedExecutionLevel": "asInvoker",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": false,
+      "include": "build/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

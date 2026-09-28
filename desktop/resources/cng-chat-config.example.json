@@ -1,0 +1,37 @@
+{
+  "enabled": true,
+  "creatorId": "210048",
+  "chat": {
+    "enabled": true,
+    "mode": "obs",
+    "url": "https://cng-plattform.com/chat-popout/DEINE-CREATOR-ID?mode=obs&obsChatToken=DEIN-PERSOENLICHER-TOKEN",
+    "obsChatToken": ""
+  },
+  "alerts": {
+    "enabled": true,
+    "url": "https://cng-plattform.com/alert-overlay?creatorId=DEINE-CREATOR-ID&alertTts=1&chatTts=0",
+    "alertTts": true,
+    "chatTts": false
+  },
+  "tts": {
+    "chat": {
+      "enabled": false,
+      "voice": "system-default",
+      "rate": 1,
+      "pitch": 1,
+      "volume": 1
+    },
+    "events": {
+      "enabled": true,
+      "voice": "system-default",
+      "rate": 1,
+      "pitch": 1,
+      "volume": 1
+    },
+    "limits": {
+      "maxTextLength": 300,
+      "maxQueue": 20,
+      "cooldownMs": 1500
+    }
+  }
+}

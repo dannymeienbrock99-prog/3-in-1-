@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Team Alpha">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#55e6ff"/><stop offset=".45" stop-color="#5376ff"/><stop offset=".75" stop-color="#ff5a49"/><stop offset="1" stop-color="#ffd166"/>
+    </linearGradient>
+    <filter id="s"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".65"/></filter>
+  </defs>
+  <path d="M256 20 460 92v146c0 117-70 209-204 254C122 447 52 355 52 238V92z" fill="#08131e" stroke="url(#g)" stroke-width="18" filter="url(#s)"/>
+  <path d="m294 72-94 170h58l-42 198 112-232h-63z" fill="url(#g)" stroke="#f8fbff" stroke-width="8" stroke-linejoin="round"/>
+  <text x="256" y="356" fill="#fff" font-family="Segoe UI,Arial,sans-serif" font-size="43" font-weight="900" text-anchor="middle">TEAM ALPHA</text>
+  <text x="256" y="399" fill="#64ddff" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="800" text-anchor="middle" letter-spacing="4">CRAZY_BATTO</text>
+</svg>

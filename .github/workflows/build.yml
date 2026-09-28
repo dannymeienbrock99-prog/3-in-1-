@@ -1,0 +1,49 @@
+name: Windows installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Prepare Inno Setup
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force work | Out-Null
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe -OutFile work/inno.exe
+          if ((Get-AuthenticodeSignature work/inno.exe).Status -ne 'Valid') { throw 'Invalid Inno signature' }
+          Start-Process -FilePath work/inno.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER',('/DIR=' + (Join-Path $pwd 'work/inno')) -WindowStyle Hidden -Wait
+      - name: Build and test
+        shell: pwsh
+        run: ./Build.ps1 -PrepareVoice -InnoCompiler "$pwd/work/inno/ISCC.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batto-3-in-1-Windows
+          path: |
+            dist/Batto-3-in-1-Setup-1.0.0.exe
+            dist/Extras/de.crazybatto.suite.streamDeckPlugin
+          retention-days: 14
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v1.0.0 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create v1.0.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.0.0' --notes 'Windows-Installer mit lokalem Jarvis, OBS Tool 2.1, PC-Messwerten, Lüfterbühne und Stream-Deck-Plugin. Einrichtung und Hardwaregrenzen stehen in README und Kurzanleitung.' }
+          gh release upload v1.0.0 dist/Batto-3-in-1-Setup-1.0.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

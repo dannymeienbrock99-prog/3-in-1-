@@ -1,0 +1,11 @@
+{
+  "name": "@batto-obs-tool/twitch-holo-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kostenloser Hologramm-Stil für Twitch-Namen und Chatnachrichten im Batto OBS Tool",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.cjs",
+    "check": "node --check src/holo-style-engine.cjs && node --check web/overlay.js && node --check web/editor.js"
+  }
+}

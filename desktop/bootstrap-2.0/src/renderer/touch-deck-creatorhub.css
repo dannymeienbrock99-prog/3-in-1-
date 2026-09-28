@@ -1,0 +1,184 @@
+/* Creator-Hub-1.8.6-inspired presentation layer for Touch-Deck Pro.
+   The underlying 2.1 deck state/runtime remains unchanged. */
+
+.tdp-shell.creatorhub-deck {
+  --ch-cyan: #35c8ff;
+  --ch-blue: #168cff;
+  --ch-purple: #9d55ff;
+  --ch-panel: #07111d;
+  --ch-panel-2: #0b1725;
+  --ch-border: #213b54;
+  width: 100%;
+  max-width: none;
+}
+
+.creatorhub-deck .tdp-heading {
+  align-items: center;
+  border-bottom: 1px solid rgba(69, 155, 217, .22);
+  padding-bottom: 18px;
+}
+.creatorhub-deck .tdp-heading .eyebrow { color: var(--ch-cyan); letter-spacing: .15em; }
+.creatorhub-deck .tdp-heading h2 { font-size: 30px; margin-top: 3px; }
+.creatorhub-deck .tdp-heading p { max-width: 760px; }
+.creatorhub-deck .tdp-heading .button-row { gap: 10px; }
+
+.creatorhub-deck .creatorhub-primary {
+  border-color: #56d1ff !important;
+  background: linear-gradient(135deg, #55d7ff, #38bdf8) !important;
+  color: #03111b !important;
+  font-weight: 800;
+  box-shadow: 0 0 22px rgba(54, 197, 255, .18);
+}
+.creatorhub-deck .creatorhub-fullscreen {
+  border-color: #34485c !important;
+  background: #101a27 !important;
+}
+
+.creatorhub-deck .tdp-profilebar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) auto auto;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--ch-border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(15, 30, 47, .96), rgba(9, 19, 31, .96));
+}
+.creatorhub-deck .tdp-profilebar label { min-width: 0; }
+.creatorhub-deck .tdp-profilebar select { width: 100%; }
+
+.creatorhub-deck:not(.creatorhub-editing) #tdp-add-profile,
+.creatorhub-deck:not(.creatorhub-editing) #tdp-add-folder,
+.creatorhub-deck:not(.creatorhub-editing) #tdp-grid-settings,
+.creatorhub-deck:not(.creatorhub-editing) #tdp-import,
+.creatorhub-deck:not(.creatorhub-editing) #tdp-export,
+.creatorhub-deck:not(.creatorhub-editing) .tdp-library,
+.creatorhub-deck:not(.creatorhub-editing) .tdp-inspector,
+.creatorhub-deck:not(.creatorhub-editing) .tdp-grid-panel,
+.creatorhub-deck:not(.creatorhub-editing) .tdp-stage-help {
+  display: none !important;
+}
+
+.creatorhub-deck:not(.creatorhub-editing) .tdp-editor-layout {
+  display: block;
+  border: 1px solid var(--ch-border);
+  border-radius: 14px;
+  margin-top: 12px;
+  background: radial-gradient(circle at 50% 10%, rgba(29, 106, 164, .09), transparent 44%), #050c15;
+  min-height: 540px;
+  overflow: hidden;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-stage {
+  width: 100%;
+  max-width: 1020px;
+  margin: 0 auto;
+  padding: 18px 24px 30px;
+  background: transparent;
+  border: 0;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-stage-meta {
+  margin: 0 0 10px;
+  color: #8aa8c0;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-grid-viewport {
+  min-height: 450px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  border-radius: 14px;
+  background: #040a12;
+  border: 1px solid rgba(47, 109, 154, .18);
+  padding: 24px;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-grid {
+  width: max-content;
+  margin: auto;
+  grid-template-columns: repeat(var(--tdp-columns), 132px) !important;
+  gap: 14px !important;
+  padding: 0;
+  background: transparent !important;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key {
+  width: 132px !important;
+  height: 132px !important;
+  min-width: 132px;
+  min-height: 132px;
+  border-radius: 14px;
+  border: 1px solid #28475e;
+  background:
+    linear-gradient(180deg, rgba(19, 38, 57, .96), rgba(10, 22, 34, .98)),
+    var(--tdp-key-color, #152130);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.015), 0 10px 22px rgba(0,0,0,.25);
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key.used {
+  border-color: rgba(54, 190, 255, .72);
+  box-shadow: inset 0 0 20px rgba(27, 133, 211, .08), 0 0 18px rgba(27, 153, 235, .10);
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key:hover {
+  transform: translateY(-2px);
+  border-color: var(--ch-cyan);
+  box-shadow: 0 0 22px rgba(39, 181, 255, .18);
+}
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key:active { transform: translateY(1px) scale(.985); }
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key img { max-width: 58px; max-height: 58px; }
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key strong { font-size: 14px; }
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key small { color: #7f9bb1; font-size: 9px; }
+.creatorhub-deck:not(.creatorhub-editing) .tdp-key.selected { outline: none; }
+
+.creatorhub-audio {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(260px, 2fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--ch-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(11, 25, 40, .98), rgba(7, 16, 27, .98));
+}
+.creatorhub-audio-copy { display: flex; align-items: center; gap: 11px; }
+.creatorhub-audio-icon { font-size: 24px; color: var(--ch-cyan); }
+.creatorhub-audio-copy strong { display: block; color: #eef8ff; }
+.creatorhub-audio-copy small { display: block; color: #7692a8; margin-top: 2px; }
+.creatorhub-audio-meter {
+  height: 13px;
+  border-radius: 7px;
+  background: repeating-linear-gradient(90deg, #1b9fff 0 7px, transparent 7px 11px);
+  opacity: .78;
+  mask-image: linear-gradient(90deg, #000 0 62%, rgba(0,0,0,.18) 62% 100%);
+}
+.creatorhub-audio-buttons { display: flex; gap: 8px; }
+.creatorhub-audio-buttons button {
+  min-width: 64px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 21px;
+  border: 1px solid #29455d;
+  background: #101b2a;
+}
+.creatorhub-audio-buttons button:hover { border-color: var(--ch-cyan); }
+
+.creatorhub-deck.creatorhub-editing .creatorhub-audio { display: none; }
+.creatorhub-deck.creatorhub-editing .tdp-editor-layout {
+  grid-template-columns: minmax(250px, 300px) minmax(430px, 1fr) minmax(300px, 350px);
+}
+
+#view-deck-pro:fullscreen,
+#view-deck-pro:-webkit-full-screen {
+  overflow: auto;
+  background: #050b13;
+  padding: 22px;
+}
+#view-deck-pro:fullscreen .creatorhub-deck:not(.creatorhub-editing) .tdp-grid {
+  transform: scale(1.06);
+  transform-origin: center;
+}
+
+@media (max-width: 1150px) {
+  .creatorhub-deck .tdp-profilebar { grid-template-columns: 1fr 1fr; }
+  .creatorhub-deck:not(.creatorhub-editing) .tdp-grid { grid-template-columns: repeat(var(--tdp-columns), 112px) !important; }
+  .creatorhub-deck:not(.creatorhub-editing) .tdp-key { width: 112px !important; height: 112px !important; min-width: 112px; min-height: 112px; }
+  .creatorhub-audio { grid-template-columns: 1fr; }
+  .creatorhub-deck.creatorhub-editing .tdp-editor-layout { grid-template-columns: 1fr; }
+}

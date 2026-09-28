@@ -1,0 +1,14 @@
+BATTO OBS TOOL – NUTZUNGS- UND LIZENZHINWEISE
+
+Version 1.9.0
+Copyright (c) 2026 Crazy_Batto / Team Alpha
+
+Batto OBS Tool darf für private Streaming-, Aufnahme- und Testzwecke installiert und verwendet werden.
+
+Die Software verändert OBS-Einstellungen nicht ohne eine ausdrückliche Aktion des Benutzers. Belastungs- und Aufnahmetests müssen vor dem Start bestätigt werden. Ergebnisse von Hardware- und Netzwerksensoren können je nach Gerät, Treiber, Windows-Version und Berechtigung unvollständig sein. Nicht zuverlässig auslesbare Werte werden als „Nicht verfügbar“ angezeigt und nicht erfunden.
+
+Twitch-, OBS- und sonstige Zugangsdaten dürfen nicht weitergegeben werden. Lokale Overlay-Server werden ausschließlich an 127.0.0.1 gebunden.
+
+Die Software wird ohne Garantie für eine bestimmte Streaming-Leistung bereitgestellt. Vor produktiven Streams sollten alle empfohlenen Einstellungen mit einer privaten Testaufnahme geprüft werden.
+
+Mit der Installation akzeptiert der Benutzer diese Hinweise.

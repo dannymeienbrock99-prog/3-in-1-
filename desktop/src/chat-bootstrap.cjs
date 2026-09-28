@@ -104,12 +104,9 @@ async function startConfiguredChats() {
 }
 
 function attachEmbeddedChat(main) {
-  if (!main || main.isDestroyed()) return;
-  const scriptPath = path.join(__dirname, "renderer", "multi-chat.js").replaceAll("\\", "/");
-  const controlsPath = path.join(__dirname, "renderer", "chat-overlay-controls.js").replaceAll("\\", "/");
-  const cssPath = path.join(__dirname, "renderer", "multi-chat.css").replaceAll("\\", "/");
-  const code = `(function(){if(document.getElementById('batto-multi-chat-dock'))return;const css=document.createElement('link');css.rel='stylesheet';css.href='file://${cssPath}';document.head.appendChild(css);const host=document.createElement('div');host.id='batto-multi-chat-dock';host.style='position:fixed;right:18px;bottom:18px;width:460px;height:700px;z-index:2147483000;box-shadow:0 22px 70px rgba(0,0,0,.55);border:1px solid #223044;border-radius:10px;overflow:hidden;background:#090d14;';const root=document.createElement('div');root.id='multi-chat-root';root.style='height:100%';host.appendChild(root);document.body.appendChild(host);const s=document.createElement('script');s.src='file://${scriptPath}';s.onload=function(){const controls=document.createElement('script');controls.src='file://${controlsPath}';document.body.appendChild(controls);};document.body.appendChild(s);window.batto.onChatWindow(function(state){host.hidden=!!state.undocked});})();`;
-  main.webContents.executeJavaScript(code).catch((error) => console.error("Multi-Chat-Einbettung fehlgeschlagen:", error));
+  // The suite renderer already contains exactly one chat root and its scripts.
+  // Keep the window manager hook without adding a second floating chat panel.
+  return Boolean(main && !main.isDestroyed());
 }
 
 function registerChatIpc() {

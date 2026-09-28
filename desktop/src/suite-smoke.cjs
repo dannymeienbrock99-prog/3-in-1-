@@ -11,7 +11,7 @@ exports.run=async(window,diagnostics)=>{
  const scene={background:'stream-startet.jpg',tiles:[{id:'uitestfan',name:'GPU · Testlayout',x:950,y:310,size:310,visible:true,rpmSensorId:speed?.id||'',temperatureSensorId:temp?.id||'',fromProfile:false}]};
  await runtime.fan.configure('stage',scene);await pause(2200);
  const checks=await window.webContents.executeJavaScript(`(async()=>{
-  const problems=[];for(const id of ['jarvis','sensors','fans']){const b=document.querySelector('[data-view="'+id+'"]');b.click();if(!document.getElementById('view-'+id).classList.contains('active'))problems.push('Navigation '+id);}
+  const problems=[];if(document.querySelectorAll('#multi-chat-root').length!==1||document.getElementById('batto-multi-chat-dock'))problems.push('Doppelte Chat-Oberfläche');for(const id of ['jarvis','sensors','fans']){const b=document.querySelector('[data-view="'+id+'"]');b.click();if(!document.getElementById('view-'+id).classList.contains('active'))problems.push('Navigation '+id);}
   const data=await window.batto.suite('state');if(!data.fan?.state?.sensors.length)problems.push('IPC Messwerte');
   document.querySelector('[data-view="sensors"]').click();const sensor=document.querySelector('[data-sensor]');if(!sensor)problems.push('Sensorliste leer');else{sensor.click();if(document.getElementById('s-rule').hidden)problems.push('Regel nicht geöffnet');}
   document.querySelector('[data-view="fans"]').click();const tile=document.querySelector('[data-fan="uitestfan"]');if(!tile)problems.push('Lüfter fehlt');

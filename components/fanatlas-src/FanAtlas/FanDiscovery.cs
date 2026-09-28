@@ -24,7 +24,11 @@ public static class FanDiscovery
                 stage.Tiles.Add(tile); changed = true;
             }
             if (tile != null && tile.ProfileKey.Length == 0) { tile.ProfileKey = f.Key; changed = true; }
-            if (tile != null && tile.RpmSensorKey.Length == 0 && reading != null) { tile.RpmSensorKey = reading.Key; changed = true; }
+            if (tile != null && tile.RpmSensorKey.Length == 0 && reading != null) {
+                tile.RpmSensorKey = reading.Key;
+                if (tile.Name == f.Name || tile.Name.StartsWith("LINK-Lüfter · …")) tile.Name = reading.Name;
+                changed = true;
+            }
             var percent = percentages.Where(s => IcueDiscovery.SameFan(s, f) && known.Count(k => IcueDiscovery.SameFan(s, k)) == 1).ToArray();
             if (tile != null && tile.PercentSensorKey.Length == 0 && percent.Length == 1) { tile.PercentSensorKey = percent[0].Key; changed = true; }
         }

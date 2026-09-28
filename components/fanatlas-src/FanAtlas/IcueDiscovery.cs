@@ -26,13 +26,23 @@ public static class IcueDiscovery
                 }
             }
             var props = ReadXml(Path.Combine(folder, "sensors", "UserProps"));
-            var names = props.Descendants("sensor").Select(s => new { Id = s.Descendants("id").FirstOrDefault(i => i.Value.Contains("senstype<fan>"))?.Value, Name = s.Parent?.Element("name")?.Value }).Where(x => !string.IsNullOrWhiteSpace(x.Id) && !string.IsNullOrWhiteSpace(x.Name)).GroupBy(x => x.Id!).ToDictionary(g => g.Key, g => g.Last().Name!);
-            foreach (var f in state.Profile.Fans) if (names.TryGetValue(f.Key, out var name)) f.Name = name;
+            ApplyAliases(state.Profile, props);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or XmlException or InvalidDataException) { /* Profile import remains available. */ }
         int count = LinkFans(state.Profile).Count;
         Status = count > 0 ? $"iCUE LINK: {count} Lüfter im gespeicherten Profil. Live-Werte benötigen ein laufendes iCUE-Sensorprotokoll." : "iCUE LINK: Noch kein Profil gefunden. iCUE-Profil oder Sensorprotokoll verbinden.";
         DiscoverLogs(state);
+    }
+    public static void ApplyAliases(ProfileData profile, XDocument props)
+    {
+        var names = props.Descendants("sensor").Select(s => new { Id = s.Descendants("id").FirstOrDefault(i => i.Value.Contains("senstype<fan>", StringComparison.OrdinalIgnoreCase))?.Value, Name = s.Parent?.Element("name")?.Value }).Where(x => !string.IsNullOrWhiteSpace(x.Id) && !string.IsNullOrWhiteSpace(x.Name)).ToArray();
+        foreach (var fan in profile.Fans)
+        {
+            var exact = names.LastOrDefault(n => n.Id == fan.Key);
+            if (exact != null) fan.Name = exact.Name!;
+            // Moving a LINK fan to another hub changes its key, but not its fan serial.
+            fan.Aliases = names.Where(n => n.Id == fan.Key || fan.Serial.Length > 0 && ProfileReader.Part(n.Id!, "sensorSN") == fan.Serial).Select(n => n.Name!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
     }
     private static XDocument ReadXml(string path)
     {
@@ -50,8 +60,10 @@ public static class IcueDiscovery
     public static bool SameFan(SensorRow sensor, FanEntry fan)
     {
         if (fan.Serial.Length > 0 && sensor.Name.Contains(fan.Serial, StringComparison.OrdinalIgnoreCase)) return true;
-        var name = fan.Name.Trim();
-        return name.Length > 4 && !name.Contains('…') && Regex.IsMatch(sensor.Name, @"(?<![\w])" + Regex.Escape(name) + @"(?![\w])", RegexOptions.IgnoreCase);
+        return (fan.Aliases ?? new()).Append(fan.Name).Any(alias => {
+            var name = alias.Trim();
+            return name.Length > 4 && !name.Contains('…') && Regex.IsMatch(sensor.Name, @"(?<![\w])" + Regex.Escape(name) + @"(?![\w])", RegexOptions.IgnoreCase);
+        });
     }
     public static bool IsLinkPercent(SensorRow sensor, ProfileData profile) => sensor.Unit == "%" && !sensor.Key.StartsWith("nvml/")
         && !Regex.IsMatch(sensor.Name, @"pump|pumpe|GPU|RAM|memory", RegexOptions.IgnoreCase)

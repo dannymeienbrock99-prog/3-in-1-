@@ -119,13 +119,15 @@ public sealed class CsvReader
         {
             var cols = Split(line.TrimEnd('\r'), delimiter);
             if (cols.Length != headers.Length) continue;
-            if (!cols.Where((v, i) => Unit(headers[i]) != null).Any(v => TryNumber(v, out _))) continue;
+            if (!cols.Where((v, i) => Unit(headers[i]) != null || ValueUnit(v) != null).Any(v => TryNumber(v, out _))) continue;
             row = cols; signature = line; break;
         }
         var result = new List<Measurement>(); if (row == null) return new(result, signature, written);
         for (int i = 0; i < row.Length; i++)
         {
-            string? unit = Unit(headers[i]); if (unit == null || !TryNumber(row[i], out double value)) continue;
+            string? cellUnit = ValueUnit(row[i]);
+            string? unit = Unit(headers[i]) ?? cellUnit;
+            if (unit == null || cellUnit != null && unit != cellUnit || !TryNumber(row[i], out double value)) continue;
             if (unit == "°F") { value = (value - 32) * 5 / 9; unit = "°C"; }
             if (unit == "°C" && (value < -100 || value > 250) || unit == "RPM" && (value < 0 || value > 100000) || unit == "%" && (value < 0 || value > 200)) continue;
             string key = "csv/" + Path.GetFullPath(path).ToUpperInvariant() + "/" + i;
@@ -151,8 +153,23 @@ public sealed class CsvReader
     public static bool TryNumber(string text, out double value)
     {
         text = text.Trim().Replace("\u00a0", "");
+        var cell = NumericCell.Match(text);
+        if (!cell.Success) { value = 0; return false; }
+        text = cell.Groups["number"].Value;
         if (!text.Contains('.') && text.Count(c => c == ',') == 1) text = text.Replace(',', '.');
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && double.IsFinite(value);
+    }
+    // iCUE 5 puts units in each value ("1650RPM", "30.20°C"), not in the header.
+    // Require the complete cell to be numeric; do not turn sensor names/errors into values.
+    private static readonly Regex NumericCell = new(@"^\s*(?<number>[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?)\s*(?<unit>RPM|U/min|°C|℃|°F|%|MHz|GHz|GB/s|MB/s|KB/s|GB|MB|W|V|A|ms|FPS)?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static string? ValueUnit(string text)
+    {
+        var match = NumericCell.Match(text.Trim().Replace("\u00a0", ""));
+        string suffix = match.Success ? match.Groups["unit"].Value : "";
+        if (suffix.Length == 0) return null;
+        if (suffix.Equals("U/min", StringComparison.OrdinalIgnoreCase)) return "RPM";
+        if (suffix == "℃") return "°C";
+        return new[] { "RPM", "°C", "°F", "%", "MHz", "GHz", "GB/s", "MB/s", "KB/s", "GB", "MB", "W", "V", "A", "ms", "FPS" }.First(u => u.Equals(suffix, StringComparison.OrdinalIgnoreCase));
     }
     public static string? Unit(string text)
     {

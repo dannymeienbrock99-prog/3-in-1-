@@ -68,6 +68,7 @@ public class FanCurve
 }
 public class FanEntry
 {
+    public List<string> Aliases { get; set; } = new();
     public string Key { get; set; } = "";
     public string Name { get; set; } = "";
     public string Hub { get; set; } = "";

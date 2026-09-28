@@ -21,6 +21,8 @@ Die Lüfterbühne liest das gespeicherte lokale Standardprofil und vorhandene iC
 
 Für echte Drehzahlen und Temperaturen in iCUE **Einstellungen → Sensorprotokollierung** öffnen, die gewünschten LINK-Sensoren auswählen, 2 Sekunden Intervall einstellen und die Protokollierung starten. Aktive `corsair_cue_*.csv` in Dokumente und Temp werden automatisch erkannt; andere Dateien über **PC-Messwerte → Sensor-CSV** wählen. Jede Temperatur und Drehzahl lässt sich dem richtigen Lüfter zuordnen. Fehlende Zuordnungen bleiben leer. Die CSV wird mit Freigabe für den gleichzeitigen iCUE-Schreibzugriff gelesen.
 
+**1.2.1:** Unterstützt das tatsächliche iCUE-5-Protokollformat mit Einheiten in den Messwerten, z. B. `1650RPM` und `30.20°C`. LINK-Lüfter bleiben auch nach einem Wechsel des Hubs über ihre Seriennummer und gespeicherten Sensornamen zugeordnet. Protokollierung muss laufen; nach einem iCUE-Neustart bei fehlenden Werten erneut starten. Das Auswählen von Sensoren allein startet noch keine Messdatei.
+
 ## Prozentwerte und hohe Lüfterdrehzahlen
 
 Pro Lüfter einen echten Prozent-Sensor zuordnen oder die bekannte Drehzahl bei 100 % eintragen. Bei letzterem werden U/min ÷ Referenz × 100 als **Anteil der Maximaldrehzahl** angezeigt; das ist kein gemessener PWM-Steuerwert. Keine Referenz wird geraten. Ohne aktuelle Messwerte bleiben Prozent und Drehzahl leer. Derselbe Bezug gilt in der App, im OBS-Overlay, auf dem Stream Deck und für Jarvis.
@@ -45,7 +47,7 @@ Neue freigegebene Sensoren und vorhandene OBS-Szenen werden erkannt. Erfolgreich
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.2.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.2.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.

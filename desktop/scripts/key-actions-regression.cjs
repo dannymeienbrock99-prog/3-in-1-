@@ -1,0 +1,54 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {ConfigStore,DEFAULT_CONFIG,migrateConfig}=require('../src/core/config-store.cjs');
+const {SettingsService}=require('../src/core/settings/settings-service.cjs');
+const {validateConfig}=require('../src/core/settings/schema.cjs');
+const {normalizeKeyActionPatch}=require('../src/core/key-action-profiles.cjs');
+const {ActionEngine}=require('../src/core/action-engine.cjs');
+const {createDeckTests}=require('../src/core/deck-tests.cjs');
+const profile={id:'output-key-1',name:'K und linke Maustaste',process:'Own Test.exe',keys:'LButton+K',keyFormat:'chord',holdMs:100,enabled:true};
+const input={id:'input-only',name:'Test',accelerator:'K+LButton',chainId:'miau',scope:'global',triggerMode:'down',enabled:true};
+const legacy={...structuredClone(DEFAULT_CONFIG),hotkeys:[input],actionChains:[{id:'miau',name:'Vorhandener Ablauf',actions:[{type:'delay',ms:0}]}]};delete legacy.keyActions;
+assert.deepEqual(migrateConfig(legacy).hotkeys,[input]);assert.deepEqual(migrateConfig(legacy).keyActions,[]);
+assert.deepEqual(normalizeKeyActionPatch([profile])[0],{...profile,process:'Own Test',keys:'K+LButton'});
+for(const item of [{...profile,id:''},{...profile,id:'bad id'},{...profile,name:''},{...profile,process:''},{...profile,process:'bad;process'},{...profile,keys:'Control'},{...profile,keys:'K+UnknownKey'},{...profile,keyFormat:'legacy'},{...profile,enabled:'yes'},{...profile,holdMs:9},{...profile,holdMs:3001},{...profile,holdMs:'100'}])assert.throws(()=>normalizeKeyActionPatch([item]));
+assert.throws(()=>normalizeKeyActionPatch([{...profile,keys:'Control'}]),error=>error.details[0].path==='keyActions.0.keys');
+assert.throws(()=>normalizeKeyActionPatch([profile,profile]),/doppelt/);assert.throws(()=>normalizeKeyActionPatch({}),/Maximal/);
+const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'batto-key-action-'));
+async function main(){try{
+ const store=new ConfigStore(temporary),service=new SettingsService({configStore:store});store.commit(migrateConfig(legacy));
+ const reference={type:'key-action',keyActionId:profile.id};
+ const event={id:'follow-rule',name:'Follower',platform:'tiktok',event:'follow',enabled:true,cooldownSeconds:0,actions:[reference]};
+ assert.equal(service.savePatch({keyActions:[profile],events:[event]}).ok,true);
+ assert.equal(store.get().keyActions[0].keys,'K+LButton');assert.deepEqual(store.get().hotkeys,[input]);
+ const persisted=fs.readFileSync(store.file,'utf8');
+ for(const patch of [{keyActions:[{...profile,keys:'Control'}]},{keyActions:[]},{keyActions:null},{events:[{...event,actions:[{type:'key-action',keyActionId:'missing'}]}]}]){
+  const result=service.savePatch(patch);assert.equal(result.ok,false);assert.equal(fs.readFileSync(store.file,'utf8'),persisted);
+ }
+ for(const keyActions of [{},null])assert.ok(validateConfig({...store.get(),keyActions}).errors.some(x=>x.path==='keyActions'));
+ assert.ok(validateConfig({...store.get(),events:[{...event,actions:[{type:'KEY-ACTION',keyActionId:'missing'}]}]}).errors.some(x=>x.path==='events.0.actions.0.keyActionId'));
+ const reopened=new ConfigStore(temporary);assert.equal(reopened.get().keyActions[0].keys,'K+LButton');assert.deepEqual(reopened.get().hotkeys,[input]);
+ let config=store.get(),sent=[];
+ const engine=new ActionEngine({getConfig:()=>config,sendChat:()=>{throw Error('No chat');},onOverlay:()=>{throw Error('No media/input binding execution');}});
+ engine.hotkey=async(action,signal)=>{sent.push({action,signal});return {ok:true,inputSent:true,confirmed:false};};
+ engine.runChain=()=>{throw Error('Output profile must not fake a physical input binding or run Miau');};
+ await engine.handleEvent({platform:'tiktok',type:'follow',data:{username:'Isolated User'}});
+ assert.equal(sent.length,1);assert.equal(sent[0].action.keys,'K+LButton');assert.equal(sent[0].action.process,'Own Test');assert.equal(sent[0].action.keyFormat,'chord');
+ config.keyActions[0].keys='RButton';config.keyActions[0].process='Updated Target';
+ await engine.execute([reference],{platform:'internal'});assert.equal(sent.at(-1).action.keys,'RButton');assert.equal(sent.at(-1).action.process,'Updated Target');
+ await engine.execute([{...reference,keys:'Z',process:'Injected Target'}],{});assert.equal(sent.at(-1).action.keys,'RButton');assert.equal(sent.at(-1).action.process,'Updated Target');
+ const deck=createDeckTests({getConfig:()=>config,engine,chains:{trigger(){throw Error('No chain trigger for output profile');}}});
+ const catalog=deck.catalog();assert.equal(catalog.find(x=>x.kind==='hotkey').id,profile.id);assert.equal(catalog.some(x=>x.id===input.id),false);
+ let before=sent.length;assert.equal((await deck.test('hotkey',profile.id)).ok,true);assert.equal(sent.length,before+1);assert.equal(sent.at(-1).action.type,'hotkey');
+ assert.equal((await deck.test('event',event.id)).ok,true);assert.equal(sent.length,before+2);
+ config.keyActions[0].enabled=false;before=sent.length;
+ assert.equal(validateConfig(config).ok,true);assert.equal(deck.catalog().find(x=>x.kind==='hotkey').enabled,false);
+ const disabled=await deck.test('hotkey',profile.id);assert.equal(disabled.ok,false);assert.match(disabled.error,/deaktiviert/);assert.equal(sent.length,before);
+ config.keyActions=[];const missing=await engine.execute([reference],{});assert.equal(missing.ok,false);assert.match(missing.error,/fehlt/);assert.equal(sent.length,before);
+ const missingDeck=await deck.test('hotkey',profile.id);assert.equal(missingDeck.ok,false);assert.match(missingDeck.error,/fehlt/);
+ config.keyActions=[{...profile,keys:'Control'}];const malformed=await engine.execute([reference],{});assert.equal(malformed.ok,false);assert.match(malformed.error,/Zusatztasten/);assert.equal(sent.length,before);
+ config.keyActions=[profile];const cancel=new AbortController();cancel.abort();assert.equal((await engine.execute([reference],{},{signal:cancel.signal})).cancelled,true);assert.equal(sent.length,before);
+ assert.deepEqual(store.get().hotkeys,[input]);
+ console.log('PASS reusable key actions: migration preserves input bindings, profile validation, atomic saves/restart, missing references, current-profile event resolution, Stream Deck dispatch, disabled/missing/malformed rejection and cancellation. Keyboard output stubbed; no OS input or user settings.');
+ }finally{const resolved=path.resolve(temporary);assert.ok(resolved.startsWith(path.resolve(os.tmpdir())+path.sep)&&path.basename(resolved).startsWith('batto-key-action-'));fs.rmSync(resolved,{recursive:true,force:true});}}
+main().catch(error=>{console.error(error);process.exitCode=1;});

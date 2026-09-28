@@ -1,0 +1,56 @@
+'use strict';
+const assert = require('assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { GiftRegistry, giftId, PUBLIC_CATALOG_URL } = require('../src/core/gifts/gift-registry.cjs');
+const { normalizeEvent } = require('../src/core/events/normalizer.cjs');
+const { SupportEvents } = require('../src/core/events/support-events.cjs');
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'batto-gift-registry-'));
+const normalized = (data, source='tikfinity') => normalizeEvent({platform:'tiktok',event:'gift',id:'provider-13891',data},source);
+const makePage = rows => '<script>self.__next_f.push('+JSON.stringify([1,'1:'+JSON.stringify({initialGifts:rows})+'\n'])+')</script>';
+const rows = Array.from({length:150},(_,i)=>({id:5000+i,name:'Katalog '+i,diamondCount:i+1}));
+
+(async()=>{
+  for (const value of [null,undefined,{},[],true,-2,0,NaN,Infinity,1.5,Number.MAX_SAFE_INTEGER+1,'-1','0','0.2','1e5','123a','18446744073709551616']) assert.equal(giftId(value),'','invalid gift ID '+String(value));
+  assert.equal(giftId('0005655'),'5655');assert.equal(giftId('9223372036854775808'),'9223372036854775808');
+  assert.equal(normalized({id:'987654',giftName:'Rose'}).gift.id,'','message ID never becomes gift ID');
+  assert.equal(normalized({giftId:Number.MAX_SAFE_INTEGER+1,giftName:'Rose'}).gift.id,'','unsafe number rejected before String conversion');
+  const details = normalized({giftDetails:{id:5655,name:'Rose',diamond_count:1,image:{url_list:['https://example.com/rose.png']}},value:9,repeatCount:9});
+  assert.deepEqual([details.gift.id,details.gift.coins,details.gift.value,details.gift.imageUrl],['5655',1,9,'https://example.com/rose.png']);
+  assert.equal(normalized({giftId:111,giftName:'Only total',value:100}).gift.coins,null,'total event value is not a unit price');
+  let changes=0; const registry=new GiftRegistry({dataDir:temp,onChange:()=>changes++});
+  assert.equal(registry.observe(details),true);
+  assert.equal(registry.observe(normalized({giftId:5655,giftName:'Rösé'})),true);
+  assert.equal(registry.match('  ROSE!! ').match.giftId,'5655');
+  const privateInput=normalized({giftId:5269,giftName:'TikTok',user:{username:'secretviewer'},message:'private text'});
+  registry.observe(privateInput);
+  for(const source of ['mock','test','automation','unknown','internal']) assert.equal(registry.observe(normalized({giftId:6064,giftName:'GG'},source)),false);
+  for(const raw of [{isTest:true},{data:{mock:true}},{meta:{sourceConnector:'automation'}},{data:{source:'test'}},{raw:{metadata:{synthetic:true}}}]) {
+    const event=normalized({giftId:6064,giftName:'GG'});event.meta.rawData=raw;assert.equal(registry.observe(event),false,'simulation markers rejected');
+  }
+  assert.equal(registry.observe({...details,platform:'twitch'}),false);
+  assert.equal(registry.observe(normalized({id:123,giftName:'Ghost'})),false);
+  const unmapped=registry.matchLibrary([{name:'Unknown',giftIdVerified:true},{name:'Rose',giftId:'999999',giftIdVerified:true},{name:'Wrong name',giftId:'5655'}]);
+  assert.equal(unmapped[0].giftIdVerified,false);assert.equal(unmapped[1].giftId,'999999');assert.equal(unmapped[1].giftIdVerified,false);assert.equal(unmapped[2].giftIdVerified,true,'explicit known ID wins over name');
+  registry.observe(normalized({giftId:1111,giftName:'Hand Heart'}));registry.observe(normalized({giftId:2222,giftName:'Hand-Heart'}));
+  assert.equal(registry.match('Hand Heart').status,'ambiguous');
+  assert.equal(registry.matchLibrary([{name:'Hand Heart'}])[0].giftIdVerified,false,'ambiguous IDs never auto-confirm');
+  assert.equal(registry.close(),true);assert.ok(changes>=4);
+  const saved=fs.readFileSync(path.join(temp,'gift-registry.json'),'utf8');assert.equal(saved.includes('secretviewer'),false);assert.equal(saved.includes('private text'),false);assert.equal(saved.includes('rawData'),false);
+  const reload=new GiftRegistry({dataDir:temp});assert.equal(reload.match('Rose').match.giftId,'5655');assert.equal(reload.match('Rösé').match.giftId,'5655');assert.equal(reload.list({query:'Hand',limit:1,offset:1}).items.length,1);assert.equal(reload.list({query:'Hand'}).total,2);reload.close();
+  let calls=0,response=()=>new Response(makePage(rows),{status:200});
+  const online=new GiftRegistry({dataDir:path.join(temp,'catalog'),fetchImpl:async(url,options)=>{assert.equal(url,PUBLIC_CATALOG_URL);assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');calls++;return response();}});
+  const [first,second]=await Promise.all([online.refreshCatalog(),online.refreshCatalog()]);assert.equal(first.ok,true);assert.equal(second.total,150);assert.equal(calls,1,'simultaneous refresh shares request');assert.equal(online.list({limit:3000}).items.length,150);
+  online.observe(normalized({giftId:5655,giftName:'Rose',coins:1}));
+  response=()=>new Response(makePage(rows.slice(0,20)),{status:200});assert.equal((await online.refreshCatalog()).ok,false);assert.equal(online.list().total,151,'partial catalogue retains cache and observed entries');
+  response=()=>new Response('denied',{status:403});assert.equal((await online.refreshCatalog()).ok,false);assert.equal(online.list().total,151);
+  response=()=>new Response('small',{status:200,headers:{'content-length':String(6*1024*1024)}});assert.equal((await online.refreshCatalog()).ok,false,'oversized response rejected');
+  online.close();const cached=new GiftRegistry({dataDir:path.join(temp,'catalog')});assert.equal(cached.list().total,151,'offline restart reads cache');cached.close();
+  let received=[];const support=new SupportEvents({onEvent:(event,source)=>received.push(normalizeEvent(event,source))});
+  const bridge={bridge:true,platform:'tiktok',type:'gift',eventId:'provider-999',giftId:5655,giftName:'Rose',count:2,value:2,coinsPerGift:1};
+  assert.equal(support.ingest({...bridge,test:true}),false);assert.equal(received.length,0);
+  assert.equal(support.ingest(bridge),true);assert.equal(received[0].gift.coins,1);assert.equal(received[0].gift.value,2);assert.equal(received[0].meta.rawData.giftId,5655);
+  const bridgeRegistry=new GiftRegistry({dataDir:path.join(temp,'bridge')});assert.equal(bridgeRegistry.observe(received[0]),true);bridgeRegistry.close();
+  console.log('PASS gift registry: genuine gift IDs, exact/ambiguous matching, explicit IDs, metadata-only persistence, restart, test filtering, Streamer.bot unit coins, public cache refresh/fallback and size bounds.');
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>fs.rmSync(temp,{recursive:true,force:true}));

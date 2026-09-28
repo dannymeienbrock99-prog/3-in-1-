@@ -1,0 +1,21 @@
+'use strict';
+const assert=require('node:assert/strict'),path=require('node:path');
+const {createChatExtrasService}=require('../electron/chat-extras-service.cjs');
+const {DEFAULT_CONFIG}=require('../src/core/config-store.cjs');
+const {validateAdditions}=require('../src/core/settings/community-schema.cjs');
+const config=structuredClone(DEFAULT_CONFIG),sent=[];
+config.chatExtras.widgets=[{id:'alert-follow',name:'Follow',enabled:true,url:'https://tikfinity.zerody.one/widget/alert?cid=676051',platform:'tiktok',event:'follow',durationMs:1500,permanent:false}];
+const service=createChatExtrasService({getConfig:()=>config,send:(channel,event)=>sent.push({channel,event}),assetsDir:path.join(__dirname,'../src/assets')});
+service.trigger({id:'alert-follow',visible:false});assert.equal(sent.at(-1).event.visible,false,'Hide action reaches both renderers as hide');
+service.trigger({id:'alert-follow'});assert.equal(sent.at(-1).event.durationMs,1500);
+config.chatExtras.widgets[0].permanent=true;service.trigger({id:'alert-follow'});assert.equal(sent.at(-1).event.durationMs,0,'Permanent display has no accidental expiry');
+service.trigger({id:'alert-follow',durationMs:5000});assert.equal(sent.at(-1).event.durationMs,5000,'Explicit timed test overrides permanent');
+config.chatExtras.widgets[0].enabled=false;assert.throws(()=>service.trigger({id:'alert-follow'}),/deaktiviert/);
+assert.throws(()=>service.trigger({kind:'wishlist'}),/deaktiviert/);
+config.chatExtras.wishlist.enabled=true;assert.throws(()=>service.trigger({kind:'wishlist'}),/mindestens/);
+config.chatExtras.wishlist.items=[{key:'file:001_Rose.png',name:'Rose',enabled:true,url:'',sourceType:'image',giftId:'',giftIdVerified:false}];
+service.trigger({kind:'wishlist'});assert.equal(sent.at(-1).event.kind,'wishlist');
+assert.deepEqual(validateAdditions(config),[],'Valid user selection accepted');
+for(const invalid of [null,{...config.chatExtras.wishlist.items[0],url:'javascript:alert(1)'},{...config.chatExtras.wishlist.items[0],giftIdVerified:true},{...config.chatExtras.wishlist.items[0],sourceType:'executable'}]){const bad=structuredClone(config);bad.chatExtras.wishlist.items=[invalid];assert.ok(validateAdditions(bad).length,'Invalid imported gift entry rejected');}
+const duplicate=structuredClone(config);duplicate.chatExtras.wishlist.items.push({...duplicate.chatExtras.wishlist.items[0]});assert.ok(validateAdditions(duplicate).some(e=>e.path.endsWith('.key')));
+(async()=>{const result=await service.library();assert.equal(result.ok,true);assert.equal(result.items.length,797);assert.ok(result.items.every(x=>x.giftId===null&&x.coins===null),'No gift IDs or coin values invented');console.log('Chat extras service: hide, permanent duration, disabled/empty failures, import validation and all 797 assets passed.');})().catch(error=>{console.error(error);process.exitCode=1;});

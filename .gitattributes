@@ -1,0 +1,7 @@
+# Keep the verified 2.4.7 visual reference byte-for-byte across checkouts.
+desktop/src/renderer/styles.css -text
+desktop/src/renderer/marble-gold.css -text
+*.png binary
+*.jpg binary
+*.ico binary
+desktop/vendor/piper/** -text

@@ -1,0 +1,34 @@
+[
+  {
+    "name": "piper-MIT.txt",
+    "url": "https://raw.githubusercontent.com/rhasspy/piper/2023.11.14-2/LICENSE.md"
+  },
+  {
+    "name": "piper-phonemize-MIT.txt",
+    "url": "https://raw.githubusercontent.com/rhasspy/piper-phonemize/2023.11.14-4/LICENSE.md"
+  },
+  {
+    "name": "espeak-ng-GPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/rhasspy/espeak-ng/master/COPYING"
+  },
+  {
+    "name": "onnxruntime-MIT.txt",
+    "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.14.1/LICENSE"
+  },
+  {
+    "name": "onnxruntime-ThirdPartyNotices.txt",
+    "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.14.1/ThirdPartyNotices.txt"
+  },
+  {
+    "name": "fmt-MIT.txt",
+    "url": "https://raw.githubusercontent.com/fmtlib/fmt/10.0.0/LICENSE.rst"
+  },
+  {
+    "name": "spdlog-MIT.txt",
+    "url": "https://raw.githubusercontent.com/gabime/spdlog/v1.12.0/LICENSE"
+  },
+  {
+    "name": "json-MIT.txt",
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.11.2/LICENSE.MIT"
+  }
+]

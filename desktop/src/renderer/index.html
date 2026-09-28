@@ -1,176 +1,143 @@
 <!doctype html>
 <html lang="de">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark">
-    <title>Batto 3-in-1</title>
-    <link rel="stylesheet" href="./styles.css">
-    <link rel="stylesheet" href="./commercial-settings.css">
-    <link rel="stylesheet" href="./overview-hero.css">
-    <link rel="stylesheet" href="./multi-chat.css">
-    <link rel="stylesheet" href="./touch-deck-20260802.css">
-    <link rel="stylesheet" href="./integration-20260904.css">
-    <link rel="stylesheet" href="./restored-tools.css">
-  <link rel="stylesheet" href="./suite.css">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: http: https:; media-src 'self' file: blob:; frame-src http: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:* ws://localhost:* https://www.googleapis.com;">
+  <title>CRAZY_BATTO Multi-Chat Platform</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./marble-gold.css" />
+  <link rel="stylesheet" href="./chat-widgets.css" />
+  <link rel="stylesheet" href="./audio-output-ui.css" />
+  <link rel="stylesheet" href="./gift-widget.css" />
+  <link rel="stylesheet" href="./chat-extras-ui.css" />
+  <link rel="stylesheet" href="./rule-editor-ui.css" />
+  <link rel="stylesheet" href="./community-ui.css" />
+  <link rel="stylesheet" href="./suite.css" />
 </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <header class="brand">
-          <img src="./assets/team-alpha-logo.svg" alt="Team Alpha Logo">
-          <div><strong>Batto 3-in-1</strong><span>Crazy_Batto · Team Alpha</span></div>
-        </header>
-        <nav aria-label="Hauptnavigation">
-<button class="nav-button" data-view="jarvis"><span>◉</span> Jarvis</button>
-<button class="nav-button" data-view="sensors"><span>⌁</span> PC-Messwerte</button>
-<button class="nav-button" data-view="fans"><span>✧</span> Lüfterbühne</button>
-          <button class="nav-button active" data-view="overview"><span>⌂</span> Übersicht</button>
-          <button class="nav-button" data-view="obs"><span>◉</span> OBS</button>
-          <button class="nav-button" data-view="chat"><span>✦</span> Multi-Chat</button>
-          <button class="nav-button" data-custom-view="moderation"><span>🛡</span> Moderation</button>
-          <button class="nav-button" data-custom-view="cohost"><span>▣</span> Co-Host</button>
-          <button class="nav-button" data-view="deck-0802"><span>▦</span> Touch-Deck</button>
-          <button class="nav-button" data-view="holo"><span>◇</span> Twitch-Hologramm</button>
-          <button class="nav-button" data-restored-view="stream-overlay"><span>▤</span> Stream-Overlay</button>
-          <button class="nav-button" data-restored-view="plugins"><span>◈</span> Plugins</button>
-          <button class="nav-button" data-restored-view="mobile"><span>▯</span> Handy verbinden</button>
-          <button class="nav-button" data-view="settings"><span>☷</span> Einstellungen</button>
+<body>
+  <div class="bg-watermark" aria-hidden="true"></div>
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand-block">
+        <img src="../assets/brand-logo.jpg" class="brand-logo" alt="CRAZY_BATTO Team Alpha">
+        <div>
+          <div class="brand-title">CRAZY_BATTO <span>Multi-Chat Platform</span></div>
+          <div class="brand-sub">Dein Stream. Alle Chats. Eine Plattform. Team Alpha.</div>
+        </div>
+      </div>
+      <div class="top-status">
+        <span class="chip" id="obsChip"><i></i>OBS 4455</span>
+        <span class="chip" id="overlayChip"><i></i>Overlay 17787</span>
+        <span class="chip" id="tikfinityChip"><i></i>TikFinity Bridge</span>
+        <span class="chip"><i></i>Lokal bereit</span>
+        <button class="icon-btn" id="detachBtn" title="Chat entkoppeln">↗</button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <nav id="mainNav">
+          <button class="nav-item" data-view="start"><b>⌂</b><span>Start</span></button>
+          <button class="nav-item active" data-view="dashboard"><b>▣</b><span>Multi-Chat</span></button>
+          <button class="nav-item" data-view="wishlist"><b>🎁</b><span>Wunschgeschenke</span></button>
+          <button class="nav-item" data-view="widgets"><b>▧</b><span>TikFinity-Widgets</span></button>
+          <button class="nav-item" data-view="livecenter"><b>◉</b><span>TikTok LIVE Center</span></button>
+          <button class="nav-item" data-view="chatarchive"><b>▤</b><span>Chatarchiv</span></button>
+          <button class="nav-item" data-view="moderation"><b>♢</b><span>Moderation</span></button>
+          <button class="nav-item" data-view="filters"><b>▽</b><span>Chat-Filter</span></button>
+          <button class="nav-item" data-view="hologram"><b>✦</b><span>Chatfarben</span></button>
+          <button class="nav-item" data-view="platforms"><b>⇄</b><span>Plattformen</span></button>
+          <button class="nav-item" data-view="commands"><b>▤</b><span>Commands</span></button>
+          <button class="nav-item" data-view="broadcast"><b>↻</b><span>Auto-Broadcast</span></button>
+          <button class="nav-item" data-view="hotkeys"><b>⌨</b><span>Hotkeys / Multi-Action</span></button>
+          <button class="nav-item" data-view="events"><b>⚡</b><span>Events</span></button>
+          <button class="nav-item" data-view="media"><b>▧</b><span>Medien</span></button>
+          <button class="nav-item" data-view="pools"><b>▦</b><span>Medien-Pools</span></button>
+          <button class="nav-item" data-view="tts"><b>◖</b><span>TTS</span></button>
+          <button class="nav-item" data-view="discord"><b>☁</b><span>Discord</span></button>
+          <button class="nav-item" data-view="streamerbot"><b>⇆</b><span>Streamer.bot</span></button>
+          <button class="nav-item" data-view="backups"><b>⬡</b><span>Backups</span></button>
+          <button class="nav-item" data-view="settings"><b>⚙</b><span>Einstellungen</span></button>
+          <div class="suite-nav-label">BATTO 3-IN-1</div>
+          <button class="nav-item" data-view="jarvis"><b>◉</b><span>Jarvis</span></button>
+          <button class="nav-item" data-view="sensors"><b>◴</b><span>PC-Messwerte</span></button>
+          <button class="nav-item" data-view="fans"><b>✣</b><span>iCUE LINK Lüfter</span></button>
         </nav>
-        <footer>
-          <span id="version-label">Version 1.0.0</span>
-          <small>Windows x64</small>
-        </footer>
+        <div class="sidebar-brand">
+          <img src="../assets/brand-logo.jpg" alt="CRAZY_BATTO">
+          <span>STRONGER TOGETHER.</span>
+        </div>
       </aside>
 
-      <section class="workspace">
-        <header class="topbar">
-          <div>
-            <h1 id="page-title">Übersicht</h1>
-            <p id="page-subtitle">OBS, TikTok, Multi-Chat, Touch-Deck und Overlays an einem Ort.</p>
-          </div>
-          <div class="top-status">
-            <span id="tiktok-studio-pill" class="status-pill neutral">TikTok Studio prüft …</span>
-            <span id="obs-pill" class="status-pill offline">OBS getrennt</span>
-          </div>
-        </header>
+      <main class="content" id="content">
+        <section class="view start-view" data-view-panel="start"><img class="start-art" src="../assets/source/start-original.png" alt="CRAZY_BATTO Startseite"></section>
+        <section class="view active" data-view-panel="dashboard">
+          <div class="dashboard-grid">
+            <section class="card chat-card">
+              <div class="card-head"><div><h2>Multi-Chat</h2><p>Alle Chats in einer Ansicht – nie wieder etwas verpassen.</p></div><div class="chat-head-actions"><button id="chatImageSettings" class="chat-image-button" title="Chatfenster-Bild einstellen" aria-label="Chatfenster-Bild einstellen">▧</button><span class="live-pill"><i></i>Live</span></div></div>
+              <div class="tabs" id="chatTabs"></div>
+              <div class="chat-list" id="chatList"></div>
+              <form class="composer" id="composer">
+                <select id="sendPlatform"><option value="local">Lokal / Test</option><option value="twitch">Twitch</option><option value="tiktok">TikTok</option><option value="cng">CNG</option><option value="youtube">YouTube</option></select>
+                <input id="messageInput" maxlength="500" placeholder="Nachricht schreiben…">
+                <button class="primary" type="submit">➤</button>
+              </form>
+            </section>
 
-        <main class="content">
-          <section id="view-overview" class="view active">
-            <div class="hero-card overview-hero">
-              <img class="overview-bg" src="./assets/multi-chat-dashboard.svg" alt="Crazy_Batto Multi Chat – TikTok, Twitch, YouTube und CNG">
-              <div class="overview-hero-shade" aria-hidden="true"></div>
-              <div class="overview-hero-copy">
-                <h2 class="overview-title">Crazy_Batto Multi Chat</h2>
-                <span class="eyebrow overview-version">BATTO OBS TOOL 2.1.0</span>
-                <h3>OBS, TikTok und Multi-Chat zentral steuern</h3>
-                <p>Produktionskern für OBS, TikTok LIVE Studio/API, Multi-Chat, Touch-Deck und Browser-Overlays.</p>
-                <div class="button-row">
-                  <button id="overview-connect-obs" class="primary">OBS verbinden</button>
-                  <button data-jump="settings">Plattformen einrichten</button>
-                </div>
+            <section class="card moderation-card">
+              <div class="card-head"><div><h2>Moderation</h2><p>Behalte die Kontrolle über deine Community.</p></div><span class="live-pill"><i></i>Automod aktiv</span></div>
+              <div class="tabs platform-switch" id="modTabs"></div>
+              <div class="mod-columns" id="modColumns"></div>
+              <div class="history-wrap">
+                <div class="section-line"><strong>Moderationsverlauf</strong><select id="historyPlatform"><option value="all">Alle Plattformen</option><option>tiktok</option><option>twitch</option><option>cng</option><option>youtube</option></select></div>
+                <div class="table-scroll"><table><thead><tr><th>Zeit</th><th>Name</th><th>Aktion</th><th>Grund</th><th>Letzte Nachricht</th><th>Durch</th><th>Plattform</th><th>Ergebnis</th></tr></thead><tbody id="historyBody"></tbody></table></div>
               </div>
-            </div>
+            </section>
 
-            <div class="summary-grid">
-              <article class="summary-card"><span>OBS</span><strong id="summary-obs">Nicht verbunden</strong><small id="summary-obs-extra">WebSocket 5.x · Port 4455</small></article>
-              <article class="summary-card"><span>TikTok</span><strong id="summary-tiktok-studio">LIVE Studio wird geprüft</strong><small id="summary-tiktok-extra">LIVE Studio + TikFinity lokal</small></article>
-              <article class="summary-card"><span>Multi-Chat</span><strong>TikTok · Twitch · YouTube · CNG</strong><small>Ein gemeinsamer Chat-Verlauf</small></article>
-              <article class="summary-card"><span>Touch-Deck</span><strong>Stand 02.08.2026 · 5 × 3</strong><small>15 Tasten · OBS-Aktionen</small></article>
-            </div>
-
-            <div class="two-column-cards">
-              <article class="panel">
-                <header><div><span class="eyebrow">SCHNELLSTART</span><h3>Direkt öffnen</h3></div></header>
-                <div class="quick-grid">
-                  <button data-jump="obs">OBS-Verbindung</button>
-                  <button data-jump="chat">Multi-Chat</button>
-                  <button data-view="deck-0802" class="nav-jump-deck">Touch-Deck</button>
-                  <button data-jump="settings">Einstellungen</button>
+            <section class="card holo-card">
+              <div class="card-head"><div><h2>Chatfarben</h2><p>Schriftfarben für Multi-Chat und Auto-Broadcast einstellen.</p></div><button id="previewHologram">Chatfarben ändern</button></div>
+              <div class="holo-grid" hidden style="display:none">
+                <div>
+                  <label class="check"><input type="checkbox" id="holoUserEnabled"> Benutzername gestalten</label>
+                  <label class="check"><input type="checkbox" id="holoMessageEnabled"> Chat-Nachricht gestalten</label>
+                  <label>Schriftart</label><select id="holoFont"><option>Segoe UI</option><option>Arial</option><option>Impact</option><option>Verdana</option><option>BattoCustom</option></select>
+                  <button class="soft" id="importFontBtn">Eigene Schrift laden</button>
                 </div>
-              </article>
-              <article class="panel">
-                <header><div><span class="eyebrow">STATUS</span><h3>Getrennte Module</h3></div></header>
-                <div class="result-copy">Ein Plattformfehler blockiert nicht den gesamten Programmstart. Verbindungen können getrennt eingerichtet und geprüft werden.</div>
-              </article>
-            </div>
-          </section>
-
-          <section id="view-obs" class="view">
-            <div class="section-heading">
-              <div><span class="eyebrow">OBS WEBSOCKET 5</span><h2>OBS Studio verbinden</h2><p>Lokale Verbindung über 127.0.0.1:4455. Das Passwort wird nur verschlüsselt gespeichert.</p></div>
-              <span id="obs-status-large" class="large-status offline">Nicht verbunden</span>
-            </div>
-            <div class="obs-layout">
-              <article class="panel form-panel">
-                <h3>Verbindungsdaten</h3>
-                <label>Adresse<input id="obs-host" value="127.0.0.1" autocomplete="off" readonly></label>
-                <label>Port<input id="obs-port" type="number" min="1" max="65535" value="4455"></label>
-                <label>WebSocket-Passwort<input id="obs-password" type="password" autocomplete="new-password" placeholder="Leer lassen, um das gespeicherte Passwort zu verwenden"></label>
-                <label class="check-line"><input id="obs-remember" type="checkbox" checked> Passwort verschlüsselt speichern</label>
-                <div class="button-row">
-                  <button id="obs-connect" class="primary">Verbinden</button>
-                  <button id="obs-disconnect">Trennen</button>
-                  <button id="obs-forget-password" class="danger-text">Passwort vergessen</button>
-                </div>
-                <output id="obs-message" class="inline-message"></output>
-              </article>
-              <article class="panel">
-                <header><div><h3>OBS-Status</h3><p>Status der verbundenen OBS-Instanz.</p></div><button id="obs-refresh">Aktualisieren</button></header>
-                <dl id="obs-details" class="details-list"><div><dt>Status</dt><dd>Nicht verbunden</dd></div></dl>
-              </article>
-            </div>
-            <article class="panel">
-              <header><div><h3>Direktsteuerung</h3><p>Aktionen sind nur aktiv, wenn OBS verbunden ist.</p></div></header>
-              <div class="control-grid">
-                <button data-obs-action="stream.start">Stream starten</button>
-                <button data-obs-action="stream.stop">Stream stoppen</button>
-                <button data-obs-action="record.start">Aufnahme starten</button>
-                <button data-obs-action="record.stop">Aufnahme stoppen</button>
-                <button data-obs-action="virtualcam.start">Virtuelle Kamera starten</button>
-                <button data-obs-action="virtualcam.stop">Virtuelle Kamera stoppen</button>
+                <div><label>Name</label><input type="color" id="holoUserColor"><label>Chat-Nachricht</label><input type="color" id="holoMsgColor"></div>
+                <div><label>Effekt / Glow</label><input type="range" id="holoGlow" min="0" max="40"><label>Deckkraft</label><input type="range" id="holoOpacity" min="20" max="100"></div>
               </div>
-              <div class="scene-row"><label>Programmszene<select id="obs-scene-select"><option>OBS verbinden</option></select></label><button id="obs-set-scene">Szene aktivieren</button></div>
-            </article>
-          </section>
+              <div class="url-row" hidden style="display:none"><span>OBS-Browserquelle</span><code id="holoUrl"></code><button data-copy="holo">URL kopieren</button></div>
+            </section>
 
-          <section id="view-chat" class="view full-height-view"><div id="multi-chat-root"></div></section>
-          <section id="view-moderation" class="view"></section>
-          <section id="view-cohost" class="view"></section>
-          <section id="view-deck-0802" class="view full-height-view" aria-label="Touch-Deck vom 02.08.2026"></section>
+            <section class="card connections-card">
+              <div class="card-head"><div><h2>Plattformen & Verbindungen</h2><p>Lokale Bridges, CNG-Overlays und Direktverbindungen.</p></div></div>
+              <div class="connections" id="connectionList"></div>
+              <button class="primary wide" data-open-view="platforms">Verbindungen verwalten</button>
+            </section>
+          </div>
+        </section>
 
-          <section id="view-holo" class="view full-height-view">
-            <div class="section-heading compact">
-              <div><span class="eyebrow">OBS-BROWSERQUELLE</span><h2>Twitch-Hologramm</h2><p>Namen, Chatfarben und Schriftart als Overlay gestalten.</p></div>
-              <div class="button-row"><button id="holo-copy">OBS-Adresse kopieren</button><button id="holo-external">In Browser öffnen</button></div>
-            </div>
-            <div class="url-bar"><span>OBS-Browserquelle</span><code id="holo-url">Wird gestartet …</code></div>
-            <iframe id="holo-frame" class="module-frame" title="Twitch-Hologramm-Editor"></iframe>
-          </section>
-
-          
-          <section id="view-stream-overlay" class="view">
-            <div class="section-heading"><div><span class="eyebrow">OBS-BROWSERQUELLE</span><h2>Stream- und Chat-Overlay</h2><p>Chat und Live-Ereignisse als lokale Browserquelle in OBS. Dieser Bereich bleibt zusätzlich zu Multi-Chat und Hologramm erhalten.</p></div><div class="button-row"><button id="stream-overlay-copy">OBS-Adresse kopieren</button><button id="stream-overlay-open" class="primary">Overlay öffnen</button></div></div>
-            <article class="panel"><div id="stream-overlay-status"><div class="empty-state">Overlay-Status wird geladen …</div></div></article>
-            <article class="panel form-panel"><h3>OBS-Browserquelle</h3><div class="tool-url"><code id="stream-overlay-url">Wird geladen …</code></div><label>Quellenname<input id="stream-overlay-source" value="Batto Multi-Chat"></label><label>OBS-Szene<input id="stream-overlay-scene" placeholder="Leer = aktuelle Szene"></label><div class="restored-actions"><button id="stream-overlay-install" class="primary">In OBS einrichten</button><button id="stream-overlay-remove">Aus OBS entfernen</button></div></article>
-          </section>
-
-          <section id="view-plugins" class="view">
-            <div class="section-heading"><div><span class="eyebrow">02.08.2026 · CREATOR HUB · ELGATO</span><h2>Plugin-System</h2><p>Installierte Plugin-Manifeste und Icon-Packs werden aus den bekannten Creator-Hub-, Batto- und Stream-Deck-Verzeichnissen geladen.</p></div><button id="plugins-rescan" class="primary">Plugins neu scannen</button></div>
-            <div id="plugin-summary-restored" class="restored-grid"></div>
-            <article class="panel"><div class="info-banner">Das originale Touch-Deck vom 02.08.2026 besitzt zusätzlich seinen eigenen Plugin-Scan und Rechtsklick auf eine Taste. Drittanbieter-Stream-Deck-Pakete werden nur ausgeführt, wenn eine kompatible Laufzeit vorhanden ist; erkannte Pakete werden nicht als funktionierend vorgetäuscht.</div><div id="plugin-list-restored"><div class="empty-state">Plugins werden geladen …</div></div></article>
-          </section>
-
-          <section id="view-mobile" class="view">
-            <div class="section-heading"><div><span class="eyebrow">WLAN · LAN · USB-TETHERING</span><h2>Handy verbinden</h2><p>Lokale Kopplung mit PIN und QR-Code. Keine Cloud-Verbindung erforderlich.</p></div><div class="button-row"><strong id="mobile-runtime-status" class="restored-status warn">Prüft …</strong><button id="mobile-start-restored">Server starten</button><button id="mobile-pin-new-restored">Neue PIN</button></div></div>
-            <div class="restored-grid"><article class="restored-card"><h3>QR-Code</h3><img id="mobile-qr-restored" class="mobile-qr" alt="Batto Handy Kopplungs-QR" hidden><code id="mobile-url-restored">Noch keine Adresse</code></article><article class="restored-card"><h3>PIN</h3><strong id="mobile-pin-restored" class="mobile-pin">------</strong><label><input id="mobile-approval-restored" type="checkbox" checked> Kopplung am PC bestätigen</label><div id="mobile-addresses-restored" class="restored-actions"></div></article></div>
-            <div class="two-column-cards"><article class="panel"><h3>Offene Kopplungsanfragen</h3><div id="mobile-pending-restored"></div></article><article class="panel"><h3>Verbundene Handys</h3><div id="mobile-connected-restored"></div></article></div>
-          </section>
-
-          <section id="view-settings" class="view">
-            <div class="section-heading"><div><span class="eyebrow">EINSTELLUNGEN</span><h2>Produkt-Einstellungen</h2><p>Die 2.1-Einstellungen werden geladen …</p></div></div>
-          </section>
-        <section id="view-jarvis" class="view">
+        <section class="view module-view" data-view-panel="wishlist"><div class="module-head"><div><h1>Wunschgeschenke</h1><p>Deine Geschenk-Bibliothek und kompakte Anzeige im Chat.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="wishlistModule"></div></section>
+        <section class="view module-view" data-view-panel="widgets"><div class="module-head"><div><h1>TikFinity-Widgets</h1><p>Einblendungen für Follower, Geschenke und weitere Ereignisse.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="widgetsModule"></div></section>
+        <section class="view module-view" data-view-panel="livecenter"><div class="module-head"><div><h1>TikTok LIVE Center</h1><p>Dein TikTok-LIVE verwalten.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="livecenterModule"></div></section>
+        <section class="view module-view" data-view-panel="chatarchive"><div class="module-head"><div><h1>Chatarchiv</h1><p>Aufzeichnung, Suche und Export deiner Chatnachrichten.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="communityArchiveModule"></div></section>
+        <section class="view module-view" data-view-panel="streamerbot"><div class="module-head"><div><h1>Streamer.bot</h1><p>Verbindung, wiederverwendbare Aktionen und Tests.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="streamerbotModule"></div></section>
+        <section class="view module-view" data-view-panel="moderation"><div class="module-head"><div><h1>Moderation</h1><p>Plattformgetrennte Moderatoren, Stummschaltungen, Blockierungen und Verlauf.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="moderationModule"></div><div id="communityModerationModule"></div></section>
+        <section class="view module-view" data-view-panel="filters"><div class="module-head"><div><h1>Chat-Filter</h1><p>Begriffe, Plattformen und automatische Aktionen.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="filtersModule"></div></section>
+        <section class="view module-view" data-view-panel="hologram"><div class="module-head"><div><h1>Chatfarben</h1><p>Schriftfarben für Multi-Chat und Auto-Broadcast.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="holoModule"></div></section>
+        <section class="view module-view" data-view-panel="platforms"><div class="module-head"><div><h1>Plattformen & Verbindungen</h1><p>TikFinity lokal, Twitch, YouTube, CNG und OBS.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="platformsModule"></div></section>
+        <section class="view module-view" data-view-panel="commands"><div class="module-head"><div><h1>Commands</h1><p>Eigene Chat-Befehle für alle eingehenden Plattformen mit Multi-Actions.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="commandsModule"></div></section>
+        <section class="view module-view" data-view-panel="broadcast"><div class="module-head"><div><h1>Auto-Broadcast</h1><p>Automatische Chat-/Overlay-Nachrichten, inklusive CNG-Local-Overlay.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="broadcastModule"></div></section>
+        <section class="view module-view" data-view-panel="hotkeys"><div class="module-head"><div><h1>Hotkeys / Multi-Action</h1><p>Windows-Hotkeys und sequenzielle Aktionen.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="hotkeysModule"></div></section>
+        <section class="view module-view" data-view-panel="events"><div class="module-head"><div><h1>Events</h1><p>Gift, Follow, Like, Share, Subscribe und eigene Events mit Multi-Actions.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="eventsModule"></div></section>
+        <section class="view module-view" data-view-panel="media"><div class="module-head"><div><h1>Medien</h1><p>Eigene MP3, WAV, MP4, WebM, GIF und Bilder.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="mediaModule"></div></section>
+        <section class="view module-view" data-view-panel="pools"><div class="module-head"><div><h1>Medien-Pools</h1><p>Medien auswählen, Reihenfolge, Zufall, Lautstärke und Wiederholung konfigurieren.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="poolsModule"></div></section>
+        <section class="view module-view" data-view-panel="tts"><div class="module-head"><div><h1>TTS</h1><p>Stimme, verbundenes Ausgabegerät und Lautstärke für Chat und Automationen.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="ttsModule"></div></section>
+        <section class="view module-view" data-view-panel="discord"><div class="module-head"><div><h1>Discord</h1><p>Webhook-Benachrichtigungen aus Commands und Events.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="discordModule"></div></section>
+        <section class="view module-view" data-view-panel="backups"><div class="module-head"><div><h1>Backups</h1><p>Konfiguration sichern, exportieren und wiederherstellen.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="backupModule"></div></section>
+        <section class="view module-view" data-view-panel="settings"><div class="module-head"><div><h1>Einstellungen</h1><p>Allgemein, Oberfläche, Synchronisation, Zusatz-Einstellungen und Info.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="settingsModule"></div></section>
+<section id="view-jarvis" class="view suite-view" data-view-panel="jarvis">
  <div class="suite-hero"><span class="suite-kicker">BATTO 3-IN-1 · LOKALER ASSISTENT</span><h2>Zu deinen Diensten,<br>Sir Crazy.</h2><p>Dein Stream, deine Messwerte, deine Stimme. Frage gezielt nach deinem PC oder wechsle deine OBS-Szene.</p></div>
  <div class="suite-grid"><div>
   <article class="suite-panel"><div class="suite-row"><div id="j-orb" class="suite-orb" aria-hidden="true"></div><div><h3>Jarvis</h3><div id="j-voice-state" class="suite-help">Sprachdienst schläft</div></div></div><div id="j-log" class="suite-chatlog" aria-live="polite"></div><form id="j-command-form"><label for="j-command">Frag Jarvis<input id="j-command" placeholder="Jarvis, wie warm ist die Grafikkarte?" maxlength="500" autocomplete="off"></label><div class="suite-row"><button class="primary" type="submit">Senden</button><button type="button" id="j-listen">Jetzt zuhören</button><button type="button" id="j-stop">Sprache stoppen</button></div></form><div class="suite-row"><button data-jarvis="GPU Temperatur">GPU-Temperatur</button><button data-jarvis="CPU Auslastung">CPU-Auslastung</button><button data-jarvis="Pause">Pause-Szene</button></div></article>
@@ -182,7 +149,7 @@
   <article class="suite-panel"><h3>Stream Deck</h3><p class="suite-help">Messwerte und Lüfter auf einzelnen Tasten anzeigen, Jarvis-Befehle ausführen und Kurvenentwürfe auswählen.</p><button id="j-plugin">Stream-Deck-Plugin installieren</button></article>
  </div></div>
 </section>
-<section id="view-sensors" class="view">
+<section id="view-sensors" class="view suite-view" data-view-panel="sensors">
  <div class="suite-row"><span class="suite-badge" id="s-count">Messwerte werden geladen</span><button id="s-csv">Sensorprotokoll hinzufügen</button><button id="s-profile">iCUE-Profil importieren</button></div>
  <p class="suite-help">Jeder von deiner Hardware und den Messquellen bereitgestellte Wert ist einzeln einstellbar. GPU-Pin-Strom (A) und Pin-Spannung (V) erscheinen nur, wenn die Quelle sie tatsächlich liefert.</p>
  <div class="suite-sensor-grid"><article class="suite-panel"><label>Messwerte durchsuchen<input id="s-search" placeholder="GPU, CPU, Pin, Spannung, Lüfter …"></label><label class="suite-check"><input id="s-show-hidden" type="checkbox"> Ausgeblendete Werte zum Bearbeiten anzeigen</label><div id="s-list" class="suite-sensors"></div></article><div>
@@ -190,25 +157,47 @@
  <article class="suite-panel"><h3>Messquellen</h3><div id="s-sources" class="suite-source"></div><div id="s-csv-list"></div><p class="suite-help">NVIDIA und Windows werden automatisch gelesen. Für weitere Sensoren HWiNFO-Sensorfreigabe aktivieren oder ein laufendes CSV-Protokoll aus iCUE, GPU Tweak oder HWiNFO auswählen. Die Datei muss regelmäßig neue Zeilen erhalten. Andere Programme behalten die Hardware-Steuerung.</p></article>
  </div></div>
 </section>
-<section id="view-fans" class="view">
- <article class="suite-panel"><div class="suite-row"><label>Hintergrund<select id="f-background"><option value="stream-startet.jpg">Stream startet</option><option value="bin-gleich-zurueck.jpg">Bin gleich zurück</option><option value="">Transparent</option></select></label><button id="f-add">Lüfter hinzufügen</button><button id="f-copy">OBS-Adresse kopieren</button><button id="f-preview">Stream-Vorschau</button><button id="f-import">Layout laden</button><button id="f-export">Layout exportieren</button></div><div class="suite-stage-wrap" id="f-wrap"><div class="suite-stage" id="f-stage" aria-label="Lüfterbühne. Lüfter zum Verschieben ziehen."></div></div><p class="suite-help">1920 × 1080 · Lüfter anklicken und frei verschieben. In OBS als Browserquelle einfügen. Die Zahl in der Mitte stammt aus dem zugeordneten Temperatursensor.</p><div id="f-edit" hidden><div class="suite-row"><label>Lüftername<input id="f-name" maxlength="80"></label><label>Temperatur in der Mitte<select id="f-temp"></select></label><label>Drehzahl / Lüfterleistung<select id="f-rpm"></select></label><label>Größe<input id="f-size" type="range" min="120" max="420"></label></div><div class="suite-row"><label>X<input id="f-x" type="number" min="0" max="1800"></label><label>Y<input id="f-y" type="number" min="0" max="900"></label><label class="suite-check"><input id="f-visible" type="checkbox"> Im Stream sichtbar</label><button id="f-save" class="primary">Lüfter speichern</button><button id="f-delete">Entfernen</button></div></div><p id="f-state" class="suite-help"></p></article>
+<section id="view-fans" class="view suite-view" data-view-panel="fans"><h2>Deine iCUE-LINK-Lüfter</h2>
+ <article class="suite-panel"><div class="suite-row"><label>Hintergrund<select id="f-background"><option value="stream-startet.jpg">Stream startet</option><option value="bin-gleich-zurueck.jpg">Bin gleich zurück</option><option value="">Transparent</option></select></label><button id="f-add">Lüfter hinzufügen</button><button id="f-align">Gleichmäßig ausrichten</button><button id="f-sources">Live-Werte verbinden</button><button id="f-copy">OBS-Adresse kopieren</button><button id="f-preview">Stream-Vorschau</button><button id="f-import">Layout laden</button><button id="f-export">Layout exportieren</button></div><p id="f-state" class="suite-status"></p><div class="suite-stage-wrap" id="f-wrap"><div class="suite-stage" id="f-stage" aria-label="Lüfterbühne. Lüfter zum Verschieben ziehen."></div></div><p class="suite-help">iCUE LINK: gespeicherte Lüfter werden automatisch eingelesen. Für Live-Drehzahlen und Temperaturen in iCUE unter Einstellungen → Sensorprotokollierung die gewünschten LINK-Sensoren auswählen, Intervall 2 Sekunden, und die Protokollierung starten. Dateien im Dokumente-Ordner werden automatisch gefunden; andere Dateien unter PC-Messwerte → Sensor-CSV verbinden wählen. 1920 × 1080 · Lüfter anklicken und frei verschieben. In OBS als Browserquelle einfügen. Die Zahl in der Mitte stammt aus dem zugeordneten Temperatursensor.</p><div id="f-edit" hidden><div class="suite-row"><label>Lüftername<input id="f-name" maxlength="80"></label><label>Temperatur in der Mitte<select id="f-temp"></select></label><label>Drehzahl / Lüfterleistung<select id="f-rpm"></select></label><label>Größe<input id="f-size" type="range" min="120" max="420"></label></div><div class="suite-row"><label>X<input id="f-x" type="number" min="0" max="1800"></label><label>Y<input id="f-y" type="number" min="0" max="900"></label><label class="suite-check"><input id="f-visible" type="checkbox"> Im Stream sichtbar</label><button id="f-save" class="primary">Lüfter speichern</button><button id="f-delete">Entfernen</button></div></div></article>
  <div class="suite-curves"><article class="suite-panel"><h3>Lüfterkurven</h3><label>Vorhandene Kurve<select id="f-curves"></select></label><div class="suite-row"><button id="f-new-curve">Eigene Kurve erstellen</button><button id="f-duplicate-curve">Als Kopie bearbeiten</button><button id="f-export-curve">Kurve exportieren</button></div><svg id="f-graph" class="suite-curve-svg" viewBox="0 0 600 250" role="img" aria-label="Lüfterkurve: Temperatur gegen Lüfterleistung"></svg><div class="suite-status">Kurven sind bearbeitbare Entwürfe. Die tatsächliche Steuerung und der Wechsel aktiver Kühlprofile bleiben in iCUE. Auf dem Stream Deck dafür die offizielle iCUE-Kühlungsaktion verwenden.</div></article><article class="suite-panel"><h3>Kurve bearbeiten</h3><label>Name<input id="f-curve-name" maxlength="100"></label><label>Temperaturbezug<input id="f-curve-sensor" placeholder="CPU, GPU oder Kühlmittel"></label><div class="suite-row suite-help"><span>Temperatur (°C)</span><span>Lüfterleistung (%)</span></div><div id="f-points" class="suite-points"></div><div class="suite-row"><button id="f-add-point">Punkt hinzufügen</button><button id="f-save-curve" class="primary">Entwurf speichern</button></div><p id="f-curve-note" class="suite-help"></p></article></div>
  <article class="suite-panel"><h3>Zuordnungen aus deinem iCUE-Profil</h3><p class="suite-help">Ein importiertes Profil zeigt gespeicherte Zuordnungen. Sie bestätigen keine aktuell angeschlossenen Geräte und keine laufende Hardwarekurve.</p><div id="f-assignments"></div></article>
 </section>
 
-</main>
-      </section>
+      </main>
     </div>
 
-    <div id="toast" class="toast" hidden></div>
-    <script src="./app.js"></script>
-    <script src="./multi-chat.js"></script>
-    <script src="./touch-deck-20260802.js"></script>
-    <script src="./integration-20260904.js"></script>
-    <script src="./commercial-settings.js"></script>
-  <script src="./eulerless-settings-addon.js"></script>
-    <script src="./restored-tools.js"></script>
-  <script src="./chat-overlay-controls.js"></script>
+    <footer class="statusbar">
+      <div><span class="status-dot ok"></span>System bereit <span class="sep">|</span> Version <span id="appVersion">2.3.3</span> <span class="sep">|</span> Team Alpha</div>
+      <div class="metrics"><span>CPU <b id="cpuStat">–</b></span><meter id="cpuMeter" min="0" max="100"></meter><span>RAM <b id="ramStat">–</b></span><meter id="ramMeter" min="0" max="100"></meter><span>Upload <b id="uploadStat">–</b></span><span>FPS <b id="fpsStat">–</b></span><span>Bitrate <b id="bitrateStat">–</b></span></div>
+      <div id="clock"></div>
+    </footer>
+  </div>
+
+  <div id="contextMenu" class="context-menu" hidden>
+    <button data-action="addModerator">♢ Als Moderator hinzufügen</button>
+    <button data-action="removeModerator">♢ Als Moderator entfernen</button>
+    <div></div>
+    <button data-action="mute">🔇 Stummschalten</button>
+    <button data-action="block" class="danger">⊘ Blockieren</button>
+    <button data-action="unmute">🔊 Entstummen</button>
+    <button data-action="unblock">🔓 Entblocken</button>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="./audio-output-ui.js"></script>
+  <script src="./audio-playback.js"></script>
+  <script src="./broadcast-ui.js"></script>
+  <script src="./app.js"></script>
+  <script src="./v21-ui.js"></script>
+  <script src="./release-ui.js"></script>
+  <script src="./automation-ui.js"></script>
+  <script src="./chat-widgets.js"></script>
+  <script src="./gift-widget.js"></script>
+  <script src="./chat-extras-ui.js"></script>
+  <script src="./rule-editor-ui.js"></script>
+  <script src="./community-ui.js"></script>
+  <link rel="stylesheet" href="./battlebar.css">
+  <script src="./battlebar-view.js"></script>
+  <script src="./battlebar-ui.js"></script>
 <script src="./suite.js"></script>
 </body>
 </html>

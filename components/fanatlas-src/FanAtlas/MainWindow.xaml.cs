@@ -86,6 +86,7 @@ public partial class MainWindow : Window
     }
     public async Task PollOnce()
     {
+        IcueDiscovery.DiscoverLogs(State);
         bool readNvidia = State.NvidiaEnabled; var paths = State.CsvPaths.ToArray();
         try
         {
@@ -373,7 +374,7 @@ public partial class MainWindow : Window
             SetStatus("Stream Deck: Entwurf ausgewählt. iCUE-Steuerung unverändert.");
             return (true, "Entwurf ausgewählt; keine Hardwareänderung. Für echte Wechsel die offizielle iCUE-Aktion verwenden.");
         }).Task);
-        bridge.Catalog = () => Dispatcher.InvokeAsync(() => (object)new { state = CreateSnapshot(), curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, c.Points }), fans = State.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveName }), csvPaths = State.CsvPaths, overlayUrl = OverlayUrl, sources = new { nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages } }).Task;
+        bridge.Catalog = () => Dispatcher.InvokeAsync(() => (object)new { state = CreateSnapshot(), curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, c.Points }), fans = State.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveName }), csvPaths = State.CsvPaths, overlayUrl = OverlayUrl, sources = new { icue = IcueDiscovery.Status, nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages } }).Task;
         bridge.Configure = (command, body) => Dispatcher.InvokeAsync(() => ConfigureSuite(command, body)).Task;
         PublishBridge(); await bridge.Start(); SaveState(); Stage.Refresh();
     }
@@ -388,7 +389,7 @@ public partial class MainWindow : Window
     }
     internal BridgeSnapshot CreateSnapshot()
     {
-        var sensors = Sensors.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc)).ToList();
+        var sensors = Sensors.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s))).ToList();
         var tiles = State.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0)).ToList();
         var curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new BridgeCurve(c.Id, c.Name, c.IsCustom)).ToList();
         return new("0.2", DateTime.UtcNow, sensors, curves, new(State.Stage.Background, tiles), selectedOriginal?.Id ?? "", "Auswahl = Entwurf. Hardwarewechsel über iCUE.");
@@ -405,7 +406,7 @@ public partial class MainWindow : Window
                 var old = State.Stage.Tiles.ToDictionary(t => t.Id);
                 string Resolve(string id, string fallback) => Sensors.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id)?.Key ?? (SensorIdentity.PublicId(fallback) == id ? fallback : "");
                 State.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
-                foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey);
+                foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.ProfileKey.Length > 0) State.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey,"sensorSN")); }
                 State.Stage.Background = scene.Background; State.Stage.Normalize(); Stage.Attach(this); break;
             case "profile":
                 string path = body.GetProperty("path").GetString() ?? "";

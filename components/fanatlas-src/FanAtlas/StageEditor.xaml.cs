@@ -34,18 +34,7 @@ public partial class StageEditor : UserControl
     public void Refresh()
     {
         if (owner == null) return;
-        bool added = false;
-        foreach (var sensor in owner.Sensors.Where(s => s.Fresh && (s.Unit == "RPM" || s.Unit == "%" && s.Name.Contains("Lüfter"))))
-        {
-            if (autoSeen.Contains(sensor.Key) || Settings.HiddenAutoSensors.Contains(sensor.Key) || Settings.Tiles.Count >= 32) continue;
-            autoSeen.Add(sensor.Key);
-            if (Settings.Tiles.Any(t => t.RpmSensorKey == sensor.Key)) continue;
-            var temperature = sensor.Key.StartsWith("nvml/") ? owner.Sensors.FirstOrDefault(s => s.Device == sensor.Device && s.Unit == "°C") : null;
-            int n = Settings.Tiles.Count;
-            Settings.Tiles.Add(new() { Name = sensor.Name.Replace(" (Treiberwert)", ""), RpmSensorKey = sensor.Key, TemperatureSensorKey = temperature?.Key ?? "", X = 650 + n % 4 * 250, Y = 170 + n / 4 * 300 });
-            Settings.Tiles[^1].Clamp(); added = true;
-        }
-        if (added) { RefreshTileList(); BuildTiles(); owner.StageChanged(); }
+        if (FanDiscovery.Refresh(owner.State, owner.Sensors)) { RefreshTileList(); BuildTiles(); owner.StageChanged(); }
         string signature = string.Join("|", owner.Sensors.Select(s => s.Key));
         if (signature != sensorSignature) { sensorSignature = signature; UpdateSelectors(); }
         foreach (var tile in Settings.Tiles)
@@ -56,7 +45,7 @@ public partial class StageEditor : UserControl
             visual.Temp.Text = t?.Fresh == true ? $"{t.NumericValue:0.#}°" : "—";
             visual.Temp.ToolTip = t?.ToString() ?? "Kein Temperatursensor zugeordnet";
             visual.Rpm.Text = rpm?.Fresh == true ? rpm.ValueText : "—";
-            visual.State.Text = rpm?.Fresh == true ? "Live" : tile.ProfileKey.Length > 0 && tile.RpmSensorKey.Length == 0 ? "Profil · nicht erkannt" : "Quelle fehlt / veraltet";
+            visual.State.Text = rpm?.Fresh == true ? "Live" : tile.ProfileKey.Length > 0 && tile.RpmSensorKey.Length == 0 ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
             visual.State.Foreground = rpm?.Fresh == true ? Brushes.LightGreen : Brushes.Goldenrod;
         }
         SceneSummary.Text = $"{Settings.Tiles.Count} Lüfterbilder · {Settings.Tiles.Count(t => t.Visible)} im Stream · 1920 × 1080";
@@ -75,7 +64,7 @@ public partial class StageEditor : UserControl
         if (owner == null) return;
         loading = true;
         TempSelect.ItemsSource = new[] { new SensorChoice("Keine Temperatur zugeordnet", "") }.Concat(owner.Sensors.Where(s => s.Unit == "°C").Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
-        RpmSelect.ItemsSource = new[] { new SensorChoice("Kein Lüfterwert zugeordnet", "") }.Concat(owner.Sensors.Where(s => s.Unit is "RPM" or "%").Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
+        RpmSelect.ItemsSource = new[] { new SensorChoice("Kein Lüfterwert zugeordnet", "") }.Concat(owner.Sensors.Where(IcueDiscovery.IsLinkSpeed).Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
         TempSelect.SelectedItem = TempSelect.Items.Cast<SensorChoice>().FirstOrDefault(s => s.Key == selected?.TemperatureSensorKey) ?? TempSelect.Items[0];
         RpmSelect.SelectedItem = RpmSelect.Items.Cast<SensorChoice>().FirstOrDefault(s => s.Key == selected?.RpmSensorKey) ?? RpmSelect.Items[0];
         NameInput.Text = selected?.Name ?? ""; SizeSlider.Value = selected?.Size ?? 210; VisibleToggle.IsChecked = selected?.Visible ?? false;
@@ -100,7 +89,7 @@ public partial class StageEditor : UserControl
             double diameter = tile.Size * .43;
             var center = new Border { Background = new SolidColorBrush(Color.FromArgb(235, 7, 19, 35)), BorderBrush = Brushes.Cyan, BorderThickness = new(2), CornerRadius = new(diameter / 2), Width = diameter, Height = diameter, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var temperature = new TextBlock { Text = "—", Foreground = Brushes.White, FontSize = tile.Size * .14, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            center.Child = temperature; picture.Children.Add(center);
+            center.Child = temperature; center.RenderTransform = new TranslateTransform(-tile.Size * .025, 0); picture.Children.Add(center);
             if (selected?.Id == tile.Id) picture.Children.Add(new Border { BorderBrush = Brushes.Cyan, BorderThickness = new(4), IsHitTestVisible = false });
             root.Children.Add(picture);
             var caption = new StackPanel { Background = new SolidColorBrush(Color.FromArgb(226, 7, 19, 35)) };

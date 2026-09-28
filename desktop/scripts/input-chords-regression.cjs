@@ -1,0 +1,35 @@
+'use strict';
+const assert=require('node:assert/strict'),{EventEmitter}=require('node:events'),fs=require('node:fs');
+const {parseAccelerator,normalizeHotkey,InputHotkeys}=require('../src/core/input-hotkeys.cjs');
+const {normalizeHotkeyPatch,validateActions}=require('../src/core/settings/action-schema.cjs');
+const {parseLegacyKeys,planKeyboardAction,sendKeyboardAction}=require('../src/core/keyboard-action.cjs');
+async function main(){
+ assert.deepEqual(parseAccelerator('RButton+K+strg').keys,['K','RButton']);
+ assert.equal(parseAccelerator('b+a+alt').accelerator,'Alt+A+B');
+ assert.equal(parseAccelerator('Mouse5+Control+A').accelerator,'Control+A+XButton2');
+ assert.throws(()=>parseAccelerator('A+B+C+D+E+F+G'),/sechs/);
+ assert.throws(()=>parseAccelerator('WheelUp+WheelDown'),/Mausrad/);
+ assert.throws(()=>normalizeHotkey({accelerator:'A+WheelUp',triggerMode:'up'}),/Mausrad/);
+ assert.throws(()=>normalizeHotkeyPatch([{id:'1',accelerator:'A+B'},{id:'2',accelerator:'B+A'}]),/doppelt/);
+ const stored=normalizeHotkeyPatch([{id:'1',accelerator:'A+B',chainId:'chain'}])[0];
+ assert.equal(stored.accelerator,'A+B');assert.equal(stored.keys,undefined);
+ let received;const manager=new InputHotkeys({backend:{stop(){},cancelCapture(){},configure:async x=>{received=x;}},trigger:()=>{throw Error('must not fire');},stop(){}});
+ manager.configure([stored]);await new Promise(r=>setImmediate(r));assert.deepEqual(received[0].keys,['A','B']);assert.equal(manager.states[0].registered,true);manager.clear();
+ assert.equal(planKeyboardAction({process:'Own Test.exe',keys:'RButton+K',keyFormat:'chord'}).value,'K+RButton');
+ assert.deepEqual(parseLegacyKeys('^a{ENTER}'),['Control+A','Return']);
+ assert.deepEqual(parseLegacyKeys('^%(ab){F1 2}'),['Control+Alt+A','Control+Alt+B','F1','F1']);
+ assert.equal(planKeyboardAction({process:'Own Test',keys:'^a'}).mode,'sequence');
+ assert.deepEqual(JSON.parse(planKeyboardAction({process:'Own Test',keys:'W'}).value),['Shift+W']);
+ assert.equal(planKeyboardAction({process:'Own Test',keys:'W',keyFormat:'chord'}).value,'W');
+ for(const keys of ['^{','^(abc','{F1 1000}','^{UNKNOWN}','{Control+A}','{K+RButton}'])assert.throws(()=>parseLegacyKeys(keys));
+ assert.throws(()=>planKeyboardAction({process:'Own Test',keys:'Control+UnknownKey',keyFormat:'chord'}),/nicht erkannt/);
+ assert.ok(validateActions({actionChains:[{actions:[{type:'hotkey',process:'',keys:''}]}]}).length>0);
+ assert.equal(validateActions({actionChains:[{actions:[{type:'hotkey',process:'Own Test',keys:'A+B',keyFormat:'chord'}]}]}).length,0);
+ const controller=new AbortController();let child,cancelPath,args;
+ const pending=sendKeyboardAction({process:'Own Test',keys:'A+B',keyFormat:'chord'},controller.signal,(_exe,argv)=>{args=argv;cancelPath=argv[3];child=new EventEmitter();child.kill=()=>{throw Error('Graceful cancellation should suffice');};return child;});
+ assert.equal(args[0],'--send');assert.equal(args[5],'A+B');controller.abort();assert.ok(fs.existsSync(cancelPath));child.emit('exit',14);await assert.rejects(pending,/abgebrochen/);assert.equal(fs.existsSync(cancelPath),false);
+ let spawnCount=0;await assert.rejects(sendKeyboardAction({process:'Own Test',keys:'A'},controller.signal,()=>{spawnCount++;}),/abgebrochen/);assert.equal(spawnCount,0);
+ const success=sendKeyboardAction({process:'Own Test',keys:'Control+K'},undefined,()=>{const emitter=new EventEmitter();queueMicrotask(()=>emitter.emit('exit',0));return emitter;});assert.equal((await success).inputSent,true);
+ console.log('PASS input chords: key sets, order-independent conflicts, IPC binding payload, legacy translation, invalid actions, child cancellation and cleanup. No real input generated.');
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

@@ -17,8 +17,6 @@ public sealed class NvidiaReader : IDisposable
     [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl)] private static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
     [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private static extern int nvmlDeviceGetName(IntPtr device, StringBuilder name, uint length);
     [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl)] private static extern int nvmlDeviceGetTemperature(IntPtr device, uint sensorType, out uint temperature);
-    [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl)] private static extern int nvmlDeviceGetNumFans(IntPtr device, out uint count);
-    [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl)] private static extern int nvmlDeviceGetFanSpeed_v2(IntPtr device, uint fan, out uint speed);
     [StructLayout(LayoutKind.Sequential)] private struct Utilization { public uint Gpu, Memory; }
     [StructLayout(LayoutKind.Sequential)] private struct MemoryInfo { public ulong Total, Free, Used; }
     [DllImport("nvml.dll", CallingConvention = CallingConvention.Cdecl)] private static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint value);
@@ -39,14 +37,6 @@ public sealed class NvidiaReader : IDisposable
                 string label = name.Length > 0 ? name.ToString() : "NVIDIA GPU " + (i + 1);
                 if (nvmlDeviceGetTemperature(device, 0, out var temp) == 0)
                     result.Add(new($"nvml/{i}/temperature", "GPU-Temperatur", label, "°C", temp, "NVIDIA-Treiber", DateTime.UtcNow));
-                try
-                {
-                    if (nvmlDeviceGetNumFans(device, out var fans) == 0)
-                        for (uint f = 0; f < Math.Min(fans, 16); f++)
-                            if (nvmlDeviceGetFanSpeed_v2(device, f, out var speed) == 0)
-                                result.Add(new($"nvml/{i}/fan/{f}", $"GPU-Lüfter {f + 1} (Treiberwert)", label, "%", speed, "NVIDIA-Treiber", DateTime.UtcNow));
-                }
-                catch (EntryPointNotFoundException) { /* Older drivers may expose temperature only. */ }
                 void Add(string key, string title, string unit, double value) => result.Add(new($"nvml/{i}/{key}", title, label, unit, value, "NVIDIA-Treiber", DateTime.UtcNow));
                 try {
                     if (nvmlDeviceGetPowerUsage(device, out uint power) == 0) Add("power", "GPU-Leistungsaufnahme", "W", power / 1000.0);
@@ -138,7 +128,11 @@ public sealed class CsvReader
             string? unit = Unit(headers[i]); if (unit == null || !TryNumber(row[i], out double value)) continue;
             if (unit == "°F") { value = (value - 32) * 5 / 9; unit = "°C"; }
             if (unit == "°C" && (value < -100 || value > 250) || unit == "RPM" && (value < 0 || value > 100000) || unit == "%" && (value < 0 || value > 200)) continue;
-            result.Add(new("csv/" + Path.GetFullPath(path).ToUpperInvariant() + "/" + i, headers[i].Trim(), Path.GetFileNameWithoutExtension(path), unit, value, "CSV · " + Path.GetFileName(path), written, false));
+            string key = "csv/" + Path.GetFullPath(path).ToUpperInvariant() + "/" + i;
+            // iCUE rotates its log filename. Preserve identities for the same named sensor.
+            if (Path.GetFileName(path).StartsWith("corsair_cue_", StringComparison.OrdinalIgnoreCase))
+                key = "icuecsv/" + SensorIdentity.PublicId(headers[i].Trim() + "#" + headers.Take(i).Count(h => h.Trim() == headers[i].Trim()));
+            result.Add(new(key, headers[i].Trim(), Path.GetFileNameWithoutExtension(path), unit, value, "CSV · " + Path.GetFileName(path), written, false));
         }
         return new(result, signature, written);
     }

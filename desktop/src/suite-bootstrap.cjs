@@ -2,7 +2,7 @@
 const path=require('node:path'),fs=require('node:fs'),{fileURLToPath}=require('node:url');
 const {app,ipcMain,BrowserWindow,dialog,clipboard,shell}=require('electron');
 const {SuiteRuntime}=require('./services/suite-runtime.cjs');
-const {getObsClient}=require('./main.cjs');
+const {getObsClient}=require('../electron/main21.cjs');
 let runtime;
 const directory=process.env.BATTO_SUITE_DATA||path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'CrazyBatto','BattoSuite');
 const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send(channel,value);};
@@ -14,7 +14,7 @@ handle('settings',value=>runtime.jarvis.update(value));
 handle('listen',()=>{runtime.voice.send({command:'listen'});return {ok:true};});
 handle('stop',()=>{runtime.voice.send({command:'stop'});return {ok:true};});
 handle('devices',()=>{runtime.voice.send({command:'devices'});return {ok:true};});
-handle('scenes',async()=>{const obs=getObsClient();if(!obs.connected)return [];return (await obs.request('GetSceneList')).scenes.map(s=>s.sceneName);});
+handle('scenes',async()=>{const obs=getObsClient();if(!obs?.connected)return [];return (await obs.request('GetSceneList')).scenes.map(s=>s.sceneName);});
 handle('fan-config',async value=>{if(!['stage','curve','csv'].includes(value?.command))throw Error('Unbekannte Einstellung.');return runtime.fan.configure(value.command,value.value);});
 handle('profile',async()=>{const result=await dialog.showOpenDialog({title:'Exportiertes iCUE-Profil wählen',properties:['openFile'],filters:[{name:'iCUE-Profil',extensions:['cueprofile']}]});if(result.canceled)return {canceled:true};return runtime.fan.configure('profile',{path:result.filePaths[0]});});
 handle('csv',async()=>{const result=await dialog.showOpenDialog({title:'Laufendes Sensorprotokoll wählen',properties:['openFile','multiSelections'],filters:[{name:'Sensorprotokolle',extensions:['csv','log']}]});if(result.canceled)return {canceled:true};const paths=[...new Set([...(runtime.fan.catalog?.csvPaths||[]),...result.filePaths])];return runtime.fan.configure('csv',{paths});});

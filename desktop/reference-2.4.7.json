@@ -1,0 +1,10 @@
+{
+  "source": "User-provided Batto-OBS-Tool-2.1-Setup-2.4.7.exe; locally verified unpacked app.asar",
+  "files": {
+    "src/renderer/styles.css": "c80f692de9d968a184bb41d3994f671e8b764344acc440a67801e2d69378dacd",
+    "src/renderer/marble-gold.css": "38c7c4e65dc61d97cadfc0ec8f6c892a242b35e87b534791d008d5a3e5c8a8c2",
+    "src/assets/marble.jpg": "53a25041d01e451e629573c162dd3a577992d6bb679d92213ef8ccb303c0fd2a",
+    "src/assets/brand-logo.jpg": "b5beeba02726648e83552649f2abe91f2c54d79e77228a4485d7b63bacb338fb",
+    "src/assets/source/start-original.png": "53ffc603bee6d5d02e8b96fed71f23ccb890914afa7132c8683b9dbf2d638ae1"
+  }
+}

@@ -1,0 +1,30 @@
+Drittanbieter-Komponenten: lokale Piper-Sprachausgabe
+
+Die Lizenzbedingungen von CRAZY_BATTO / Batto OBS Tool für dessen eigenen
+Programmcode gelten nicht für die hier aufgeführten Drittanbieter-Komponenten.
+Insbesondere schränken sie die durch MIT, GPL-3.0 und die jeweiligen
+Modell-/Datenlizenzen gewährten Rechte zur Nutzung, Änderung, Weitergabe und
+Untersuchung dieser Komponenten nicht ein. Für diese Komponenten gelten
+ausschließlich ihre jeweiligen mitgelieferten Lizenztexte und Hinweise.
+
+Enthaltene Komponenten:
+- Piper 2023.11.14-2, Copyright (c) 2022 Michael Hansen: MIT-Quellcode-Lizenz.
+- piper-phonemize: MIT-Quellcode-Lizenz.
+- eSpeak NG: GNU General Public License, Version 3.
+- ONNX Runtime 1.14.1: MIT und mitgelieferte ThirdPartyNotices.
+- fmt, spdlog und nlohmann/json: jeweilige MIT-Lizenztexte.
+- de_DE-thorsten-medium: Modell-Metadaten des Piper-Voices-Repositories (MIT)
+  sowie beiliegende unveränderte MODEL_CARD. Diese nennt für den
+  Thorsten-Trainingsdatensatz CC0. Siehe auch den dort vermerkten Lessac-Ursprung.
+
+Piper ist als eigenständiges lokales Hilfsprogramm enthalten. Die komplette
+Laufzeit ist wegen der eingebundenen eSpeak-NG-Komponente nicht als ausschließlich
+MIT-lizenziert zu behandeln. Der GPL-Lizenztext liegt unter
+licenses/espeak-ng-GPL-3.0.txt. Quellarchive einschließlich Build-Dateien für
+Piper, piper-phonemize und eSpeak NG liegen direkt neben dieser Datei im Ordner
+sources. SOURCE_BUILD.md dokumentiert Versionen, Bezugsquellen und Build-Weg.
+Diese Dateien und die Lizenztexte bei Weitergabe der Laufzeit beibehalten.
+
+Die mitgelieferten Komponenten werden entsprechend ihren jeweiligen Lizenzen
+ohne Gewährleistung bereitgestellt. Die Lizenztexte enthalten die vollständigen
+Bedingungen. Diese Zusammenstellung ersetzt keine der Originallizenzen.

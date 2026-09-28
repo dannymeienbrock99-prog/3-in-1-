@@ -1,0 +1,9 @@
+'use strict';
+const {app}=require('electron');
+const path=require('node:path');
+// Own app identity, settings and single-instance lock; never open the original data directory.
+app.setName('Batto 3-in-1');
+app.setPath('userData',process.env.BATTO_OBS_DATA||path.join(app.getPath('appData'),'Batto3in1-v247'));
+require('./bootstrap.cjs');
+require('../src/suite-bootstrap.cjs');
+if(process.argv.includes('--suite-smoke'))require('./suite-smoke.cjs');

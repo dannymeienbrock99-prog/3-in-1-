@@ -1,0 +1,14 @@
+[
+  {
+    "name": "piper-2023.11.14-2.zip",
+    "url": "https://codeload.github.com/rhasspy/piper/zip/refs/tags/2023.11.14-2"
+  },
+  {
+    "name": "piper-phonemize-fccd4f3.zip",
+    "url": "https://codeload.github.com/rhasspy/piper-phonemize/zip/fccd4f335aa68ac0b72600822f34d84363daa2bf"
+  },
+  {
+    "name": "espeak-ng-0f65aa3.zip",
+    "url": "https://codeload.github.com/rhasspy/espeak-ng/zip/0f65aa301e0d6bae5e172cc74197d32a6182200f"
+  }
+]

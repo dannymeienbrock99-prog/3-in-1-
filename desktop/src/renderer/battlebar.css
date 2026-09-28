@@ -1,0 +1,26 @@
+.batto-battle-chat{display:flex;flex:none;position:relative;z-index:2;min-width:0;max-width:100%;margin:2px 0 8px;pointer-events:none}
+.batto-battle-chat[hidden],.batto-battle-bar[hidden],.batto-battle-bar [hidden],.battlebar-settings [hidden]{display:none!important}
+.batto-battle-bar{box-sizing:border-box;max-width:100%;min-width:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:9px 12px;border:1px solid #6b5327;border-radius:11px;background:rgba(15,14,18,.91);color:#fff7e6;font:12px/1.25 "Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums;text-shadow:none;pointer-events:none}
+.batto-battle-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;color:#dfbf7c;font-size:11px;letter-spacing:.25px}
+.batto-battle-timer{font-weight:700;color:#fff7e6}
+.batto-battle-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.batto-battle-teams>div{display:flex;align-items:center;gap:6px;min-width:0}
+.batto-battle-teams>div:last-child{flex-direction:row-reverse;text-align:right}
+.batto-battle-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.batto-battle-score{font-size:13px;font-weight:750;white-space:nowrap;flex-shrink:0;max-width:65%;overflow:hidden;text-overflow:ellipsis}
+.batto-battle-track{height:7px;flex:none;overflow:hidden;border-radius:5px;background:#26bedb}
+.batto-battle-track>i{height:100%;display:block;background:#f35a84;transition:width 200ms ease}
+.batto-battle-status{font-size:11px;color:#cfc9bf;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.batto-battle-bar[data-density="small"]{padding:4px 8px;gap:3px}
+.batto-battle-bar[data-density="small"] .batto-battle-heading{display:none}
+.batto-battle-bar[data-density="small"] .batto-battle-status{-webkit-line-clamp:1}
+.batto-battle-bar[data-status="error"] .batto-battle-status,.batto-battle-bar[data-status="disconnected"] .batto-battle-status{color:#ffb2a8}
+.batto-battle-widget{padding:0;background:transparent;border:0;border-radius:0}
+.batto-battle-frame{display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
+.battlebar-settings .toolbar{flex-wrap:wrap}
+.battlebar-settings [data-battlebar-status]{padding:9px 12px;border-left:3px solid #bb9749;background:#15140f}
+.battlebar-settings [data-battlebar-key-status]{font-size:12px}
+.battlebar-settings [data-battlebar-url]{overflow-wrap:anywhere;white-space:normal}
+body.batto-battle-overlay{margin:0;overflow:hidden;background:transparent}
+.batto-battle-overlay [data-batto-battle-overlay]{position:absolute;max-width:100vw;max-height:100vh}
+@media (prefers-reduced-motion:reduce){.batto-battle-track>i{transition:none}}

@@ -19,3 +19,11 @@ jarvis-settings.json
 jarvis-memory.json
 secrets.json
 .env
+
+/desktop/vendor/piper/runtime/
+/desktop/vendor/piper/voices/*.onnx
+/IMPLEMENTATION.md
+/suite-publish-files.json
+
+/desktop/build/generated-installer-key.nsh
+/desktop/build/installer-key-verifier.json

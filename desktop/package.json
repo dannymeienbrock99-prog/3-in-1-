@@ -1,26 +1,43 @@
 {
   "name": "batto-3-in-1",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Batto 3-in-1 mit der Originaloberfläche von OBS Tool 2.4.7",
+  "main": "electron/suite-entry.cjs",
+  "author": "Crazy_Batto",
+  "license": "SEE LICENSE IN build/license_de.txt",
   "private": true,
-  "description": "Batto 3-in-1: OBS, Jarvis und PC-Messwerte",
-  "author": "Crazy_Batto / Team Alpha",
-  "main": "src/main-v2.cjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "prepare:touchdeck-0802": "node scripts/prepare-original-touchdeck.cjs",
-    "prepare:integrated": "npm run prepare:touchdeck-0802 && node scripts/patch-overview-multichat.cjs && node scripts/prepare-runtime-support.cjs && node scripts/prepare-stream-overlay.cjs && node scripts/patch-cohost-runtime.cjs && node scripts/patch-cohost-ui.cjs && node scripts/patch-commercial-settings.cjs && node scripts/restore-full-ui.cjs && node scripts/patch-plugin-truth.cjs && node scripts/patch-tiktok-hybrid-direct-only.cjs && node scripts/fix-multichat-single-tikfinity.cjs && node scripts/verify-source-tree.cjs",
-    "check": "node scripts/verify-source-tree.cjs && node scripts/check-icon.cjs",
-    "test:core": "node --test test/commercial-settings.test.cjs test/hybrid-runtime.test.cjs test/cng-config.test.cjs test/platform-adapters-2.1.test.cjs test/overview-ui.test.cjs",
-    "test:modules": "node --test test/multi-chat.test.cjs modules/twitch-holo-chat/test/*.test.cjs",
-    "test": "npm run check && npm run test:core && npm run test:modules",
-    "test:legacy-2.0": "node scripts/check-2.0.0.cjs && node --test test/integrated-2.0.0.test.cjs",
+    "prestart": "node scripts/restore-app.cjs && electron scripts/prepare-icons.cjs",
+    "start": "electron .",
+    "predev": "node scripts/restore-app.cjs && electron scripts/prepare-icons.cjs",
+    "dev": "electron .",
+    "precheck": "node scripts/restore-app.cjs",
+    "check": "node scripts/check.cjs",
+    "presmoke": "node scripts/restore-app.cjs",
+    "smoke": "node scripts/smoke.cjs",
+    "pretest:ui": "node scripts/restore-app.cjs",
+    "test:ui": "node scripts/ui-contract.cjs",
+    "test:core": "node scripts/core21.cjs",
+    "test:broadcast": "node scripts/broadcast-regression.cjs",
+    "stress": "node scripts/stress.cjs",
+    "soak": "node scripts/soak.cjs",
+    "soak:quick": "node -e \"process.env.SOAK_MINUTES='1';require('./scripts/soak.cjs')\"",
     "pack:win": "electron-builder --win --x64 --dir --publish never",
-    "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "test:jarvis": "node --test test/jarvis-core.test.cjs"
+    "test:storage": "node scripts/storage-regression.cjs",
+    "test:runtime": "node scripts/runtime21.cjs",
+    "test:release": "node scripts/release-regression.cjs",
+    "test:installer": "node scripts/installer-regression.cjs",
+    "test:community": "node scripts/community-regression.cjs",
+    "test:chat-extras": "node scripts/chat-extras-regression.cjs",
+    "test:jarvis": "node --test test/jarvis-core.test.cjs test/suite-v247.test.cjs"
   },
   "dependencies": {
-    "qrcode": "^1.5.4",
-    "tiktok-live-connector": "^2.4.4",
-    "ws": "^8.18.3"
+    "express": "5.1.0",
+    "obs-websocket-js": "5.0.6",
+    "ws": "8.18.3"
   },
   "devDependencies": {
     "electron": "38.8.6",
@@ -30,29 +47,56 @@
     "appId": "de.crazybatto.suite",
     "productName": "Batto 3-in-1",
     "artifactName": "Batto-3-in-1-Setup-${version}.${ext}",
-    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
     "files": [
+      "electron/**/*",
       "src/**/*",
-      "!src/services/hardware.cjs",
-      "!src/services/hardware-enrichment-v2.cjs",
-      "!src/services/telemetry.cjs",
-      "!src/services/recommendation.cjs",
-      "modules/twitch-holo-chat/**/*",
-      "resources/**/*",
-      "package.json"
+      "scripts/**/*",
+      "package.json",
+      "README.md",
+      "!electron/main.cjs",
+      "!src/adapters/axelchat.cjs",
+      "!scripts/axelchat-regression.cjs",
+      "!electron/qa*.cjs",
+      "!scripts/**",
+      "!test/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "src/assets/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "license": "build/license_de.txt",
+      "installerLanguages": [
+        "de_DE"
+      ],
+      "language": "1031",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Batto OBS Tool 2.1",
+      "runAfterFinish": false,
+      "installerHeader": "src/assets/installer-header.bmp",
+      "installerSidebar": "src/assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "src/assets/installer-sidebar.bmp",
+      "installerIcon": "src/assets/installer.ico",
+      "uninstallerIcon": "src/assets/installer.ico"
+    },
+    "asarUnpack": [
+      "src/core/mouse-input.exe",
+      "src/core/physical-input.exe"
     ],
     "extraResources": [
       {
-        "from": "build/license.txt",
-        "to": "Nutzungs-und-Lizenzbedingungen.txt"
-      },
-      {
-        "from": "resources/cng-chat-config.example.json",
-        "to": "resources/cng-chat-config.example.json"
-      },
-      {
-        "from": "resources/touchdeck-0802",
-        "to": "touchdeck-0802"
+        "from": "vendor/piper",
+        "to": "piper"
       },
       {
         "from": "../FanAtlas",
@@ -71,34 +115,6 @@
         "from": "../dist/Extras",
         "to": "Extras"
       }
-    ],
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "win": {
-      "icon": "build/icon.png",
-      "requestedExecutionLevel": "asInvoker",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "signAndEditExecutable": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
-      "runAfterFinish": false,
-      "include": "build/installer.nsh",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "deleteAppDataOnUninstall": false
-    }
+    ]
   }
 }

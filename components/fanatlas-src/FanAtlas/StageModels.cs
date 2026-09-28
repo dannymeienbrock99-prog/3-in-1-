@@ -48,7 +48,7 @@ public static class SensorIdentity
 {
     public static string PublicId(string key) => string.IsNullOrEmpty(key) ? "" : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
 }
-public record BridgeSensor(string Id, string Name, string Device, string Unit, double? Value, bool Fresh, DateTime UpdatedUtc);
+public record BridgeSensor(string Id, string Name, string Device, string Unit, double? Value, bool Fresh, DateTime UpdatedUtc, bool IsLinkFan = false);
 public record BridgeTile(string Id, string Name, double X, double Y, double Size, bool Visible, string RpmSensorId, string TemperatureSensorId, bool FromProfile);
 public record BridgeCurve(string Id, string Name, bool IsCustom);
 public record BridgeScene(string Background, List<BridgeTile> Tiles);

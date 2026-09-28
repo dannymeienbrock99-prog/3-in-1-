@@ -51,7 +51,7 @@ public static class ProfileReader
             if (assignment == null || !seen.Add(key.Value)) continue;
             var serial = Part(key.Value, "sensorSN"); var hub = Part(key.Value, "serial");
             byId.TryGetValue(assignment, out var curve);
-            string type = serial.StartsWith("01") ? "QX-Lüfter" : serial.StartsWith("07") ? "AIO-Kanal" : "Lüfterkanal";
+            string type = serial.StartsWith("01") ? "LINK-Lüfter" : serial.StartsWith("07") ? "AIO-Kanal" : "Lüfterkanal";
             result.Fans.Add(new() { Key = key.Value, Serial = serial, Hub = hub, Name = type + " · …" + serial[^Math.Min(6, serial.Length)..], CurveId = assignment, CurveName = curve?.Name ?? "Kurve nicht in Datei enthalten" });
         }
         if (result.Curves.Count == 0 && result.Fans.Count == 0) throw new InvalidDataException("In dieser Datei wurden keine unterstützten Kühlkurven oder Lüfterzuordnungen gefunden.");

@@ -1,0 +1,28 @@
+'use strict';
+const assert = require('node:assert/strict');
+const { TikTokWriter } = require('../src/core/broadcast/tiktok-writer.cjs');
+(async () => {
+  const cfg = { platforms: { tikfinity: { sendEnabled: true, senderUsername: 'my_bot', streamerbotPort: 7474 } } };
+  let request;
+  const writer = new TikTokWriter({ getConfig: () => cfg, fetchImpl: async (url, options) => { request = { url, options }; return { status: 204 }; } });
+  const result = await writer.send('Broadcast', { source: 'broadcast:one' });
+  assert.equal(result.delivery, 'queued');
+  assert.equal(request.url, 'http://127.0.0.1:7474/DoAction');
+  assert.deepEqual(JSON.parse(request.options.body), { action: { name: 'Batto TikTok Broadcast' }, args: { message: 'Broadcast' } });
+  assert.equal(writer.sourceFor({ platform: 'tiktok', username: 'my_bot', message: 'Broadcast' }, 'tikfinity'), 'broadcast:one');
+  assert.equal(writer.sourceFor({ platform: 'tiktok', username: 'viewer', message: 'Broadcast' }, 'tikfinity'), 'tikfinity');
+  assert.equal(writer.sourceFor({ platform: 'tiktok', username: 'my_bot', message: 'Normal' }, 'tikfinity'), 'tikfinity');
+  assert.equal(writer.echoes.length,0,'Each actual echo consumes its source mapping');
+  assert.equal(writer.sourceFor({ platform: 'tiktok', username: 'my_bot', message: 'Broadcast' }, 'tikfinity'),'tikfinity','Later identical manual message is not the old broadcast');
+  await writer.send('Broadcast',{source:'broadcast:two'});
+  writer.echoes[0].expires = 0;
+  assert.equal(writer.sourceFor({ platform: 'tiktok', username: 'my_bot', message: 'Broadcast' }, 'tikfinity'), 'tikfinity');
+  const rejected = new TikTokWriter({ getConfig: () => cfg, fetchImpl: async () => ({ status: 404 }) });
+  await assert.rejects(rejected.send('Broadcast'), /nicht bestätigt/);
+  assert.equal(rejected.echoes.length, 0);
+  const offline = new TikTokWriter({ getConfig: () => cfg, fetchImpl: async () => { throw new Error('offline'); } });
+  await assert.rejects(offline.send('Broadcast'), error => error.retryable === false);
+  cfg.platforms.tikfinity.sendEnabled = false;
+  await assert.rejects(writer.send('Broadcast'), /aktivieren/);
+  console.log('TikTok bridge: documented payload, queue status, own-account echo matching, rejection and timeout OK');
+})().catch(error => { console.error(error); process.exitCode = 1; });

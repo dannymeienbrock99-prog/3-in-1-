@@ -13,12 +13,14 @@ public partial class App : Application
         base.OnStartup(e);
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
+        if (e.Args.Length >= 2 && e.Args[0] == "--fan-tests") { Shutdown(FanDiscoveryTests.Run(e.Args[1])); return; }
         if (e.Args.Contains("--suite"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             StateStore.DirectoryPath = Environment.GetEnvironmentVariable("BATTO_FAN_DATA") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrazyBatto", "BattoSuite", "FanAtlas");
             mutex = new Mutex(true, @"Local\CrazyBatto-Suite-Sensors", out bool suiteAcquired); if (!suiteAcquired) { Shutdown(); return; }
             var suiteState = StateStore.Load(); if (StateStore.LoadWarning != null) { File.Copy(StateStore.StatePath, StateStore.StatePath + ".recovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); } suiteState.Bridge.Port = 17658;
+            IcueDiscovery.Initialize(suiteState);
             var suiteHost = new MainWindow(suiteState, true); MainWindow = suiteHost; await suiteHost.StartHeadless(); return;
         }
         if (e.Args.Length >= 3 && e.Args[0] == "--test-host")

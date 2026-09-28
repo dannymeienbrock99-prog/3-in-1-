@@ -27,6 +27,14 @@ app.whenReady().then(async()=>{
   assert(geometry.square<1);assert(Math.abs(geometry.x-.475)<.005);assert(Math.abs(geometry.y-.5)<.005);
   assert((await js('document.querySelector(".suite-fan .temp").textContent')).includes('%'),'percent center label');
   await capture('iCUE-LINK-Luefter');
+  // Synthetic UI-only reading verifies that cached layout values clear on disconnect.
+  const runtime=require('../src/suite-bootstrap.cjs').getRuntime();
+  const fixture=structuredClone(runtime.fan.snapshot);fixture.scene.tiles[0].speedPercent={value:80,unit:'%',fresh:true,basis:'measured',updatedUtc:new Date().toISOString()};
+  let isolated=runtime.snapshot();isolated.fan.state=fixture;win.webContents.send('suite:state',isolated);await delay(100);
+  assert.match(await js('document.querySelector(".suite-fan .temp").textContent'),/80/);
+  isolated={...isolated,fan:{...isolated.fan,state:null},fanError:'Testunterbrechung'};win.webContents.send('suite:state',isolated);await delay(100);
+  assert.equal(await js('document.querySelector(".suite-fan .temp").textContent'),'— %','cached percentages clear when source disconnects');
+  win.webContents.send('suite:state',runtime.snapshot());await delay(100);
   win.setSize(1180,800);await delay(500);await capture('iCUE-LINK-1180');
   win.setSize(1600,980);await js('setView("jarvis")');await capture('Jarvis');
   assert.equal(errors.length,0,errors.join('\n'));

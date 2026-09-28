@@ -47,9 +47,10 @@ async function poll() {
       e.root.hidden = !tile.visible; e.root.style.left = tile.x + "px"; e.root.style.top = tile.y + "px"; e.root.style.width = tile.size + "px"; e.temp.style.fontSize = tile.size * .115 + "px";
       e.name.textContent = tile.name;
       const t = sensors.get(tile.temperatureSensorId), r = sensors.get(tile.rpmSensorId);
-      e.temp.textContent = t?.fresh && Number.isFinite(t.value) ? t.value.toLocaleString("de-DE",{maximumFractionDigits:1}) + " °C" : "—";
+      const center = tile.centerMode === 'temperature' ? t : tile.centerMode === 'rpm' ? r : tile.speedPercent;
+      e.temp.textContent = center?.fresh && Number.isFinite(center.value) ? center.value.toLocaleString("de-DE",{maximumFractionDigits:0}) + " " + center.unit : tile.centerMode === 'temperature' ? "— °C" : tile.centerMode === 'rpm' ? "—" : "— %";
       e.rpm.textContent = r?.fresh && Number.isFinite(r.value) ? r.value.toLocaleString("de-DE",{maximumFractionDigits:r.unit==="RPM"?0:1}) + " " + r.unit : "—";
-      e.state.textContent = r?.fresh ? "Live" : tile.fromProfile && !tile.rpmSensorId ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
+      e.state.textContent = tile.speedPercent?.fresh ? (tile.speedPercent.basis === "rpm-reference" ? "% der Max.-Drehzahl" : "Live · gemessene %") : r?.fresh ? "Live · % nicht zugeordnet" : tile.fromProfile && !tile.rpmSensorId ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
       e.root.classList.toggle("stale",!r?.fresh);
       e.root.setAttribute("aria-label", tile.name + ", " + e.temp.textContent + ", " + e.rpm.textContent);
     }

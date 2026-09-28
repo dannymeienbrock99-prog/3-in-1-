@@ -10,16 +10,26 @@ Ein Windows-Programm für **Batto OBS Tool 2.4.7, lokalen Jarvis und PC-Messwert
 - Moderator-Chat vorlesen: standardmäßig nur vom Anbieter bestätigte Moderatoren und Kanalinhaber; Plattformen, Benutzer-IDs, Länge und Abstand einstellbar. Chattexte werden nicht als Befehle ausgeführt.
 - Jeder bereitgestellte PC-Messwert separat benennbar, ein-/ausblendbar und für Sprache sowie Grenzwert-/Änderungsmeldungen einstellbar. Hysterese und Mindestabstand pro Sensor.
 - Windows: CPU-Auslastung und RAM. NVIDIA: verfügbare Temperatur, Auslastung, Leistungsaufnahme, VRAM und Takt. Weitere Werte über HWiNFO Shared Memory oder fortlaufende CSV-/Logdateien.
-- OIP-Lüfterbild pro Kachel, Temperatur in der Mitte, frei verschiebbare Bühne, beide Crazy_Batto-Hintergründe oder Transparenz, Layoutimport/-export, lokale OBS-Browserquelle in 1920 × 1080.
+- OIP-Lüfterbild pro Kachel, Prozent in der Mitte (Temperatur / U/min wählbar), frei verschiebbare Bühne, beide Crazy_Batto-Hintergründe oder Transparenz, Layoutimport/-export, lokale OBS-Browserquelle in 1920 × 1080.
 - Automatisches Lesen des lokalen iCUE-Standardprofils und optionaler Profilimport; gespeicherte LINK-Lüfter werden nach Geräte-ID zusammengeführt, GPU-Lüfter ausgeschlossen; eigene Kurvenentwürfe mit Vorschau und Export.
 - Echtes Stream-Deck-Paket: Lüfter, beliebiger Messwert, Jarvis-Befehl, Kurvenentwurf.
 - Per-Benutzer-Installer mit Crazy_Batto-Bild und Deinstallation. Windows x64; keine Administratorrechte für den normalen Betrieb.
 
 ## iCUE LINK einrichten
 
-Die Lüfterbühne liest das gespeicherte lokale Standardprofil und vorhandene iCUE-Sensornamen automatisch. Profilzuordnungen werden ausdrücklich nicht als bestätigte Live-Verbindung bezeichnet. Es werden keine GPU-Lüfter erzeugt. Die Temperatur sitzt auf der Lüfternabe des OIP-Bildes, Auswahlrahmen ändern die Geometrie nicht. „Gleichmäßig ausrichten“ ordnet bis zu 32 Kacheln im Raster an.
+Die Lüfterbühne liest das gespeicherte lokale Standardprofil und vorhandene iCUE-Sensornamen automatisch. Profilzuordnungen werden ausdrücklich nicht als bestätigte Live-Verbindung bezeichnet. Es werden keine GPU-Lüfter erzeugt. Der mittige Messwert sitzt auf der Lüfternabe des OIP-Bildes, Auswahlrahmen ändern die Geometrie nicht. „Gleichmäßig ausrichten“ ordnet bis zu 32 Kacheln im Raster an.
 
 Für echte Drehzahlen und Temperaturen in iCUE **Einstellungen → Sensorprotokollierung** öffnen, die gewünschten LINK-Sensoren auswählen, 2 Sekunden Intervall einstellen und die Protokollierung starten. Aktive `corsair_cue_*.csv` in Dokumente und Temp werden automatisch erkannt; andere Dateien über **PC-Messwerte → Sensor-CSV** wählen. Jede Temperatur und Drehzahl lässt sich dem richtigen Lüfter zuordnen. Fehlende Zuordnungen bleiben leer. Die CSV wird mit Freigabe für den gleichzeitigen iCUE-Schreibzugriff gelesen.
+
+## Prozentwerte und hohe Lüfterdrehzahlen
+
+Pro Lüfter einen echten Prozent-Sensor zuordnen oder die bekannte Drehzahl bei 100 % eintragen. Bei letzterem werden U/min ÷ Referenz × 100 als **Anteil der Maximaldrehzahl** angezeigt; das ist kein gemessener PWM-Steuerwert. Keine Referenz wird geraten. Ohne aktuelle Messwerte bleiben Prozent und Drehzahl leer. Derselbe Bezug gilt in der App, im OBS-Overlay, auf dem Stream Deck und für Jarvis.
+
+Unter Jarvis ist die Lüftermeldung ab **80 %** voreingestellt und auf z. B. 75 oder 95 % änderbar. Eine Meldung beim Erreichen der Schwelle; erneut erst nach einem Rückgang (standardmäßig 5 Prozentpunkte) und neuem Anstieg. Die Mindestpause von 90 Sekunden verhindert weitere Meldungen bei schnellen Schwankungen, ist kein Wiederholungsintervall. Messunterbrechungen, Neustarts und Änderungen anderer Einstellungen lösen keine Wiederholung aus. Jeder Lüfter ist separat von Ansagen ausnehmbar. „Jarvis Lüfterdrehzahl“ liest U/min vor; „Wie schnell sind die Lüfter in Prozent?“ liest Prozentwerte vor.
+
+## Übernahme aus Batto OBS Tool
+
+Beim ersten regulären Start von 1.2.0 wird `%APPDATA%/batto-obs-tool/Batto-OBS-Tool` in die eigene Suite-Konfiguration übernommen: Einstellungen inklusive Bot/Auto-Broadcast, Medien, Profile, Daten und verschlüsselte Zugangsdaten. Das Original wird nur gelesen. Eine vorhandene Suite-Konfiguration wird vorher in `obs-before-import-*` im Suite-Datenordner gesichert. Die Seite Jarvis zeigt den Importstatus und erlaubt eine erneute Übernahme beim nächsten Start. Die Suite behält die separaten lokalen Ports 17787/17788; ihre Overlay- und Stream-Deck-Adressen sind deshalb neu zu übernehmen. Browser-Sitzungen werden nicht kopiert; eingebettete Anbieter können eine erneute Anmeldung verlangen. Persönliche Dateien gelangen nicht ins Repository oder den Installer.
 
 ## Messwerte und Hardwaregrenzen
 
@@ -35,7 +45,7 @@ Neue freigegebene Sensoren und vorhandene OBS-Szenen werden erkannt. Erfolgreich
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.1.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.2.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.

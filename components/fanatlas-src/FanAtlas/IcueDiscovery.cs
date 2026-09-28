@@ -53,6 +53,11 @@ public static class IcueDiscovery
         var name = fan.Name.Trim();
         return name.Length > 4 && !name.Contains('…') && Regex.IsMatch(sensor.Name, @"(?<![\w])" + Regex.Escape(name) + @"(?![\w])", RegexOptions.IgnoreCase);
     }
+    public static bool IsLinkPercent(SensorRow sensor, ProfileData profile) => sensor.Unit == "%" && !sensor.Key.StartsWith("nvml/")
+        && !Regex.IsMatch(sensor.Name, @"pump|pumpe|GPU|RAM|memory", RegexOptions.IgnoreCase)
+        && (LinkFans(profile).Any(f => SameFan(sensor, f))
+            || Regex.IsMatch(sensor.Name + " " + sensor.Device, @"iCUE\s*LINK|\b(QX|RX|LX)\b", RegexOptions.IgnoreCase)
+            && Regex.IsMatch(sensor.Name, @"fan|lüfter|lufter|speed|duty|drehzahl", RegexOptions.IgnoreCase));
     public static void DiscoverLogs(AppState state)
     {
         if (Environment.GetEnvironmentVariable("BATTO_DISABLE_ICUE_DISCOVERY") == "1") return;

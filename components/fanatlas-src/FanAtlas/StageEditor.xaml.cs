@@ -42,8 +42,10 @@ public partial class StageEditor : UserControl
             if (!visuals.TryGetValue(tile.Id, out var visual)) continue;
             var t = owner.Sensors.FirstOrDefault(s => s.Key == tile.TemperatureSensorKey);
             var rpm = owner.Sensors.FirstOrDefault(s => s.Key == tile.RpmSensorKey);
-            visual.Temp.Text = t?.Fresh == true ? $"{t.NumericValue:0.#}°" : "—";
-            visual.Temp.ToolTip = t?.ToString() ?? "Kein Temperatursensor zugeordnet";
+            var percent = FanTelemetry.Percent(tile, owner.Sensors);
+            visual.Temp.Text = tile.CenterMode == "temperature" ? (t?.Fresh == true ? $"{t.NumericValue:0.#}°" : "— °C")
+                : tile.CenterMode == "rpm" ? (rpm?.Fresh == true ? $"{rpm.NumericValue:0}" : "—") : percent.Fresh ? $"{percent.Value:0} %" : "— %";
+            visual.Temp.ToolTip = "Anzeige und Prozentbezug in Batto 3-in-1 → Lüfterbühne einstellen.";
             visual.Rpm.Text = rpm?.Fresh == true ? rpm.ValueText : "—";
             visual.State.Text = rpm?.Fresh == true ? "Live" : tile.ProfileKey.Length > 0 && tile.RpmSensorKey.Length == 0 ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
             visual.State.Foreground = rpm?.Fresh == true ? Brushes.LightGreen : Brushes.Goldenrod;

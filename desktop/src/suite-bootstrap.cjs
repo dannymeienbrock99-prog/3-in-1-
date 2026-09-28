@@ -11,6 +11,12 @@ function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSend
 handle('state',()=>runtime.snapshot());
 handle('command',value=>runtime.jarvis.execute(value));
 handle('settings',value=>runtime.jarvis.update(value));
+handle('import-status',()=>require('./services/obs-settings-import.cjs').status(app.getPath('userData')));
+handle('import-obs-settings',()=>{
+ const importer=require('./services/obs-settings-import.cjs');
+ importer.prepareImport(path.join(app.getPath('appData'),'batto-obs-tool'),app.getPath('userData'));
+ return importer.status(app.getPath('userData'));
+});
 handle('listen',()=>{runtime.voice.send({command:'listen'});return {ok:true};});
 handle('stop',()=>{runtime.voice.send({command:'stop'});return {ok:true};});
 handle('devices',()=>{runtime.voice.send({command:'devices'});return {ok:true};});

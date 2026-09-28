@@ -13,6 +13,7 @@ app.whenReady().then(async()=>{
   for(let n=0;n<30;n++){await delay(400);snapshot=await js('window.batto.suite("state")');if(snapshot.fan?.state?.scene.tiles.length)break;}
   assert(snapshot.fan?.state?.sensors.some(s=>s.device==='RAM'&&s.fresh),'real RAM readings');
   assert(snapshot.fan.state.scene.tiles.length>0,'iCUE profile detected');
+  assert(snapshot.fan.state.scene.tiles.every(t=>t.centerMode==='percent'),'percentage default');
   assert(snapshot.fan.state.scene.tiles.every(t=>!t.name.includes('GPU-Lüfter')),'no GPU fan placeholders');
   await js('window.batto.suite("settings",{voiceEnabled:false})');
   async function capture(name){win.webContents.invalidate();await delay(250);await win.webContents.capturePage();await delay(250);fs.writeFileSync(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());}
@@ -24,6 +25,7 @@ app.whenReady().then(async()=>{
   const after=await js('JSON.stringify([...document.querySelectorAll(".suite-fan")].map(e=>({width:e.getBoundingClientRect().width,src:e.querySelector("img").src})))');assert.equal(before,after,'selection must not resize fans');
   const geometry=await js(`(()=>{const p=document.querySelector('.suite-fan-picture').getBoundingClientRect(),t=document.querySelector('.suite-fan .temp').getBoundingClientRect();return {square:Math.abs(p.width-p.height),x:(t.x+t.width/2-p.x)/p.width,y:(t.y+t.height/2-p.y)/p.height}})()`);
   assert(geometry.square<1);assert(Math.abs(geometry.x-.475)<.005);assert(Math.abs(geometry.y-.5)<.005);
+  assert((await js('document.querySelector(".suite-fan .temp").textContent')).includes('%'),'percent center label');
   await capture('iCUE-LINK-Luefter');
   win.setSize(1180,800);await delay(500);await capture('iCUE-LINK-1180');
   win.setSize(1600,980);await js('setView("jarvis")');await capture('Jarvis');

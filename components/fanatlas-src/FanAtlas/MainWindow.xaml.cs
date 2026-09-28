@@ -389,8 +389,8 @@ public partial class MainWindow : Window
     }
     internal BridgeSnapshot CreateSnapshot()
     {
-        var sensors = Sensors.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s))).ToList();
-        var tiles = State.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0)).ToList();
+        var sensors = Sensors.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s) || IcueDiscovery.IsLinkPercent(s, State.Profile))).ToList();
+        var tiles = State.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0, SensorIdentity.PublicId(t.PercentSensorKey), t.MaxRpm, t.CenterMode, t.Announce, FanTelemetry.Percent(t, Sensors))).ToList();
         var curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new BridgeCurve(c.Id, c.Name, c.IsCustom)).ToList();
         return new("0.2", DateTime.UtcNow, sensors, curves, new(State.Stage.Background, tiles), selectedOriginal?.Id ?? "", "Auswahl = Entwurf. Hardwarewechsel über iCUE.");
     }
@@ -405,8 +405,8 @@ public partial class MainWindow : Window
                 if (scene.Tiles == null || scene.Tiles.Count > 32 || scene.Background is not ("" or "stream-startet.jpg" or "bin-gleich-zurueck.jpg")) throw new InvalidDataException("Ungültiges Layout.");
                 var old = State.Stage.Tiles.ToDictionary(t => t.Id);
                 string Resolve(string id, string fallback) => Sensors.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id)?.Key ?? (SensorIdentity.PublicId(fallback) == id ? fallback : "");
-                State.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
-                foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.ProfileKey.Length > 0) State.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey,"sensorSN")); }
+                State.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), PercentSensorKey = Resolve(t.PercentSensorId, prior?.PercentSensorKey ?? ""), MaxRpm = t.MaxRpm, CenterMode = t.CenterMode, Announce = t.Announce, ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
+                foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.PercentSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.PercentSensorKey); if (removed.ProfileKey.Length > 0) State.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey,"sensorSN")); }
                 State.Stage.Background = scene.Background; State.Stage.Normalize(); Stage.Attach(this); break;
             case "profile":
                 string path = body.GetProperty("path").GetString() ?? "";

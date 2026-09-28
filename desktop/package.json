@@ -1,6 +1,6 @@
 {
   "name": "batto-3-in-1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Batto 3-in-1 mit der Originaloberfläche von OBS Tool 2.4.7",
   "main": "electron/suite-entry.cjs",
   "author": "Crazy_Batto",
@@ -32,7 +32,7 @@
     "test:installer": "node scripts/installer-regression.cjs",
     "test:community": "node scripts/community-regression.cjs",
     "test:chat-extras": "node scripts/chat-extras-regression.cjs",
-    "test:jarvis": "node --test test/jarvis-core.test.cjs test/suite-v247.test.cjs"
+    "test:jarvis": "node --test test/jarvis-core.test.cjs test/suite-v247.test.cjs test/suite-120.test.cjs"
   },
   "dependencies": {
     "express": "5.1.0",

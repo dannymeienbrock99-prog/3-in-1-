@@ -12,7 +12,7 @@ function fill(id, items, selected, placeholder) {
 function save() { settings={...settings,tileId:$('tile').value,mode:$('mode').value,curveId:$('curveId').value,sensorId:$('sensorId').value,command:$('commandText').value,label:$('label').value}; send('setSettings',settings); }
 window.connectElgatoStreamDeckSocket = (port, propertyInspectorUUID, registerEvent, info, actionInfo) => {
   uuid=propertyInspectorUUID; const data=JSON.parse(actionInfo); action=data.action; settings=data.payload?.settings || {};
-  for(const kind of ['fan','curve','sensor','command']) $(kind).hidden=!action.endsWith('.'+kind); $('commandText').value=settings.command||''; $('label').value=settings.label||'Jarvis'; $('mode').value=settings.mode || 'temperature';
+  for(const kind of ['fan','curve','sensor','command']) $(kind).hidden=!action.endsWith('.'+kind); $('commandText').value=settings.command||''; $('label').value=settings.label||'Jarvis'; $('mode').value=settings.mode || 'percent';
   ws=new WebSocket(`ws://127.0.0.1:${port}`);
   ws.onopen=()=>{ws.send(JSON.stringify({event:registerEvent,uuid}));requestCatalog();};
   ws.onmessage=message=>{const e=JSON.parse(message.data); if(e.event!=='sendToPropertyInspector')return;

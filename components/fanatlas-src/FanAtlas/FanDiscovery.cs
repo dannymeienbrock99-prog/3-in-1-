@@ -10,6 +10,7 @@ public static class FanDiscovery
         changed |= stage.Tiles.RemoveAll(t => t.RpmSensorKey.StartsWith("nvml/") && t.RpmSensorKey.Contains("/fan/")) > 0;
         var speeds = sensors.Where(s => s.Fresh && IcueDiscovery.IsLinkSpeed(s)).ToArray();
         var known = IcueDiscovery.LinkFans(state.Profile);
+        var percentages = sensors.Where(s => s.Fresh && IcueDiscovery.IsLinkPercent(s, state.Profile)).ToArray();
         foreach (var f in known)
         {
             if (stage.HiddenAutoSensors.Contains("profile/" + f.Serial)) continue;
@@ -24,6 +25,8 @@ public static class FanDiscovery
             }
             if (tile != null && tile.ProfileKey.Length == 0) { tile.ProfileKey = f.Key; changed = true; }
             if (tile != null && tile.RpmSensorKey.Length == 0 && reading != null) { tile.RpmSensorKey = reading.Key; changed = true; }
+            var percent = percentages.Where(s => IcueDiscovery.SameFan(s, f) && known.Count(k => IcueDiscovery.SameFan(s, k)) == 1).ToArray();
+            if (tile != null && tile.PercentSensorKey.Length == 0 && percent.Length == 1) { tile.PercentSensorKey = percent[0].Key; changed = true; }
         }
         foreach (var sensor in speeds)
         {

@@ -7,7 +7,7 @@ const on = (channel, callback) => {
 };
 
 contextBridge.exposeInMainWorld('batto', {
-  suite: (command,value) => {if(!['state','command','settings','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
+  suite: (command,value) => {if(!['import-status','import-obs-settings','state','command','settings','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
   onSuiteState:cb=>on('suite:state',cb),onJarvisMessage:cb=>on('suite:message',cb),onJarvisVoice:cb=>on('suite:voice',cb),
   communityStatus:()=>ipcRenderer.invoke('community:status'),
   archiveSearch:payload=>ipcRenderer.invoke('archive:search',payload),

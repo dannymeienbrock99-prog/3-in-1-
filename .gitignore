@@ -27,3 +27,8 @@ secrets.json
 
 /desktop/build/generated-installer-key.nsh
 /desktop/build/installer-key-verifier.json
+
+obs-import-*.json
+obs-import-stage-*/
+obs-before-import-*/
+jarvis-fan-alert-state.json

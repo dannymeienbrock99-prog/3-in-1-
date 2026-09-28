@@ -22,6 +22,10 @@ public class FanTile
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "Lüfter";
     public string RpmSensorKey { get; set; } = "";
+    public string PercentSensorKey { get; set; } = "";
+    public double MaxRpm { get; set; }
+    public string CenterMode { get; set; } = "percent";
+    public bool Announce { get; set; } = true;
     public string TemperatureSensorKey { get; set; } = "";
     public string ProfileKey { get; set; } = "";
     public double X { get; set; } = 250;
@@ -32,6 +36,9 @@ public class FanTile
     public void Clamp()
     {
         RpmSensorKey ??= ""; TemperatureSensorKey ??= ""; ProfileKey ??= "";
+        PercentSensorKey ??= "";
+        MaxRpm = double.IsFinite(MaxRpm) && MaxRpm >= 100 ? Math.Clamp(MaxRpm, 100, 20000) : 0;
+        if (CenterMode is not ("percent" or "temperature" or "rpm")) CenterMode = "percent";
         Size = double.IsFinite(Size) ? Math.Clamp(Size, 120, 420) : 210;
         X = double.IsFinite(X) ? Math.Clamp(X, 0, 1920 - Size) : 250;
         Y = double.IsFinite(Y) ? Math.Clamp(Y, 0, 1080 - Size - 64) : 200;
@@ -49,7 +56,7 @@ public static class SensorIdentity
     public static string PublicId(string key) => string.IsNullOrEmpty(key) ? "" : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..24].ToLowerInvariant();
 }
 public record BridgeSensor(string Id, string Name, string Device, string Unit, double? Value, bool Fresh, DateTime UpdatedUtc, bool IsLinkFan = false);
-public record BridgeTile(string Id, string Name, double X, double Y, double Size, bool Visible, string RpmSensorId, string TemperatureSensorId, bool FromProfile);
+public record BridgeTile(string Id, string Name, double X, double Y, double Size, bool Visible, string RpmSensorId, string TemperatureSensorId, bool FromProfile, string PercentSensorId = "", double MaxRpm = 0, string CenterMode = "percent", bool Announce = true, FanPercent? SpeedPercent = null);
 public record BridgeCurve(string Id, string Name, bool IsCustom);
 public record BridgeScene(string Background, List<BridgeTile> Tiles);
 public record BridgeSnapshot(string Version, DateTime GeneratedUtc, List<BridgeSensor> Sensors, List<BridgeCurve> Curves, BridgeScene Scene, string SelectedCurveId, string SelectionNote);

@@ -87,7 +87,7 @@ public sealed class DeckPlugin : IDisposable
         {
             if (state.Action.EndsWith(".fan"))
             {
-                var next = (JsonObject)state.Settings.DeepClone(); next["mode"] = next["mode"]?.GetValue<string>() == "rpm" ? "temperature" : "rpm"; state.Settings = next;
+                var next = (JsonObject)state.Settings.DeepClone(); next["mode"] = next["mode"]?.GetValue<string>() switch { "percent" => "rpm", "rpm" => "temperature", "temperature" => "percent", _ => "rpm" }; state.Settings = next;
                 await Send(new { @event = "setSettings", context, payload = state.Settings }); state.LastImageHash = ""; await Render(context);
             }
             else if (state.Action.EndsWith(".command") || state.Action.EndsWith(".sensor"))
@@ -97,8 +97,8 @@ public sealed class DeckPlugin : IDisposable
                 bool ok = false;
                 try {
                     var descriptor = JsonNode.Parse(await File.ReadAllTextAsync(suiteDescriptor));
-                    if (descriptor?["port"]?.GetValue<int>() == 17656 && descriptor["token"]?.GetValue<string>() is string secret && secret.Length == 64 && text.Length is > 0 and <= 500) {
-                        using var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:17656/api/command"); request.Headers.Authorization = new("Bearer", secret);
+                    if (descriptor?["port"]?.GetValue<int>() == (Environment.GetEnvironmentVariable("BATTO_TEST_INSTANCE") == "1" ? 17666 : 17656) && descriptor["token"]?.GetValue<string>() is string secret && secret.Length == 64 && text.Length is > 0 and <= 500) {
+                        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{descriptor["port"]!.GetValue<int>()}/api/command"); request.Headers.Authorization = new("Bearer", secret);
                         request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { text }), Encoding.UTF8, "application/json");
                         using var result = await http.SendAsync(request, lifetime.Token); ok = result.IsSuccessStatusCode;
                     }
@@ -170,9 +170,12 @@ public sealed class DeckPlugin : IDisposable
                 var temp = sensors.FirstOrDefault(s => s["id"]?.GetValue<string>() == tile["temperatureSensorId"]?.GetValue<string>());
                 var rpm = sensors.FirstOrDefault(s => s["id"]?.GetValue<string>() == tile["rpmSensorId"]?.GetValue<string>());
                 string Value(JsonObject? s, bool temperature) => Online && s?["fresh"]?.GetValue<bool>() == true && s["value"] != null ? s["value"]!.GetValue<double>().ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("de-DE")) + (temperature ? "°" : " " + s["unit"]?.GetValue<string>()) : "—";
-                bool rpmMode = action.Settings["mode"]?.GetValue<string>() == "rpm";
-                main = Value(rpmMode ? rpm : temp, !rpmMode); bottom = Value(rpmMode ? temp : rpm, rpmMode);
-                status = !Online ? "FanAtlas offline" : rpm?["fresh"]?.GetValue<bool>() == true ? "Live" : "Quelle fehlt";
+                string mode = action.Settings["mode"]?.GetValue<string>() ?? "percent";
+                var percent = tile["speedPercent"] as JsonObject;
+                main = Value(mode == "rpm" ? rpm : mode == "temperature" ? temp : percent, mode == "temperature");
+                if (main == "—" && mode == "percent") main = "— %";
+                bottom = mode == "rpm" ? Value(percent, false) : Value(rpm, false);
+                status = Online && mode == "percent" && percent?["fresh"]?.GetValue<bool>() == true ? (percent["basis"]?.GetValue<string>() == "rpm-reference" ? "% Max. RPM" : "Live %") : !Online ? "FanAtlas offline" : rpm?["fresh"]?.GetValue<bool>() == true ? "Live" : "Quelle fehlt";
             }
         }
         else if (action.Action.EndsWith(".sensor"))

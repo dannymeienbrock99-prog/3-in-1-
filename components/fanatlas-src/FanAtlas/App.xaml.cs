@@ -18,8 +18,9 @@ public partial class App : Application
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             StateStore.DirectoryPath = Environment.GetEnvironmentVariable("BATTO_FAN_DATA") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrazyBatto", "BattoSuite", "FanAtlas");
-            mutex = new Mutex(true, @"Local\CrazyBatto-Suite-Sensors", out bool suiteAcquired); if (!suiteAcquired) { Shutdown(); return; }
-            var suiteState = StateStore.Load(); if (StateStore.LoadWarning != null) { File.Copy(StateStore.StatePath, StateStore.StatePath + ".recovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); } suiteState.Bridge.Port = 17658;
+            bool isolatedTest = Environment.GetEnvironmentVariable("BATTO_TEST_INSTANCE") == "1";
+            mutex = new Mutex(true, @"Local\CrazyBatto-Suite-Sensors" + (isolatedTest ? "-Test" : ""), out bool suiteAcquired); if (!suiteAcquired) { Shutdown(); return; }
+            var suiteState = StateStore.Load(); if (StateStore.LoadWarning != null) { File.Copy(StateStore.StatePath, StateStore.StatePath + ".recovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); } suiteState.Bridge.Port = isolatedTest ? 17668 : 17658;
             IcueDiscovery.Initialize(suiteState);
             var suiteHost = new MainWindow(suiteState, true); MainWindow = suiteHost; await suiteHost.StartHeadless(); return;
         }

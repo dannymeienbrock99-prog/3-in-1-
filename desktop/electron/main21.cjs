@@ -995,6 +995,7 @@ async function shutdown() {
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 else {
+  require('../src/services/obs-settings-import.cjs').initialize(app);
   app.on('second-instance', () => {
     if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); }
   });

@@ -1,10 +1,11 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
+const {FanAlertEngine}=require('./fan-alerts.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
 const DEFAULTS={address:'Sir Crazy',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,
  chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
- sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
+ fanAlerts:{enabled:true,threshold:80,hysteresis:5,cooldown:90},sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
 function finite(value,min,max,fallback){return typeof value==='number'&&Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
 function cleanSettings(input={}){
  const s={...DEFAULTS};
@@ -18,6 +19,7 @@ function cleanSettings(input={}){
    if(!r||typeof r!=='object'||id.length>160)continue;
    s.sensorRules[id]={alias:String(r.alias||'').slice(0,80),visible:r.visible!==false,readable:r.readable!==false,alert:r.alert===true,mode:['above','below','change'].includes(r.mode)?r.mode:'above',threshold:finite(r.threshold,-100000,1e9,80),delta:finite(r.delta,0.01,1e8,5),hysteresis:finite(r.hysteresis,0,1e6,2),cooldown:finite(r.cooldown,10,3600,60)};
  }
+ s.fanAlerts={enabled:input.fanAlerts?.enabled!==false,threshold:finite(input.fanAlerts?.threshold,1,100,80),hysteresis:finite(input.fanAlerts?.hysteresis,1,30,5),cooldown:finite(input.fanAlerts?.cooldown,10,3600,90)};
  s.aiPort=Math.round(finite(input.aiPort,1024,65535,11435));s.aiModel=/^[\w.:/-]{1,80}$/.test(input.aiModel||'')?input.aiModel:'qwen3:8b';s.voiceRuntime=String(input.voiceRuntime||'').slice(0,1000);s.microphone=Number.isInteger(input.microphone)&&input.microphone>=0?input.microphone:null;
  return s;
 }
@@ -50,14 +52,14 @@ class AlertEngine{
  }
 }
 class JarvisCore extends EventEmitter{
- constructor({directory,getSensors=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi}){
-  super();this.directory=directory;this.getSensors=getSensors;this.obs=obs;this.speak=speak;this.stopSpeech=stopSpeech;this.clock=clock;this.askAi=askAi;
+ constructor({directory,getSensors=()=>[],getFans=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi}){
+  super();this.directory=directory;this.getSensors=getSensors;this.getFans=getFans;this.obs=obs;this.speak=speak;this.stopSpeech=stopSpeech;this.clock=clock;this.askAi=askAi;
   this.settings=cleanSettings(this.read('jarvis-settings.json',{}));this.memory=this.read('jarvis-memory.json',[]);if(!Array.isArray(this.memory))this.memory=[];
-  this.history=[];this.alerts=new AlertEngine();this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;
+  this.history=[];this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;
  }
  read(name,fallback){try{return JSON.parse(fs.readFileSync(path.join(this.directory,name),'utf8'));}catch{return fallback;}}
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
- update(settings){this.settings=cleanSettings({...this.settings,...settings});this.alerts=new AlertEngine();this.save('jarvis-settings.json',this.settings);this.emit('settings',this.settings);return this.settings;}
+ update(settings){const previous=this.settings;this.settings=cleanSettings({...this.settings,...settings});if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.save('jarvis-settings.json',this.settings);this.emit('settings',this.settings);return this.settings;}
  say(text,kind='answer',speech=true){const entry={id:crypto.randomUUID(),time:this.clock(),kind,text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);if(speech&&this.settings.voiceEnabled)this.speak(text,{priority:kind==='alert'?2:kind==='chat'?0:1});return {ok:true,text,kind};}
  remember(command,intent){if(!this.settings.learn)return;const key=normalize(command).slice(0,200);const old=this.memory.find(m=>m.command===key);if(old){old.count++;old.last=this.clock();}else this.memory.push({command:key,intent,count:1,last:this.clock()});this.memory=this.memory.sort((a,b)=>b.last-a.last).slice(0,200);this.save('jarvis-memory.json',this.memory);}
  onChat(batch){for(const m of batch){if(!allowedChat(m,this.settings))continue;const key=m.platform+':'+(m.id||crypto.createHash('sha256').update(m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));if(this.chatSeen.has(key))continue;this.chatSeen.set(key,this.clock());
@@ -65,9 +67,27 @@ class JarvisCore extends EventEmitter{
   const body=m.message.replace(/https?:\/\/\S+/gi,'Link').replace(/[\x00-\x1f]/g,' ').slice(0,this.settings.chatMaxLength);
   this.say(`${this.settings.address}, ${isModerator(m)?'Moderator ':''}${String(m.username||'Chat').slice(0,60)} sagt: ${body}`,'chat');
  }for(const [key,time]of this.chatSeen)if(this.clock()-time>300000)this.chatSeen.delete(key);}
- poll(){const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());for(const a of alerts.slice(0,3))this.say(`${this.settings.address}, ${a.text}`,'alert');return alerts;}
+ poll(){
+  const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());
+  for(const a of alerts.slice(0,3))this.say(`${this.settings.address}, ${a.text}`,'alert');
+  const high=this.fanAlerts.evaluate(this.getFans(),this.settings.fanAlerts,this.clock());
+  const saved=JSON.stringify(this.fanAlerts.snapshot());if(saved!==this.lastFanState){this.save('jarvis-fan-alert-state.json',this.fanAlerts.snapshot());this.lastFanState=saved;}
+  if(high.length){
+   const describe=f=>`${f.name}: ${Math.round(f.percent.value)} Prozent${f.percent.basis==='rpm-reference'?' der eingestellten Maximaldrehzahl':''}${fresh(f.rpm,this.clock())?', '+Math.round(f.rpm.value).toLocaleString('de-DE')+' Umdrehungen pro Minute':''}`;
+   const detail=high.length<=3?high.map(describe).join('. '):`${high.length} iCUE-LINK-Lüfter haben die Meldeschwelle erreicht. Höchster Wert: ${describe(high.reduce((a,b)=>a.percent.value>b.percent.value?a:b))}`;
+   this.say(`${this.settings.address}, hohe Lüfterdrehzahl. ${detail}.`,'alert');
+  }
+  return [...alerts,...high.map(f=>({fanId:f.id}))];
+ }
  resolveSensors(text){
   const q=normalize(text), all=this.getSensors().filter(s=>this.settings.sensorRules[s.id]?.readable!==false);
+  const fans=this.getFans();
+  const namedFans=fans.filter(f=>{const n=normalize(f.name);return n.length>2&&q.includes(n);});
+  if((/lufter|\bfan\b|icue link/.test(q)||namedFans.length)&&!/gpu|grafikkarte|pin|spannung|strom|temperatur|warm/.test(q)){
+   const wanted=namedFans.length?namedFans:fans;
+   const percent=/prozent|%|leistung|wie schnell|geschwindigkeit/.test(q);
+   return wanted.slice(0,32).map(f=>({...((percent?f.percent:f.rpm)||{}),id:'fan/'+f.id+(percent?'/percent':'/rpm'),name:f.name,unit:percent?'%':'RPM'}));
+  }
   const connector=/\b(pin|pins|anschluss|stecker)\b|12v.?2.?6|12vhpwr|16.?pin/.test(q);
   const exact=all.filter(s=>{const name=normalize(this.settings.sensorRules[s.id]?.alias||s.name);return name.length>2&&q.includes(name)&&(!connector||/pin|12v.?2.?6|12vhpwr|16.?pin/.test(normalize(s.name+' '+s.device)));});if(exact.length)return exact.slice(0,8);
   let group=/\b(gpu|grafikkarte|grafik)\b/.test(q)?'gpu':/\b(cpu|prozessor)\b/.test(q)?'cpu':/\b(ram|arbeitsspeicher)\b/.test(q)?'ram':/\b(pin|pins|anschluss|stecker)\b/.test(q)?'pin':'';

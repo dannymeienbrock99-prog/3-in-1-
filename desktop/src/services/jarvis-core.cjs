@@ -68,9 +68,11 @@ class JarvisCore extends EventEmitter{
  poll(){const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());for(const a of alerts.slice(0,3))this.say(`${this.settings.address}, ${a.text}`,'alert');return alerts;}
  resolveSensors(text){
   const q=normalize(text), all=this.getSensors().filter(s=>this.settings.sensorRules[s.id]?.readable!==false);
-  const exact=all.filter(s=>{const name=normalize(this.settings.sensorRules[s.id]?.alias||s.name);return name.length>2&&q.includes(name);});if(exact.length)return exact.slice(0,8);
+  const connector=/\b(pin|pins|anschluss|stecker)\b|12v.?2.?6|12vhpwr|16.?pin/.test(q);
+  const exact=all.filter(s=>{const name=normalize(this.settings.sensorRules[s.id]?.alias||s.name);return name.length>2&&q.includes(name)&&(!connector||/pin|12v.?2.?6|12vhpwr|16.?pin/.test(normalize(s.name+' '+s.device)));});if(exact.length)return exact.slice(0,8);
   let group=/\b(gpu|grafikkarte|grafik)\b/.test(q)?'gpu':/\b(cpu|prozessor)\b/.test(q)?'cpu':/\b(ram|arbeitsspeicher)\b/.test(q)?'ram':/\b(pin|pins|anschluss|stecker)\b/.test(q)?'pin':'';
-  let unit=/temperatur|warm|heiss/.test(q)?'°C':/spannung|volt/.test(q)?'V':/stromstarke|ampere/.test(q)?'A':/leistung|watt/.test(q)?'W':/auslastung|last/.test(q)?'%':/drehzahl|umdrehung/.test(q)?'RPM':/takt|mhz/.test(q)?'MHz':'';
+  if(connector)group='pin';
+  let unit=/temperatur|warm|heiss/.test(q)?'°C':/spannung|volt/.test(q)?'V':/strom|ampere/.test(q)?'A':/leistung|watt/.test(q)?'W':/auslastung|last/.test(q)?'%':/drehzahl|umdrehung/.test(q)?'RPM':/takt|mhz/.test(q)?'MHz':'';
   const pin=q.match(/\bpin\s*([1-6])\b/);if(pin)group='pin';
   let matched=all.filter(s=>{const name=normalize(s.name+' '+s.device);if(unit&&s.unit!==unit)return false;
     if(group==='gpu'&&!/gpu|nvidia|geforce|radeon|grafik/.test(name))return false;

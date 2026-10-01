@@ -1,0 +1,204 @@
+{
+  "config_version": 1,
+  "document_type": "project_configuration_specification",
+  "executable_configuration": false,
+  "created_on": "2026-10-01",
+  "project": {
+    "working_title": "Dual Stream Studio",
+    "working_title_is_provisional": true,
+    "language": "de-DE",
+    "target_platform": "Windows",
+    "objective": "Eine eigene sparsame Desktop-App mit genau einer TikTok-Leinwand und einer Twitch-Leinwand; OBS Studio und TikTok LIVE Studio als separate Sendesoftware ersetzen.",
+    "implementation_status": "not_started"
+  },
+  "architecture_recommendation": {
+    "standalone_desktop_app": true,
+    "media_engine": "libobs",
+    "media_engine_decision": "recommended_not_yet_confirmed",
+    "separate_obs_studio_process_required": false,
+    "native_capture_composition_encoding": true,
+    "ui_framework": "to_be_decided",
+    "build_web_apps_role": "Bedienoberfläche und deren Prototyp; native Videoverarbeitung gesondert implementieren.",
+    "tiktok_events_library_candidate": "TikTokLive"
+  },
+  "canvases": [
+    {
+      "id": "tiktok_vertical",
+      "label": "TikTok",
+      "platform": "tiktok",
+      "orientation": "portrait",
+      "aspect_ratio": "9:16",
+      "independent_layout": true,
+      "source_ids": [
+        "game",
+        "camera"
+      ],
+      "initial_layout": "editable",
+      "default_game_fit": "contain"
+    },
+    {
+      "id": "twitch_landscape",
+      "label": "Twitch",
+      "platform": "twitch",
+      "orientation": "landscape",
+      "aspect_ratio": "16:9",
+      "independent_layout": true,
+      "source_ids": [
+        "game",
+        "camera"
+      ],
+      "initial_layout": "editable",
+      "default_game_fit": "contain"
+    }
+  ],
+  "shared_sources": [
+    {
+      "id": "game",
+      "type": "game_capture",
+      "target": null,
+      "capture_once_for_both_canvases": true
+    },
+    {
+      "id": "camera",
+      "type": "camera",
+      "device_id": null,
+      "capture_once_for_both_canvases": true
+    },
+    {
+      "id": "microphone",
+      "type": "audio_input",
+      "device_id": null
+    },
+    {
+      "id": "desktop_audio",
+      "type": "desktop_audio",
+      "device_id": null
+    }
+  ],
+  "active_profile": "economy_720p30",
+  "profiles": {
+    "economy_720p30": {
+      "status": "proposed_default_requires_device_and_network_validation",
+      "fps": 30,
+      "canvas_and_output_sizes_match": true,
+      "outputs": {
+        "tiktok_vertical": {
+          "width": 720,
+          "height": 1280,
+          "video_bitrate_kbps": 3200
+        },
+        "twitch_landscape": {
+          "width": 1280,
+          "height": 720,
+          "video_bitrate_kbps": 3000
+        }
+      }
+    },
+    "fullhd_1080p30": {
+      "status": "optional_after_performance_validation",
+      "fps": 30,
+      "canvas_and_output_sizes_match": true,
+      "outputs": {
+        "tiktok_vertical": {
+          "width": 1080,
+          "height": 1920,
+          "video_bitrate_kbps": 6000
+        },
+        "twitch_landscape": {
+          "width": 1920,
+          "height": 1080,
+          "video_bitrate_kbps": 4500
+        }
+      }
+    }
+  },
+  "encoding": {
+    "video_codec": "H.264",
+    "preferred_implementation": "hardware",
+    "hardware_selection": "detect_supported_encoder_on_capture_gpu",
+    "candidates": [
+      "NVENC",
+      "AMF",
+      "QSV"
+    ],
+    "rate_control": "CBR",
+    "keyframe_interval_seconds": 2,
+    "video_encoder_sessions_for_two_different_layouts": 2,
+    "hardware_dual_session_support": "unverified",
+    "software_fallback": "offer_only_after_showing_expected_performance_tradeoff",
+    "additional_twitch_renditions_enabled": false
+  },
+  "audio": {
+    "shared_mix": true,
+    "source_ids": [
+      "microphone",
+      "desktop_audio"
+    ],
+    "codec": "AAC-LC",
+    "bitrate_kbps_per_destination": 128,
+    "sample_rate_hz": 48000,
+    "channels": 2,
+    "per_destination_mute_control": true,
+    "reuse_encoded_audio_when_compatible": true
+  },
+  "performance": {
+    "preview_max_fps": 15,
+    "preview_disable_control": true,
+    "pause_hidden_previews": true,
+    "preview_rendering_independent_of_stream_frame_rate": true,
+    "default_visible_previews": 1,
+    "reuse_capture_sources": true,
+    "keep_video_frames_in_native_pipeline": true,
+    "avoid_cpu_gpu_frame_copies_where_supported": true,
+    "browser_overlays_optional": true,
+    "recording_enabled_by_default": false,
+    "replay_buffer_enabled_by_default": false,
+    "ai_effects_enabled_by_default": false,
+    "measure_cpu_gpu_encoder_memory_and_dropped_frames": true,
+    "performance_savings_verified": false
+  },
+  "destinations": {
+    "tiktok": {
+      "canvas_id": "tiktok_vertical",
+      "enabled_in_project": true,
+      "start_automatically": false,
+      "access_status": "unverified",
+      "access_route": "authorized_rtmp_or_supported_integration_to_be_confirmed",
+      "stream_url": null,
+      "credential_reference": null
+    },
+    "twitch": {
+      "canvas_id": "twitch_landscape",
+      "enabled_in_project": true,
+      "start_automatically": false,
+      "access_status": "unconfigured",
+      "access_route": "account_authorization_or_stream_key",
+      "ingest_server_selection": "auto_after_setup",
+      "credential_reference": null
+    }
+  },
+  "credentials_policy": {
+    "secret_values_in_this_file": false,
+    "intended_storage": "Windows credential storage",
+    "redact_secrets_in_logs": true
+  },
+  "controls": {
+    "independent_start_stop_per_platform": true,
+    "start_stop_both": true,
+    "independent_scene_layout_editing": true
+  },
+  "tiktok_events": {
+    "chat_display": "candidate_for_initial_version",
+    "gift_follow_like_alerts": "candidate_for_initial_version",
+    "access_method": "unofficial_library_requires_live_validation",
+    "chat_sending_moderation_guest_invites_battle_control": "outside_initial_scope_unverified"
+  },
+  "unresolved": [
+    "CPU, GPU, RAM, Windows-Version und stabiler Upload fehlen.",
+    "TikTok-Sendezugang und Twitch-Anmeldung sind ungeprüft.",
+    "Zwei gleichzeitige Hardware-Encoder-Sitzungen müssen auf der konkreten GPU geprüft werden.",
+    "libobs ist eine Empfehlung; Oberflächentechnik und endgültige Architektur sind noch nicht bestätigt.",
+    "720p30 und Full HD30 sind vorgeschlagene Startprofile, keine vom Nutzer festgelegten Qualitätswerte.",
+    "Es gibt noch keine App, keinen Adapter für diese JSON-Datei und keine Leistungs- oder Live-Tests."
+  ]
+}

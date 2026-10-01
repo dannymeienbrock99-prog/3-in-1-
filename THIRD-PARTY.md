@@ -16,5 +16,8 @@ Die bestehenden Lizenzdateien in `desktop/build`, in den Python-`.dist-info`-Ord
 
 Herstellerprogramme iCUE, GPU Tweak, HWiNFO, OBS, Stream Deck und ein optionaler Ollama-Server werden nicht durch diesen Installer installiert oder verändert.
 
+## Nativer Dual-Stream-Dienst
+`components/dual-stream` / `BattoDualStream` ist ein separates Programm unter GPL-2.0-or-later; die Lizenz liegt bei dessen Quellcode. Vollständiger zugehöriger eigener Quellcode wird im selben Release-Commit veröffentlicht. Es verwendet die C-Schnittstelle der vom Benutzer lokal installierten OBS-32-Laufzeit: https://github.com/obsproject/obs-studio/tree/32.2.2 (GPL-2.0-or-later und enthaltene Drittanbieterhinweise). OBS-DLLs, Capture-Hooks und Plugins werden nicht mit diesem Installer verteilt. Vier bekannte Encoder-/Mux-Prüfhelfer werden beim Start aus der gewählten lokalen OBS-Installation in den Ordner des eigenen Dienstes kopiert, weil libobs sie dort erwartet. Die bestehende OBS-Installation und deren Konfiguration werden nur gelesen. Grafiken und übrige Suite-Module behalten ihre jeweiligen Rechte und Lizenzbedingungen.
+
 ## OBS Tool 2.4.7
 Der eigene lokale Multi-Chat-Quellstand entspricht dem bereitgestellten 2.4.7-Installer. Die Originalquellen werden separat erhalten. Piper-Runtime, Modell, Lizenzen und Quellarchive dieses Programms werden unverändert mitgeliefert; Herkunft und Hashes stehen in desktop/vendor/piper/README.md und manifest.json.

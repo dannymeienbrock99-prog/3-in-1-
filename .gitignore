@@ -32,3 +32,4 @@ obs-import-*.json
 obs-import-stage-*/
 obs-before-import-*/
 jarvis-fan-alert-state.json
+dual-stream-secrets.json

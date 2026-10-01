@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="./rule-editor-ui.css" />
   <link rel="stylesheet" href="./community-ui.css" />
   <link rel="stylesheet" href="./suite.css" />
+  <link rel="stylesheet" href="./dual-stream.css" />
 </head>
 <body>
   <div class="bg-watermark" aria-hidden="true"></div>
@@ -63,6 +64,7 @@
           <button class="nav-item" data-view="jarvis"><b>◉</b><span>Jarvis</span></button>
           <button class="nav-item" data-view="sensors"><b>◴</b><span>PC-Messwerte</span></button>
           <button class="nav-item" data-view="fans"><b>✣</b><span>iCUE LINK Lüfter</span></button>
+          <button class="nav-item" data-view="dualstream"><b>▣</b><span>Dual Stream</span></button>
         </nav>
         <div class="sidebar-brand">
           <img src="../assets/brand-logo.jpg" alt="CRAZY_BATTO">
@@ -165,6 +167,10 @@
  <article class="suite-panel"><h3>Zuordnungen aus deinem iCUE-Profil</h3><p class="suite-help">Ein importiertes Profil zeigt gespeicherte Zuordnungen. Sie bestätigen keine aktuell angeschlossenen Geräte und keine laufende Hardwarekurve.</p><div id="f-assignments"></div></article>
 </section>
 
+        <section class="view module-view" id="view-dualstream" data-view-panel="dualstream">
+          <div class="module-head"><div><h1>Dual Stream</h1><p>TikTok im Hochformat. Twitch im Querformat. Gemeinsame Quellen.</p></div><button data-back-dashboard>← Multi-Chat</button></div>
+          <div id="dual-root"></div>
+        </section>
       </main>
     </div>
 
@@ -202,5 +208,6 @@
   <script src="./battlebar-view.js"></script>
   <script src="./battlebar-ui.js"></script>
 <script src="./suite.js"></script>
+<script src="./dual-stream.js"></script>
 </body>
 </html>

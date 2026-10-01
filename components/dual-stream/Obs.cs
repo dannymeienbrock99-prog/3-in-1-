@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+using System.Runtime.InteropServices;
+
+// libobs C ABI, OBS 32.x. The runtime is loaded from an explicitly selected local OBS installation.
+internal static class Obs {
+ const string D="obs.dll";
+ [StructLayout(LayoutKind.Sequential)] public struct Video { public nint graphics; public uint fpsNum,fpsDen,width,height,outWidth,outHeight; public int format; public uint adapter; [MarshalAs(UnmanagedType.I1)] public bool gpu; public int colorspace,range,scale; }
+ [StructLayout(LayoutKind.Sequential)] public struct Audio { public uint rate; public int speakers; }
+ [StructLayout(LayoutKind.Sequential)] public struct Vec { public float x,y; public Vec(float x,float y){this.x=x;this.y=y;} }
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void Log(int level,nint format,nint args,nint param);
+ [DllImport("kernel32",CharSet=CharSet.Unicode)] public static extern bool SetDllDirectory(string path);
+ [DllImport(D)] public static extern void base_set_log_handler(Log handler,nint data);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_startup([MarshalAs(UnmanagedType.LPUTF8Str)] string locale,[MarshalAs(UnmanagedType.LPUTF8Str)] string path,nint store);
+ [DllImport(D)] public static extern void obs_shutdown();
+ [DllImport(D)] public static extern nint obs_get_version_string();
+ [DllImport(D)] public static extern void obs_add_data_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
+ [DllImport(D)] public static extern int obs_reset_video(ref Video video);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_reset_audio(ref Audio audio);
+ [DllImport(D)] public static extern int obs_open_module(out nint module,[MarshalAs(UnmanagedType.LPUTF8Str)] string path,[MarshalAs(UnmanagedType.LPUTF8Str)] string data);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_init_module(nint module);
+ [DllImport(D)] public static extern void obs_post_load_modules();
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_enum_encoder_types(nuint i,out nint id);
+ [DllImport(D,EntryPoint="obs_encoder_defaults")] public static extern nint obs_get_encoder_defaults([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+ [DllImport(D)] public static extern nint obs_get_source_defaults([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+ [DllImport(D)] public static extern nint obs_get_latest_input_type_id([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+ [DllImport(D)] public static extern nint obs_data_create();
+ [DllImport(D)] public static extern nint obs_data_create_from_json([MarshalAs(UnmanagedType.LPUTF8Str)] string json);
+ [DllImport(D)] public static extern void obs_data_release(nint data);
+ [DllImport(D)] public static extern void obs_data_apply(nint target,nint source);
+ [DllImport(D)] public static extern nint obs_source_create([MarshalAs(UnmanagedType.LPUTF8Str)] string id,[MarshalAs(UnmanagedType.LPUTF8Str)] string name,nint data,nint hotkeys);
+ [DllImport(D)] public static extern void obs_source_release(nint source);
+ [DllImport(D)] public static extern void obs_source_set_audio_mixers(nint source,uint mixers);
+ [DllImport(D)] public static extern uint obs_source_get_width(nint source);
+ [DllImport(D)] public static extern uint obs_source_get_height(nint source);
+ [DllImport(D)] public static extern void obs_set_output_source(uint channel,nint source);
+ [DllImport(D)] public static extern nint obs_scene_create_private([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+ [DllImport(D)] public static extern nint obs_scene_get_source(nint scene);
+ [DllImport(D)] public static extern void obs_scene_release(nint scene);
+ [DllImport(D)] public static extern nint obs_scene_add(nint scene,nint source);
+ [DllImport(D)] public static extern void obs_sceneitem_set_pos(nint item,ref Vec pos);
+ [DllImport(D)] public static extern void obs_sceneitem_set_alignment(nint item,uint value);
+ [DllImport(D)] public static extern void obs_sceneitem_set_bounds_type(nint item,int value);
+ [DllImport(D)] public static extern void obs_sceneitem_set_bounds_alignment(nint item,uint value);
+ [DllImport(D)] public static extern void obs_sceneitem_set_bounds_crop(nint item,[MarshalAs(UnmanagedType.I1)] bool value);
+ [DllImport(D)] public static extern void obs_sceneitem_set_bounds(nint item,ref Vec size);
+ [DllImport(D)] public static extern nint obs_view_create();
+ [DllImport(D)] public static extern void obs_view_set_source(nint view,uint channel,nint source);
+ [DllImport(D)] public static extern nint obs_view_add2(nint view,ref Video video);
+ [DllImport(D)] public static extern void obs_view_remove(nint view);
+ [DllImport(D)] public static extern void obs_view_destroy(nint view);
+ [DllImport(D)] public static extern nint obs_video_encoder_create([MarshalAs(UnmanagedType.LPUTF8Str)] string id,[MarshalAs(UnmanagedType.LPUTF8Str)] string name,nint data,nint hotkeys);
+ [DllImport(D)] public static extern nint obs_audio_encoder_create([MarshalAs(UnmanagedType.LPUTF8Str)] string id,[MarshalAs(UnmanagedType.LPUTF8Str)] string name,nint data,nuint mix,nint hotkeys);
+ [DllImport(D)] public static extern void obs_encoder_release(nint encoder);
+ [DllImport(D)] public static extern void obs_encoder_set_video(nint encoder,nint video);
+ [DllImport(D)] public static extern void obs_encoder_set_audio(nint encoder,nint audio);
+ [DllImport(D)] public static extern nint obs_get_audio();
+ [DllImport(D)] public static extern nint obs_service_create([MarshalAs(UnmanagedType.LPUTF8Str)] string id,[MarshalAs(UnmanagedType.LPUTF8Str)] string name,nint data,nint hotkeys);
+ [DllImport(D)] public static extern void obs_service_release(nint service);
+ [DllImport(D)] public static extern nint obs_output_create([MarshalAs(UnmanagedType.LPUTF8Str)] string id,[MarshalAs(UnmanagedType.LPUTF8Str)] string name,nint data,nint hotkeys);
+ [DllImport(D)] public static extern void obs_output_set_video_encoder(nint output,nint encoder);
+ [DllImport(D)] public static extern void obs_output_set_audio_encoder(nint output,nint encoder,nuint idx);
+ [DllImport(D)] public static extern void obs_output_set_service(nint output,nint service);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_output_start(nint output);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_output_active(nint output);
+ [DllImport(D)] public static extern void obs_output_stop(nint output);
+ [DllImport(D)] public static extern void obs_output_force_stop(nint output);
+ [DllImport(D)] public static extern void obs_output_release(nint output);
+ [DllImport(D)] public static extern ulong obs_output_get_total_bytes(nint output);
+ [DllImport(D)] public static extern int obs_output_get_frames_dropped(nint output);
+ [DllImport(D)] public static extern int obs_output_get_total_frames(nint output);
+ [DllImport(D)] public static extern nint obs_get_source_properties([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+ [DllImport(D)] public static extern nint obs_properties_get(nint props,[MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+ [DllImport(D)] public static extern void obs_properties_destroy(nint props);
+ [DllImport(D)] public static extern nuint obs_property_list_item_count(nint prop);
+ [DllImport(D)] public static extern nint obs_property_list_item_name(nint prop,nuint i);
+ [DllImport(D)] public static extern nint obs_property_list_item_string(nint prop,nuint i);
+ [DllImport(D)] public static extern long obs_property_list_item_int(nint prop,nuint i);
+ [DllImport(D)] public static extern int obs_property_list_format(nint prop);
+ [DllImport(D)] public static extern uint obs_get_total_frames();
+ [DllImport(D)] public static extern uint obs_get_lagged_frames();
+ public static string Str(nint p)=>Marshal.PtrToStringUTF8(p)??"";
+ [StructLayout(LayoutKind.Sequential)] public struct Color { public float r,g,b,a; }
+ [DllImport(D)] public static extern void obs_enter_graphics();
+ [DllImport(D)] public static extern void obs_leave_graphics();
+ [DllImport(D)] public static extern void obs_source_video_render(nint source);
+ [DllImport(D)] public static extern nint gs_texrender_create(int format,int depth);
+ [DllImport(D)] public static extern void gs_texrender_destroy(nint render);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool gs_texrender_begin(nint render,uint width,uint height);
+ [DllImport(D)] public static extern void gs_texrender_end(nint render);
+ [DllImport(D)] public static extern nint gs_texrender_get_texture(nint render);
+ [DllImport(D)] public static extern nint gs_stagesurface_create(uint width,uint height,int format);
+ [DllImport(D)] public static extern void gs_stagesurface_destroy(nint surface);
+ [DllImport(D)] public static extern void gs_stage_texture(nint surface,nint texture);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool gs_stagesurface_map(nint surface,out nint data,out uint stride);
+ [DllImport(D)] public static extern void gs_stagesurface_unmap(nint surface);
+ [DllImport(D)] public static extern void gs_ortho(float left,float right,float top,float bottom,float near,float far);
+ [DllImport(D)] public static extern void gs_clear(uint flags,ref Color color,float depth,byte stencil);
+ [DllImport(D)] public static extern void gs_viewport_push();
+ [DllImport(D)] public static extern void gs_viewport_pop();
+ [DllImport(D)] public static extern void gs_projection_push();
+ [DllImport(D)] public static extern void gs_projection_pop();
+ [DllImport(D)] public static extern void gs_matrix_push();
+ [DllImport(D)] public static extern void gs_matrix_identity();
+ [DllImport(D)] public static extern void gs_matrix_pop();
+}

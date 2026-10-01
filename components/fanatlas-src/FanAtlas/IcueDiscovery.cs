@@ -79,6 +79,9 @@ public static class IcueDiscovery
             try
             {
                 var newest = new DirectoryInfo(dir).EnumerateFiles("corsair_cue_*.csv", SearchOption.TopDirectoryOnly).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+                // Directory enumeration can cache an old write time while iCUE keeps
+                // its log open. Query the file directly before judging its freshness.
+                newest?.Refresh();
                 if (newest == null || DateTime.UtcNow - newest.LastWriteTimeUtc > TimeSpan.FromMinutes(2)) continue;
                 state.CsvPaths.RemoveAll(p => Path.GetDirectoryName(p)?.Equals(dir, StringComparison.OrdinalIgnoreCase) == true && Path.GetFileName(p).StartsWith("corsair_cue_", StringComparison.OrdinalIgnoreCase));
                 if (state.CsvPaths.Count < 20 && !state.CsvPaths.Contains(newest.FullName, StringComparer.OrdinalIgnoreCase)) state.CsvPaths.Add(newest.FullName);

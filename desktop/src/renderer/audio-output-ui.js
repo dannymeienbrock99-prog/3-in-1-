@@ -11,6 +11,7 @@
   let devicesError = '';
   let deviceRequest = null;
   let initialRequest = null;
+  let devicesLoaded = false;
 
   function normalized(config) {
     const value = config?.audioOutput || {};
@@ -54,6 +55,8 @@
 
   async function refreshDevices() {
     if (deviceRequest) return deviceRequest;
+    if (!devicesLoaded) navigator.mediaDevices?.addEventListener?.('devicechange', () => { if (!document.hidden) void refreshDevices(); });
+    devicesLoaded = true;
     deviceRequest = (async () => {
       try {
         if (!navigator.mediaDevices?.enumerateDevices) throw new Error('Geräteliste nicht verfügbar.');
@@ -143,7 +146,7 @@
       save.disabled = locked;
       level.value = `${volume.value} %`;
       volume.setAttribute('aria-valuetext', `${volume.value} Prozent`);
-      const missing = device.value !== 'default' && !devices.some(item => item.id === device.value);
+      const missing = devicesLoaded && device.value !== 'default' && !devices.some(item => item.id === device.value);
       hint.textContent = obs
         ? 'Das Ausgabegerät und das Mithören stellst du in OBS ein. Die Lautstärke gilt auch dort.'
         : devicesError || (missing
@@ -159,7 +162,7 @@
       device.replaceChildren(new Option('Systemstandard', 'default'));
       for (const item of devices) device.add(new Option(item.label, item.id));
       if (wanted !== 'default' && !devices.some(item => item.id === wanted)) {
-        device.add(new Option(`${selectedLabel} (nicht verbunden)`, wanted));
+        device.add(new Option(devicesLoaded ? `${selectedLabel} (nicht verbunden)` : selectedLabel, wanted));
       }
       device.value = wanted;
       controls();
@@ -201,6 +204,7 @@
       status('Noch nicht gespeichert.');
       controls();
     };
+    device.addEventListener('focus', () => { if (!devicesLoaded) void refreshDevices(); });
     volume.oninput = () => { status('Noch nicht gespeichert.'); controls(); };
     refresh.onclick = () => run(refreshDevices);
     test.onclick = () => run(async () => {
@@ -222,11 +226,9 @@
     active.add(item);
     populate(current || normalized({}));
     initialize();
-    refreshDevices();
     return element;
   }
 
   api.onConfigChanged?.(update);
-  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
   window.BattoAudioOutputUI = Object.freeze({ mount });
 })();

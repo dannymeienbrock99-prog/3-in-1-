@@ -396,43 +396,19 @@ public partial class MainWindow : Window
         string path = Path.Combine(AppContext.BaseDirectory, "Assets", filename);
         if (File.Exists(path)) Background = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(new Uri(path))) { Stretch = Stretch.UniformToFill };
     }
-    internal BridgeSnapshot CreateSnapshot()
-    {
-        var sensors = Sensors.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s) || IcueDiscovery.IsLinkPercent(s, State.Profile))).ToList();
-        var tiles = State.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0, SensorIdentity.PublicId(t.PercentSensorKey), t.MaxRpm, t.CenterMode, t.Announce, FanTelemetry.Percent(t, Sensors))).ToList();
-        var curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new BridgeCurve(c.Id, c.Name, c.IsCustom)).ToList();
-        return new("0.2", DateTime.UtcNow, sensors, curves, new(State.Stage.Background, tiles), selectedOriginal?.Id ?? "", "Auswahl = Entwurf. Hardwarewechsel über iCUE.");
-    }
+    internal BridgeSnapshot CreateSnapshot() => SuiteState.Snapshot(State, Sensors, selectedOriginal?.Id ?? "");
     private void PublishBridge() => bridge?.Publish(CreateSnapshot());
     internal async Task StartHeadless() { await StartBridge(); timer.Start(); await PollOnce(); }
     private object ConfigureSuite(string command, JsonElement body)
     {
-        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var curve = SuiteState.Configure(State, Sensors, command, body);
         switch (command) {
-            case "stage":
-                var scene = body.Deserialize<BridgeScene>(json) ?? throw new InvalidDataException("Layout fehlt.");
-                if (scene.Tiles == null || scene.Tiles.Count > 32 || scene.Background is not ("" or "stream-startet.jpg" or "bin-gleich-zurueck.jpg")) throw new InvalidDataException("Ungültiges Layout.");
-                var old = State.Stage.Tiles.ToDictionary(t => t.Id);
-                string Resolve(string id, string fallback) => Sensors.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id)?.Key ?? (SensorIdentity.PublicId(fallback) == id ? fallback : "");
-                State.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), PercentSensorKey = Resolve(t.PercentSensorId, prior?.PercentSensorKey ?? ""), MaxRpm = t.MaxRpm, CenterMode = t.CenterMode, Announce = t.Announce, ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
-                foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.PercentSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.PercentSensorKey); if (removed.ProfileKey.Length > 0) State.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey,"sensorSN")); }
-                State.Stage.Background = scene.Background; State.Stage.Normalize(); if (!headless) Stage.Attach(this); break;
+            case "stage": if (!headless) Stage.Attach(this); break;
             case "profile":
-                string path = body.GetProperty("path").GetString() ?? "";
-                if (!path.EndsWith(".cueprofile", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Bitte ein iCUE-Profil wählen.");
-                State.Profile = ProfileReader.Read(path); draft = null; selectedOriginal = null; dirty = false; RefreshProfile(); RefreshCurves(); if (!headless) Stage.Attach(this); break;
-            case "csv":
-                var paths = body.GetProperty("paths").Deserialize<List<string>>() ?? new();
-                if (paths.Count > 20 || paths.Any(p => string.IsNullOrEmpty(p) || !Path.IsPathFullyQualified(p) || !new[] { ".csv", ".log" }.Contains(Path.GetExtension(p).ToLowerInvariant()))) throw new InvalidDataException("Bitte höchstens 20 CSV-/Logdateien wählen.");
-                State.CsvPaths = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList(); RefreshCsv(); break;
+                draft = null; selectedOriginal = null; dirty = false; RefreshProfile(); RefreshCurves(); if (!headless) Stage.Attach(this); break;
+            case "csv": RefreshCsv(); break;
             case "curve":
-                var curve = body.Deserialize<FanCurve>(json) ?? throw new InvalidDataException("Kurve fehlt.");
-                if (curve.Points == null || curve.Points.Any(p => p == null)) throw new InvalidDataException("Kurvenpunkte fehlen.");
-                string? error = FanCurve.Validate(curve); if (error != null) throw new InvalidDataException(error);
-                var existing = State.CustomCurves.FindIndex(c => c.Id == curve.Id); curve.IsCustom = true; curve.Predefined = false; curve.Origin = "Batto 3-in-1 Entwurf";
-                if (existing >= 0) State.CustomCurves[existing] = curve; else { curve.Id = Guid.NewGuid().ToString(); State.CustomCurves.Add(curve); }
-                dirty = false; RefreshCurves(curve.Id); selectedOriginal = curve; LoadDraft(curve.Copy()); break;
-            default: throw new InvalidDataException("Unbekannte Einstellung.");
+                dirty = false; RefreshCurves(curve!.Id); selectedOriginal = curve; LoadDraft(curve.Copy()); break;
         }
         if (!SaveState()) throw new InvalidDataException("Einstellungen konnten nicht gespeichert werden."); PublishBridge(); return new { ok = true, hardwareApplied = false };
     }

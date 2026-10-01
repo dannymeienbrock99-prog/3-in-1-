@@ -34,4 +34,4 @@ Pop-Location
 if (-not $InnoCompiler) { $InnoCompiler = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $InnoCompiler) { throw 'Inno Setup 7.1 oder neuer: -InnoCompiler mit Pfad zu ISCC.exe angeben.' }
 & $InnoCompiler installer/BattoSuite.iss; Check-Exit
-Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.2.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.2.3.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'

@@ -41,6 +41,7 @@ function isTikFinityGiftsWidgetUrl(value) {
 function validateConfig(config) {
   const errors = [];
   const c = config || {};
+  if (c.performance && typeof c.performance.webWidgetsAutoStart !== 'boolean') errors.push(issue('performance.webWidgetsAutoStart', 'Web-Widgets automatisch starten muss an oder aus sein.'));
 
   const battle = c.battleBar;
   if (battle) {

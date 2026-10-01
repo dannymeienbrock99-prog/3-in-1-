@@ -18,7 +18,7 @@
       panel = document.createElement('section');
       panel.className = 'dashboard-gifts';
       panel.setAttribute('aria-labelledby', 'dashboardGiftsTitle');
-      panel.innerHTML = '<h3 id="dashboardGiftsTitle">TikTok-Geschenke</h3><div class="dashboard-gifts-viewport"></div>';
+      panel.innerHTML = '<h3 id="dashboardGiftsTitle">TikTok-Geschenke</h3><div class="dashboard-gifts-viewport"><p data-resource-note>Sparmodus · Bei Bedarf oben „Widgets starten“ wählen.</p></div>';
       history.append(panel);
     }
     panel.hidden = !url;
@@ -34,7 +34,8 @@
       panel.querySelector('.dashboard-gifts-viewport').append(frame);
     }
     // Keep the widget session when unrelated settings or chat content update.
-    if (frame.getAttribute('src') !== url) frame.src = url;
+    if (window.BattoResources) { window.BattoResources.setFrameSource(frame, url); window.BattoResources.refresh(); }
+    else if (frame.getAttribute('src') !== url) frame.src = url;
   }
   const baseWidgets = window.applyChatWidgets;
   window.applyChatWidgets = function () { baseWidgets?.(); applyGifts(); };

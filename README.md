@@ -4,6 +4,8 @@ Ein Windows-Programm für **Batto OBS Tool 2.4.7, lokalen Jarvis und PC-Messwert
 
 ## Funktionen
 
+**1.2.3 – Sparmodus als Standard:** Web-Widgets werden erst mit **Widgets starten** im Multi-Chat geladen. Beim Verlassen des Chats oder Minimieren werden sie entladen, bei Rückkehr nach vorheriger Aktivierung erneut geladen. Eine externe Widget-Seite kann dabei ihre eigene Sitzung/Animationshistorie zurücksetzen. Unter **Einstellungen → Leistung sparen** lässt sich der automatische Start einschalten (höherer Verbrauch). Alle bisherigen Widget-Adressen bleiben gespeichert; Bot, Auto-Broadcast, lokale Chatnachrichten, OBS-Overlays und Jarvis-Warnungen laufen unabhängig davon weiter. Die Audio-Geräteliste wird erst beim Öffnen der Geräteauswahl oder „Geräte erkennen“ geladen. Der Messdienst läuft vollständig ohne zusätzliches Fenster oder Grafikbühne. Originalbilder und Grundgestaltung bleiben erhalten.
+
 **1.2.2 – weniger Hintergrundarbeit:** Nur der sichtbare Zusatzbereich wird gezeichnet. Lüfterbilder bleiben bei Live-Aktualisierungen bestehen; der Messdienst baut keine unsichtbare Lüfterbühne oder Verlaufsgrafik mehr auf. Messwerte, OBS-Overlay, Stream Deck und Grenzwertmeldungen laufen weiter im 2-Sekunden-Takt. Die lokale Spracherkennung und Sprachausgabe nutzen je zwei Rechen-Threads; große Sprachmodelle werden nach 60 Sekunden ohne Auftrag beendet und beim nächsten Auftrag erneut geladen. Das spart Speicher, kann die erste Antwort nach längerer Ruhe etwas verzögern. Das optionale Aktivierungswort bleibt bei eingeschaltetem Mikrofon aktiv. Styles und Bilder des Originals bleiben erhalten.
 
 - OBS-Verbindung, Multi-Chat und vorhandene Creator-Werkzeuge aus OBS Tool 2.1.
@@ -49,7 +51,7 @@ Neue freigegebene Sensoren und vorhandene OBS-Szenen werden erkannt. Erfolgreich
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.2.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.2.3.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.

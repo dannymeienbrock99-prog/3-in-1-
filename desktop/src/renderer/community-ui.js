@@ -45,7 +45,9 @@
  api.onCommunityStatus?.(s=>{const changed=JSON.stringify(snapshot.moderation)!==JSON.stringify(s.moderation);snapshot=s;renderViewers();renderStorage();if(changed){renderModeration();renderChat();}});api.onViewersStatus?.(v=>{snapshot.viewers=v;renderViewers();});api.onModerationStatus?.(()=>reload());api.onModerationEvent?.(()=>reload());
  api.onModerationLoginStatus?.(login=>{snapshot.login=login;const target=q('#communityLogin');if(!target)return;if(login.status==='pending'){target.innerHTML=`Code: <strong>${html(login.code)}</strong> <button id="communityOpenLogin">Anmeldung öffnen</button>`;q('#communityOpenLogin').onclick=()=>api.moderationOpenLogin({platform:'twitch'});}else target.textContent=login.error||'Anmeldung abgeschlossen.';});
  api.onConfigChanged?.(()=>{renderStorage();renderViewers();});
- const poll=setInterval(()=>{if(S.config)reload().catch(()=>{});},15000);window.addEventListener('beforeunload',()=>clearInterval(poll));
+ const visible=()=>!document.hidden&&(detached||['dashboard','moderation','chatarchive','settings'].includes(S.view));
+ const poll=setInterval(()=>{if(S.config&&visible())reload().catch(()=>{});},15000);window.addEventListener('beforeunload',()=>clearInterval(poll));
+ for(const event of ['batto:view','visibilitychange'])document.addEventListener(event,()=>{if(S.config&&visible())reload().catch(()=>{});});
  api.getState().then(r=>{if(r.community)snapshot=r.community;renderStorage();renderViewers();return reload();}).catch(e=>console.warn('Community:',e.message));
  window.BattoCommunity={reload,renderArchive,openArchive};
 })();

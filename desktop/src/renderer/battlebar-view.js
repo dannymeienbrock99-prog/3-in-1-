@@ -27,7 +27,7 @@
     if(bar.hidden){if(ctx.frame){ctx.frame.remove();ctx.frame=null;ctx.kind=null;}return;}
     if(config.provider==='widget'&&validWidgetUrl(config.widgetUrl)){
       if(ctx.kind!=='widget'){bar.replaceChildren();const frame=doc.createElement('iframe');frame.className='batto-battle-frame';frame.title='TikFinity Battle-Bar';frame.tabIndex=-1;frame.setAttribute('sandbox','allow-scripts allow-same-origin');frame.setAttribute('referrerpolicy','no-referrer');frame.setAttribute('allow',"autoplay 'none'; camera 'none'; microphone 'none'");bar.append(frame);ctx.frame=frame;ctx.kind='widget';}
-      const url=validWidgetUrl(config.widgetUrl);if(ctx.frame.getAttribute('src')!==url)ctx.frame.src=url;bar.classList.add('batto-battle-widget');return;
+      const url=validWidgetUrl(config.widgetUrl);if(doc.defaultView?.BattoResources)doc.defaultView.BattoResources.setFrameSource(ctx.frame,url);else if(ctx.frame.getAttribute('src')!==url)ctx.frame.src=url;bar.classList.add('batto-battle-widget');return;
     }
     if(ctx.kind!=='native'){
       bar.replaceChildren();bar.classList.remove('batto-battle-widget');ctx.frame=null;ctx.kind='native';

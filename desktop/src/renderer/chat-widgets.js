@@ -7,7 +7,7 @@
   let el=frames.get(kind);
   if(!url){el?.remove();frames.delete(kind);return;}
   if(!el){el=document.createElement('iframe');el.title={snow:'TikFinity Schnee',likes:'TikFinity Like-Ziel',viewers:'TikFinity Zuschauerzahl'}[kind];el.className='chat-widget-frame';el.setAttribute('sandbox','allow-scripts allow-same-origin');el.setAttribute('referrerpolicy','no-referrer');el.tabIndex=-1;parent.append(el);frames.set(kind,el);}
-  if(el.getAttribute('src')!==url)el.src=url;
+  if(window.BattoResources)window.BattoResources.setFrameSource(el,url);else if(el.getAttribute('src')!==url)el.src=url;
  }
  let snow,stats,likes,viewers;
  window.applyChatWidgets=()=>{

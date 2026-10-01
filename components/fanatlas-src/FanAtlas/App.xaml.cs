@@ -8,6 +8,7 @@ namespace FanAtlas;
 public partial class App : Application
 {
     private Mutex? mutex;
+    private SuiteSensorHost? suiteHost;
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -22,7 +23,7 @@ public partial class App : Application
             mutex = new Mutex(true, @"Local\CrazyBatto-Suite-Sensors" + (isolatedTest ? "-Test" : ""), out bool suiteAcquired); if (!suiteAcquired) { Shutdown(); return; }
             var suiteState = StateStore.Load(); if (StateStore.LoadWarning != null) { File.Copy(StateStore.StatePath, StateStore.StatePath + ".recovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); } suiteState.Bridge.Port = isolatedTest ? 17668 : 17658;
             IcueDiscovery.Initialize(suiteState);
-            var suiteHost = new MainWindow(suiteState, true, headless: true); MainWindow = suiteHost; await suiteHost.StartHeadless(); return;
+            suiteHost = new SuiteSensorHost(suiteState); await suiteHost.Start(); return;
         }
         if (e.Args.Length >= 3 && e.Args[0] == "--test-host")
         {
@@ -70,5 +71,5 @@ public partial class App : Application
         }
         var window = new MainWindow(state); MainWindow = window; window.Show();
     }
-    protected override void OnExit(ExitEventArgs e) { mutex?.Dispose(); base.OnExit(e); }
+    protected override void OnExit(ExitEventArgs e) { suiteHost?.DisposeAsync().AsTask().GetAwaiter().GetResult(); mutex?.Dispose(); base.OnExit(e); }
 }

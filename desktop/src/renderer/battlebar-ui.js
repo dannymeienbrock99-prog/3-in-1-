@@ -87,5 +87,5 @@
   api.onBattlePreview?.(preview);
   window.BattoBattlebar={id:ID,config,mount,apply,reload,preview};
   void reload().catch(error=>{state={status:'error',error:error.message,teams:[]};apply();});
-  setInterval(()=>{if(chatHost&&!chatHost.hidden)apply();},1000);
+  setInterval(()=>{if(chatHost&&!chatHost.hidden&&window.BattoResources?.chatVisible()!==false)apply();},1000);
 })();

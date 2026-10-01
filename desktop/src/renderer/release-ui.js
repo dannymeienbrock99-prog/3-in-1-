@@ -4,6 +4,7 @@
   const caught = fn => async (...args) => {try {return await fn(...args);} catch(e){toast(e.message || String(e),true);}};
   function showResult(result) {toast(result.ok ? 'Aktionskette erfolgreich getestet.' : result.error || 'Mindestens eine Aktion ist fehlgeschlagen.', !result.ok);}
   const baseSettings=renderSettingsModule;
+  let watchingAudioDevices=false;
   renderSettingsModule=function(){
     let sharedAudio=document.querySelector('#settingsModule [data-settings-audio-output]');
     baseSettings();
@@ -18,7 +19,9 @@
     audio.innerHTML=`<h3>Sprachausgabe (TTS)</h3><p>Ausgabegerät und Lautstärke für vorgelesene Texte.</p><div class="tts-output-row"><label>Verbundenes Ausgabegerät<select id="settingsTtsOutput"><option value="default">Systemstandard</option></select></label><label>Lautstärke <span id="settingsTtsVolumeLabel">${Math.round(t.volume*100)}%</span><input id="settingsTtsVolume" type="range" min="0" max="100" value="${Math.round(t.volume*100)}"></label></div><div class="toolbar"><button id="settingsTtsRefresh">Geräte erkennen</button><button id="settingsTtsSave" class="primary">Ausgabe speichern & anwenden</button><button id="settingsTtsTest">Test sprechen</button><button id="settingsTtsDetails">Alle TTS-Einstellungen</button></div>`;
     el.append(audio);
     async function devices(){const select=audio.querySelector('#settingsTtsOutput');if(!select)return;const wanted=select.dataset.loaded ? select.value : t.outputDeviceId;const items=await loadAudioOutputs();if(!audio.isConnected)return;select.innerHTML='<option value="default">Systemstandard</option>'+items.filter(x=>x.id!=='default').map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('');if(wanted && ![...select.options].some(x=>x.value===wanted)){const option=new Option((t.outputDeviceLabel || wanted)+' (nicht verbunden)',wanted);select.add(option);}select.value=wanted||'default';select.dataset.loaded='1';}
-    devices().catch(()=>{});
+    const output=audio.querySelector('#settingsTtsOutput');
+    if(t.outputDeviceId&&t.outputDeviceId!=='default'){output.add(new Option(t.outputDeviceLabel||'Gespeichertes Ausgabegerät',t.outputDeviceId));output.value=t.outputDeviceId;}
+    output.addEventListener('focus',()=>{if(!output.dataset.loaded)devices().catch(()=>{});if(!watchingAudioDevices){watchingAudioDevices=true;navigator.mediaDevices?.addEventListener?.('devicechange',()=>{if(!document.hidden&&S.view==='settings')document.querySelector('#settingsTtsRefresh')?.click();});}});
     audio.querySelector('#settingsTtsRefresh').onclick=caught(devices);
     audio.querySelector('#settingsTtsVolume').oninput=e=>audio.querySelector('#settingsTtsVolumeLabel').textContent=e.target.value+'%';
     audio.querySelector('#settingsTtsSave').onclick=caught(async()=>{const out=audio.querySelector('#settingsTtsOutput');await saveAndSync({tts:{outputDeviceId:out.value,outputDeviceLabel:out.selectedOptions[0].textContent,volume:Number(audio.querySelector('#settingsTtsVolume').value)/100}},'TTS-Ausgabe gespeichert und synchronisiert.');});
@@ -28,7 +31,6 @@
     links.innerHTML='<h3>Modul-Einstellungen</h3><p>Alle Bereiche verwenden dieselbe gespeicherte Konfiguration.</p><div class="module-settings-links">'+[...document.querySelectorAll('#mainNav [data-view]')].filter(b=>!['settings','start','dashboard'].includes(b.dataset.view)).map(b=>`<button data-settings-view="${b.dataset.view}">${esc(b.textContent.trim())}</button>`).join('')+'</div>';
     links.querySelectorAll('[data-settings-view]').forEach(b=>b.onclick=()=>setView(b.dataset.settingsView));el.append(links);
   };
-  navigator.mediaDevices?.addEventListener?.('devicechange',()=>{document.querySelector('#settingsTtsRefresh')?.click();});
 
   function advanced(prefix,rule,container){
     const target=document.querySelector(container+' .action-builder');if(!target)return;

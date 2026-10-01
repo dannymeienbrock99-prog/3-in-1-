@@ -211,11 +211,12 @@ function renderChat() {
     chatList.classList.remove('tiktok-native-active');
     const current=$('#tikfinityChatFrame');
     if (!current || current.dataset.url !== url) {
-      chatList.innerHTML = `<div class="tikfinity-chat-embed"><div class="tikfinity-chat-frame-bar"><span><span class="platform-icon tiktok">${platformIcon('tiktok')}</span><b>TikFinity Originalansicht</b></span><small id="tikfinityChatFrameState">Widget wird geladen · nur neue LIVE-Nachrichten</small><div class="tikfinity-chat-actions"><button id="tikfinityNativeView" type="button">Batto-Chat</button><button id="tikfinityChatReload" type="button">Neu laden</button></div></div><iframe id="tikfinityChatFrame" class="tikfinity-chat-frame" data-url="${esc(url)}" src="${esc(url)}" title="TikFinity TikTok LIVE-Chat" loading="eager" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
+      chatList.innerHTML = `<div class="tikfinity-chat-embed"><div class="tikfinity-chat-frame-bar"><span><span class="platform-icon tiktok">${platformIcon('tiktok')}</span><b>TikFinity Originalansicht</b></span><small id="tikfinityChatFrameState">Widget wird geladen · nur neue LIVE-Nachrichten</small><div class="tikfinity-chat-actions"><button id="tikfinityNativeView" type="button">Batto-Chat</button><button id="tikfinityChatReload" type="button">Neu laden</button></div></div><iframe id="tikfinityChatFrame" class="tikfinity-chat-frame" data-url="${esc(url)}" title="TikFinity TikTok LIVE-Chat" loading="eager" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe></div>`;
       const frame=$('#tikfinityChatFrame');
+      if(window.BattoResources)window.BattoResources.setFrameSource(frame,url);else frame.src=url;
       frame.addEventListener('load',()=>{const state=$('#tikfinityChatFrameState');if(state)state.textContent='Widget geladen · wartet auf neue LIVE-Nachrichten';});
       $('#tikfinityNativeView').onclick=()=>{S.tiktokChatView='native';renderChat();};
-      $('#tikfinityChatReload').onclick=()=>{const state=$('#tikfinityChatFrameState');if(state)state.textContent='Quelle wird neu geladen …';frame.setAttribute('src',frame.dataset.url);};
+      $('#tikfinityChatReload').onclick=()=>{const state=$('#tikfinityChatFrameState');if(state)state.textContent='Quelle wird neu geladen …';window.BattoResources?.activate();frame.setAttribute('src',frame.dataset.url);};
     }
     return;
   }
@@ -241,7 +242,7 @@ function renderChat() {
   $('#tikfinityBridgeTest')?.addEventListener('click',async()=>{
     await api.testMessage({platform:'tiktok',username:'TikFinity_Test',displayName:'TikFinity Test',text:'TikTok-Testnachricht: Die Anzeige funktioniert.'});
   });
-  $('#tikfinityWidgetView')?.addEventListener('click',()=>{S.tiktokChatView='widget';renderChat();});
+  $('#tikfinityWidgetView')?.addEventListener('click',()=>{S.tiktokChatView='widget';window.BattoResources?.activate();renderChat();});
 
   $$('.chat-user').forEach((el) => {
     el.oncontextmenu = (event) => {
@@ -943,7 +944,7 @@ function bindStatic() {
   $$('[data-copy]').forEach((button) => { button.onclick = () => copy($('#holoUrl').textContent); });
   $('#detachBtn').onclick = () => detached ? api.closeDetached() : api.detachChat();
   $('#chatImageSettings').onclick = () => { setView('settings'); setTimeout(() => $('#chatBackgroundSettings')?.scrollIntoView({ block:'start' }), 0); };
-  setInterval(() => { $('#clock').textContent = new Date().toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }); }, 1000);
+  const updateClock=()=>{if(!document.hidden)$('#clock').textContent=new Date().toLocaleString('de-DE',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'});};updateClock();setInterval(updateClock,30000);document.addEventListener('visibilitychange',updateClock);
 }
 
 function updateSystem(status) {

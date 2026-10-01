@@ -8,3 +8,4 @@ require('./bootstrap.cjs');
 require('../src/suite-bootstrap.cjs');
 if(process.argv.includes('--suite-smoke'))require('./suite-smoke.cjs');
 if(process.argv.includes('--suite-performance')&&process.env.BATTO_TEST_INSTANCE==='1')require('./suite-performance.cjs');
+if(process.argv.includes('--suite-resources')&&process.env.BATTO_TEST_INSTANCE==='1')require('./suite-resources.cjs');

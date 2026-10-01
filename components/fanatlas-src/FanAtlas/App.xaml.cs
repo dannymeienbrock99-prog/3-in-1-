@@ -22,7 +22,7 @@ public partial class App : Application
             mutex = new Mutex(true, @"Local\CrazyBatto-Suite-Sensors" + (isolatedTest ? "-Test" : ""), out bool suiteAcquired); if (!suiteAcquired) { Shutdown(); return; }
             var suiteState = StateStore.Load(); if (StateStore.LoadWarning != null) { File.Copy(StateStore.StatePath, StateStore.StatePath + ".recovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), true); } suiteState.Bridge.Port = isolatedTest ? 17668 : 17658;
             IcueDiscovery.Initialize(suiteState);
-            var suiteHost = new MainWindow(suiteState, true); MainWindow = suiteHost; await suiteHost.StartHeadless(); return;
+            var suiteHost = new MainWindow(suiteState, true, headless: true); MainWindow = suiteHost; await suiteHost.StartHeadless(); return;
         }
         if (e.Args.Length >= 3 && e.Args[0] == "--test-host")
         {

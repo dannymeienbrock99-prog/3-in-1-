@@ -30,8 +30,10 @@ public partial class MainWindow : Window
     private LocalBridge? bridge;
     public string OverlayUrl => bridge?.OverlayUrl ?? $"http://127.0.0.1:{State.Bridge.Port}/overlay?token={State.Bridge.OverlayToken}";
     public string BridgeStatusText => bridge?.Status ?? "Stream-Vorschau noch nicht gestartet";
-    public MainWindow(AppState state, bool test = false)
+    private readonly bool headless;
+    public MainWindow(AppState state, bool test = false, bool headless = false)
     {
+        this.headless = headless;
         State = state; testMode = test; loading = true;
         InitializeComponent();
         Language = System.Windows.Markup.XmlLanguage.GetLanguage("de-DE");
@@ -44,7 +46,7 @@ public partial class MainWindow : Window
         EditorChart.Edited += () => { if (!loading) { dirty = true; ValidateDraft(); } };
         RefreshProfile(); RefreshCurves(); RefreshCsv();
         loading = false;
-        Stage.Attach(this); ApplyBrandBackground();
+        if (!headless) { Stage.Attach(this); ApplyBrandBackground(); }
         if (CurveList.Items.Count > 0) CurveList.SelectedIndex = 0;
         if (FanList.Items.Count > 0) FanList.SelectedIndex = 0;
         timer.Tick += (_, _) => { if (pollTask == null || pollTask.IsCompleted) pollTask = PollOnce(); };
@@ -101,7 +103,7 @@ public partial class MainWindow : Window
                 var row = Sensors.FirstOrDefault(s => s.Key == m.Key);
                 if (row == null) { row = new(m); Sensors.Add(row); }
                 row.Update(m, State.StaleSeconds);
-                if (row.Fresh)
+                if (row.Fresh && !headless)
                 {
                     if (!histories.TryGetValue(m.Key, out var list)) histories[m.Key] = list = new();
                     if (list.Count == 0 || list[^1].Time != m.UpdatedUtc) list.Add((m.UpdatedUtc, m.Value));
@@ -114,6 +116,13 @@ public partial class MainWindow : Window
                 || s.Key.StartsWith("csv/") && !State.CsvPaths.Any(p => s.Key.StartsWith("csv/" + Path.GetFullPath(p).ToUpperInvariant() + "/"))).ToList())
             { Sensors.Remove(old); histories.Remove(old.Key); }
             foreach (var s in Sensors) s.Refresh(State.StaleSeconds);
+            if (headless)
+            {
+                // The suite renders its own UI. Keep discovery, persistence and alerts live
+                // without decoding background images or rebuilding an invisible WPF stage.
+                if (FanDiscovery.Refresh(State, Sensors)) SaveState();
+                PublishBridge(); return;
+            }
             var gpu = Sensors.FirstOrDefault(s => s.Key.StartsWith("nvml/") && s.Unit == "°C" && s.Fresh);
             GpuMetric.Text = gpu?.ValueText ?? "—";
             GpuHint.Text = gpu?.Device.Replace("NVIDIA GeForce ", "") ?? "Kein aktueller GPU-Wert";
@@ -376,7 +385,7 @@ public partial class MainWindow : Window
         }).Task);
         bridge.Catalog = () => Dispatcher.InvokeAsync(() => (object)new { state = CreateSnapshot(), curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, c.Points }), fans = State.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveName }), csvPaths = State.CsvPaths, overlayUrl = OverlayUrl, sources = new { icue = IcueDiscovery.Status, nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages } }).Task;
         bridge.Configure = (command, body) => Dispatcher.InvokeAsync(() => ConfigureSuite(command, body)).Task;
-        PublishBridge(); await bridge.Start(); SaveState(); Stage.Refresh();
+        PublishBridge(); await bridge.Start(); SaveState(); if (!headless) Stage.Refresh();
     }
     internal void StageChanged() { SaveState(); PublishBridge(); }
     internal void StageNotice(string message) => SetStatus(message);
@@ -407,11 +416,11 @@ public partial class MainWindow : Window
                 string Resolve(string id, string fallback) => Sensors.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id)?.Key ?? (SensorIdentity.PublicId(fallback) == id ? fallback : "");
                 State.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), PercentSensorKey = Resolve(t.PercentSensorId, prior?.PercentSensorKey ?? ""), MaxRpm = t.MaxRpm, CenterMode = t.CenterMode, Announce = t.Announce, ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
                 foreach (var removed in old.Values.Where(t => !State.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.PercentSensorKey.Length > 0) State.Stage.HiddenAutoSensors.Add(removed.PercentSensorKey); if (removed.ProfileKey.Length > 0) State.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey,"sensorSN")); }
-                State.Stage.Background = scene.Background; State.Stage.Normalize(); Stage.Attach(this); break;
+                State.Stage.Background = scene.Background; State.Stage.Normalize(); if (!headless) Stage.Attach(this); break;
             case "profile":
                 string path = body.GetProperty("path").GetString() ?? "";
                 if (!path.EndsWith(".cueprofile", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Bitte ein iCUE-Profil wählen.");
-                State.Profile = ProfileReader.Read(path); draft = null; selectedOriginal = null; dirty = false; RefreshProfile(); RefreshCurves(); Stage.Attach(this); break;
+                State.Profile = ProfileReader.Read(path); draft = null; selectedOriginal = null; dirty = false; RefreshProfile(); RefreshCurves(); if (!headless) Stage.Attach(this); break;
             case "csv":
                 var paths = body.GetProperty("paths").Deserialize<List<string>>() ?? new();
                 if (paths.Count > 20 || paths.Any(p => string.IsNullOrEmpty(p) || !Path.IsPathFullyQualified(p) || !new[] { ".csv", ".log" }.Contains(Path.GetExtension(p).ToLowerInvariant()))) throw new InvalidDataException("Bitte höchstens 20 CSV-/Logdateien wählen.");

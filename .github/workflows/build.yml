@@ -38,7 +38,7 @@ jobs:
         with:
           name: Batto-3-in-1-Windows
           path: |
-            dist/Batto-3-in-1-Setup-1.2.1.exe
+            dist/Batto-3-in-1-Setup-1.2.2.exe
             dist/Extras/de.crazybatto.suite.streamDeckPlugin
           retention-days: 14
       - name: Publish release
@@ -46,7 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.2.1 --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create v1.2.1 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.2.1' --notes 'Repariert iCUE-5-Livewerte mit RPM-/Temperatureinheiten in den CSV-Zellen und die Lüfterzuordnung nach einem Hubwechsel. Originaloberfläche von OBS Tool 2.4.7 unverändert. Die iCUE-Sensorprotokollierung muss laufen; Einrichtung in README und Kurzanleitung.' }
-          gh release upload v1.2.1 dist/Batto-3-in-1-Setup-1.2.1.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
+          gh release view v1.2.2 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create v1.2.2 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.2.2' --notes 'Reduziert unnötige Hintergrundaktualisierungen und Speicherbedarf. Sprachmodelle ruhen nach 60 Sekunden; Spracherkennung und Ausgabe verwenden je zwei Rechen-Threads. Enthält die iCUE-5-Livewert-Reparatur. Originaloberfläche von OBS Tool 2.4.7 unverändert. Die iCUE-Sensorprotokollierung muss laufen; Einrichtung in README und Kurzanleitung.' }
+          gh release upload v1.2.2 dist/Batto-3-in-1-Setup-1.2.2.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

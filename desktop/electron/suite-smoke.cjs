@@ -3,8 +3,8 @@ const {app}=require('electron'),fs=require('node:fs'),path=require('node:path'),
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 app.whenReady().then(async()=>{
  const dir=process.env.BATTO_SUITE_TEST_OUTPUT;if(!dir)throw Error('Test output directory missing');fs.mkdirSync(dir,{recursive:true});
- const win=require('./main21.cjs').getMainWindow(),errors=[];
- win.webContents.on('console-message',(_e,level,message)=>{if(level>=3&&!/favicon|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED/.test(message))errors.push(message);});
+ const win=require('./main21.cjs').getMainWindow(),errors=[],warnings=[];
+ win.webContents.on('console-message',(_e,level,message)=>{if(message==='Potential permissions policy violation: autoplay is not allowed in this document.'){warnings.push(message);return;}if(level>=3&&!/favicon|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED/.test(message))errors.push(message);});
  try{
   if(win.webContents.isLoading())await new Promise(r=>win.webContents.once('did-finish-load',r));
   const js=code=>win.webContents.executeJavaScript(code);
@@ -19,6 +19,9 @@ app.whenReady().then(async()=>{
   async function capture(name){win.webContents.invalidate();await delay(250);await win.webContents.capturePage();await delay(250);fs.writeFileSync(path.join(dir,name+'.png'),(await win.webContents.capturePage()).toPNG());}
   await js('setView("dashboard")');await capture('Multi-Chat-2.4.7');
   await js('setView("fans")');await delay(500);
+  await js('window.savedFanImage=document.querySelector(".suite-fan img")');
+  await delay(2300);
+  assert(await js('window.savedFanImage===document.querySelector(".suite-fan img")'),'live readings must retain fan images');
   let before=await js('JSON.stringify([...document.querySelectorAll(".suite-fan")].map(e=>({width:e.getBoundingClientRect().width,src:e.querySelector("img").src})))');
   await js('document.querySelector(".suite-fan").dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,clientX:0,clientY:0,pointerId:1}));document.getElementById("f-stage").dispatchEvent(new PointerEvent("pointerup",{bubbles:true,pointerId:1}))');
   await delay(500);
@@ -35,10 +38,16 @@ app.whenReady().then(async()=>{
   isolated={...isolated,fan:{...isolated.fan,state:null},fanError:'Testunterbrechung'};win.webContents.send('suite:state',isolated);await delay(100);
   assert.equal(await js('document.querySelector(".suite-fan .temp").textContent'),'— %','cached percentages clear when source disconnects');
   win.webContents.send('suite:state',runtime.snapshot());await delay(100);
+  await js('setView("dashboard");window.hiddenFanText=document.querySelector(".suite-fan .temp").textContent');
+  win.webContents.send('suite:state',{...runtime.snapshot(),fan:{...runtime.snapshot().fan,state:fixture}});await delay(100);
+  assert(await js('window.hiddenFanText===document.querySelector(".suite-fan .temp").textContent'),'hidden stage must not repaint');
+  await js('setView("fans")');
+  assert.match(await js('document.querySelector(".suite-fan .temp").textContent'),/80/,'returning to the stage must immediately show latest readings');
+  win.webContents.send('suite:state',runtime.snapshot());await delay(100);
   win.setSize(1180,800);await delay(500);await capture('iCUE-LINK-1180');
   win.setSize(1600,980);await js('setView("jarvis")');await capture('Jarvis');
   assert.equal(errors.length,0,errors.join('\n'));
-  fs.writeFileSync(path.join(dir,'result.json'),JSON.stringify({ok:true,geometry,fanCount:snapshot.fan.state.scene.tiles.length,liveFanCount:snapshot.fan.state.scene.tiles.filter(t=>snapshot.fan.state.sensors.some(s=>s.id===t.rpmSensorId&&s.fresh)).length,originalPalette:await js('getComputedStyle(document.documentElement).getPropertyValue("--gold")'),errors},null,2));
+  fs.writeFileSync(path.join(dir,'result.json'),JSON.stringify({ok:true,geometry,fanCount:snapshot.fan.state.scene.tiles.length,liveFanCount:snapshot.fan.state.scene.tiles.filter(t=>snapshot.fan.state.sensors.some(s=>s.id===t.rpmSensorId&&s.fresh)).length,originalPalette:await js('getComputedStyle(document.documentElement).getPropertyValue("--gold")'),errors,warnings},null,2));
   app.quit();
  }catch(e){fs.writeFileSync(path.join(dir,'error.txt'),e.stack+'\n'+errors.join('\n'));console.error(e);app.exit(1);}
 });

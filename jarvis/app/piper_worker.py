@@ -13,12 +13,22 @@ network_guard.install()
 
 def run():
     from piper import PiperVoice, SynthesisConfig
+    from piper.config import PiperConfig
+    import onnxruntime
     from piper.phonemize_espeak import ESPEAK_DATA_DIR
     # eSpeak's Windows C runtime cannot reliably open absolute UTF-8 paths.
     # This dedicated worker can use a relative ASCII data path from its package.
     os.chdir(ESPEAK_DATA_DIR.parent)
-    voice = PiperVoice.load(str(MODELS / 'piper/de_DE-thorsten-medium.onnx'),
-                            espeak_data_dir=Path(ESPEAK_DATA_DIR.name))
+    model = MODELS / 'piper/de_DE-thorsten-medium.onnx'
+    options = onnxruntime.SessionOptions()
+    options.intra_op_num_threads = 2
+    options.inter_op_num_threads = 1
+    options.add_session_config_entry('session.intra_op.allow_spinning', '0')
+    options.add_session_config_entry('session.inter_op.allow_spinning', '0')
+    with Path(str(model) + '.json').open(encoding='utf-8') as config:
+        voice = PiperVoice(config=PiperConfig.from_dict(json.load(config)),
+            session=onnxruntime.InferenceSession(str(model), sess_options=options, providers=['CPUExecutionProvider']),
+            espeak_data_dir=Path(ESPEAK_DATA_DIR.name))
     folder = DATA / 'speech-cache'
     folder.mkdir(parents=True, exist_ok=True)
     for old in folder.glob('piper-*.wav'):

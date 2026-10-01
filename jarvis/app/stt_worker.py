@@ -26,7 +26,7 @@ def run():
     import ctranslate2
     model=None;backend='Whisper Small · CPU';fallback=''
     def cpu_model():
-        return WhisperModel(str(MODELS/'whisper-small'),device='cpu',compute_type='int8',cpu_threads=6,local_files_only=True)
+        return WhisperModel(str(MODELS/'whisper-small'),device='cpu',compute_type='int8',cpu_threads=2,local_files_only=True)
     try:
         if (MODELS/'whisper-turbo/model.bin').is_file() and ctranslate2.get_cuda_device_count():
             model=WhisperModel(str(MODELS/'whisper-turbo'),device='cuda',compute_type='int8_float16',local_files_only=True)

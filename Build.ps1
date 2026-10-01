@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Build-Schritt fehlgeschlagen: $LASTEXITCODE" } }
 if ($PrepareVoice) { python scripts/prepare-voice.py; Check-Exit }
+python -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 if (-not (Test-Path jarvis/python/python.exe) -or -not (Test-Path jarvis/models/whisper-small/model.bin)) { throw 'Sprachpaket fehlt. Mit Python 3.12 und -PrepareVoice vorbereiten.' }
 dotnet publish components/fanatlas-src/FanAtlas/FanAtlas.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 New-Item -ItemType Directory -Force work | Out-Null
@@ -33,4 +34,4 @@ Pop-Location
 if (-not $InnoCompiler) { $InnoCompiler = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $InnoCompiler) { throw 'Inno Setup 7.1 oder neuer: -InnoCompiler mit Pfad zu ISCC.exe angeben.' }
 & $InnoCompiler installer/BattoSuite.iss; Check-Exit
-Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.2.1.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.2.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'

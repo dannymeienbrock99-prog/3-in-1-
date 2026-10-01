@@ -7,3 +7,4 @@ app.setPath('userData',process.env.BATTO_OBS_DATA||path.join(app.getPath('appDat
 require('./bootstrap.cjs');
 require('../src/suite-bootstrap.cjs');
 if(process.argv.includes('--suite-smoke'))require('./suite-smoke.cjs');
+if(process.argv.includes('--suite-performance')&&process.env.BATTO_TEST_INSTANCE==='1')require('./suite-performance.cjs');

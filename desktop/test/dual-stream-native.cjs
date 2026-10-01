@@ -17,7 +17,14 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   const after=await client.request('stop',{platform:'tiktok'});assert.equal(after.outputs.tiktok.state,'stopped');assert.equal(after.outputs.twitch.state,'test');
   await delay(1000);await client.request('stop',{platform:'both'});
   const restart=await client.request('test-record',{platform:'tiktok',path:path.join(output,'tiktok-restart.mkv')});await delay(2500);assert.equal((await client.request('status')).outputs.tiktok.state,'test');await client.request('stop',{platform:'both'});
+  cfg.program.backgrounds.Pause=path.resolve(__dirname,'../src/renderer/assets/bin-gleich-zurueck.jpg');assert(fs.existsSync(cfg.program.backgrounds.Pause));const prepared=await client.request('test-prepare',{config:cfg});assert.equal(prepared.sourceCount,3);
+  await client.request('overlay',{chat:'Moderator: Lokaler Einblendungstest',events:'Testnutzer · 3 × Rose',chatVisible:true,eventsVisible:true});
+  const scene=await client.request('scene',{scene:'Pause',transition:'fade',durationMs:350});assert.equal(scene.outputs.tiktok.scene,'Pause');assert.equal(scene.outputs.twitch.scene,'Pause');await delay(650);assert((await client.request('status')).overlays.twitch.chatWidth>0,'native text renderer exists');
+  for(const p of ['tiktok','twitch']){const img=await client.request('snapshot',{platform:p});fs.writeFileSync(path.join(output,'pause-'+p+'.png'),Buffer.from(img.image.split(',')[1],'base64'));}
+  await client.request('scene',{scene:'Spiel',transition:'cut',durationMs:100});await client.request('source',{source:'camera',enabled:false});await delay(200);
+  const hidden=await client.request('snapshot',{platform:'twitch'});fs.writeFileSync(path.join(output,'camera-hidden.png'),Buffer.from(hidden.image.split(',')[1],'base64'));
+  await client.request('media',{path:cfg.program.backgrounds.Pause,volume:0,duration:2});await delay(300);assert.equal((await client.request('media-state')).active,true);await client.request('media-stop');assert.equal((await client.request('media-state')).active,false);
   cfg.profile='fullhd_1080p30';await client.request('test-prepare',{config:cfg});for(const p of ['tiktok','twitch'])await client.request('test-record',{platform:p,path:path.join(output,p+'-fullhd.mkv')});await delay(4000);const hd=await client.request('status');assert.equal(hd.outputs.tiktok.width,1080);assert.equal(hd.outputs.twitch.width,1920);for(const p of ['tiktok','twitch'])assert(hd.outputs[p].frames>70);await client.request('stop',{platform:'both'});
-  fs.writeFileSync(path.join(output,'native-result.json'),JSON.stringify({ok:true,encoder:probe.encoder,version:probe.version,state,fullHd:hd,independentStop:true,independentMute:true,restart:true},null,2));
+  fs.writeFileSync(path.join(output,'native-result.json'),JSON.stringify({ok:true,encoder:probe.encoder,version:probe.version,state,fullHd:hd,independentStop:true,independentMute:true,restart:true,scenes:true,transition:true,chatOverlay:true,sourceVisibility:true},null,2));
  }finally{await client.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

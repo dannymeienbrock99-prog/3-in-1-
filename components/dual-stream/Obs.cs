@@ -102,4 +102,15 @@ internal static class Obs {
  [DllImport(D)] public static extern void gs_matrix_push();
  [DllImport(D)] public static extern void gs_matrix_identity();
  [DllImport(D)] public static extern void gs_matrix_pop();
+ [DllImport(D)] public static extern void obs_source_update(nint source,nint settings);
+ [DllImport(D)] public static extern void obs_source_set_muted(nint source,[MarshalAs(UnmanagedType.I1)]bool muted);
+ [DllImport(D)] public static extern void obs_sceneitem_set_visible(nint item,[MarshalAs(UnmanagedType.I1)]bool visible);
+ [DllImport(D)] public static extern void obs_transition_set(nint transition,nint source);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_transition_start(nint transition,int mode,uint duration,nint source);
+ [DllImport(D)] public static extern void obs_transition_set_size(nint transition,uint width,uint height);
+ [DllImport(D)] public static extern nint obs_source_get_settings(nint source);
+ [DllImport(D)] public static extern void obs_source_load(nint source);
+ [DllImport(D)] public static extern void obs_sceneitem_remove(nint item);
+ [DllImport(D)] public static extern int obs_source_media_get_state(nint source);
+ [DllImport(D)] public static extern void obs_source_set_volume(nint source,float volume);
 }

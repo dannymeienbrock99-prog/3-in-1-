@@ -3,8 +3,8 @@
   "Name": "Batto 3-in-1",
   "UUID": "de.crazybatto.suite",
   "Author": "Crazy_Batto",
-  "Version": "1.2.0.0",
-  "Description": "Jarvis, PC-Messwerte, Lüfter und Kurvenentwürfe auf dem Stream Deck.",
+  "Version": "1.4.0.0",
+  "Description": "Batto vollständig bedienen: Jarvis, Szenen, Übergänge, Streams, Bot, Chat, Lüfter und PC-Werte. Auch für Creator Hub.",
   "Category": "Batto 3-in-1",
   "CategoryIcon": "images/category",
   "Icon": "images/plugin",
@@ -75,10 +75,78 @@
     {
       "UUID": "de.crazybatto.suite.command",
       "Name": "Jarvis Befehl",
-      "Tooltip": "Zum Beispiel Pause, GPU Temperatur oder CPU Auslastung. OBS-Szenen werden in Batto 3-in-1 zugeordnet.",
+      "Tooltip": "Gespeicherten Jarvis-Befehl ausführen. Szenen laufen im eigenen Batto-Sender.",
       "Icon": "images/action",
       "PropertyInspectorPath": "ui/index.html",
       "SupportedInMultiActions": false,
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "de.crazybatto.suite.listen",
+      "Name": "Jarvis zuhören",
+      "Tooltip": "Begrüßung vorlesen, danach einen Sprachbefehl aufnehmen.",
+      "Icon": "images/action",
+      "PropertyInspectorPath": "ui/index.html",
+      "SupportedInMultiActions": false,
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "de.crazybatto.suite.scene",
+      "Name": "Szene & Übergang",
+      "Tooltip": "Spiel, Pause, Start oder Ende gleichzeitig auf beide Ausgaben schalten.",
+      "Icon": "images/action",
+      "PropertyInspectorPath": "ui/index.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "de.crazybatto.suite.control",
+      "Name": "Programm steuern",
+      "Tooltip": "Streams, Ton, Quellen, Chat, Bot, Broadcasts, Aktionen und alle Programmbereiche bedienen.",
+      "Icon": "images/action",
+      "PropertyInspectorPath": "ui/index.html",
+      "SupportedInMultiActions": true,
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "images/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "de.crazybatto.suite.combo",
+      "Name": "Aktionen kombinieren",
+      "Tooltip": "Bis zu acht Batto-Aktionen mit einem Tastendruck, in festgelegter Reihenfolge.",
+      "Icon": "images/action",
+      "PropertyInspectorPath": "ui/index.html",
+      "SupportedInMultiActions": true,
       "Controllers": [
         "Keypad"
       ],

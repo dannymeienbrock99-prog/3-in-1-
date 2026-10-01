@@ -45,6 +45,17 @@ app.whenReady().then(async()=>{
   await js('document.getElementById("dual-start-both").scrollIntoView({block:"end"})');await capture('Dual-Stream-Sendeziele');
   await js('document.getElementById("dual-release").click()');await until('!(document.getElementById("dual-readiness").textContent.includes("eingeschaltet"))');
   await check('native resources released by user control','!(await window.batto.dual("state")).engineRunning');
+  await js('setView("jarvis")');await delay(250);
+  await check('simple Jarvis view hides detailed settings','!document.getElementById("j-events-likeThreshold").getClientRects().length');
+  await js('document.getElementById("j-settings-toggle").click();document.getElementById("j-events-likeThreshold").value="7500";document.getElementById("j-save-events").click()');await until('(window.batto.suite("state").then(s=>s.jarvis.settings.events.likeThreshold===7500))');
+  await check('Jarvis event settings persist and original moderator default survives','(await window.batto.suite("state")).jarvis.settings.events.likeThreshold===7500 && (await window.batto.suite("state")).jarvis.settings.chatMode==="moderators"');
+  await js('document.getElementById("j-events-likeThreshold").scrollIntoView({block:"center"})');await capture('Jarvis-Ereignisse');
+  await js('document.getElementById("j-settings-toggle").click();document.getElementById("content").scrollTop=0');await capture('Jarvis-Fragen');
+  await check('deck catalog covers scenes, sources, bot, actions and all views','(await window.batto.suite("catalog")).actions.length>=24');
+  await js('window.batto.suite("control",{steps:[{action:"scene",target:"Pause",transition:"cut",durationMs:100},{action:"navigate",target:"dualstream"}]})');
+  await check('combined deck action changes native scene without opening OBS or starting capture','(await window.batto.dual("state")).config.program.scene==="Pause" && !(await window.batto.dual("state")).engineRunning');
+  await js('document.getElementById("dual-scene").scrollIntoView({block:"center"})');await capture('Szenen-Uebergaenge');
+  await js('window.batto.suite("control",{action:"companion",op:"on"})');await check('LIVE Studio live flag is explicit and leaves own capture off','(await window.batto.dual("state")).companionLive && !(await window.batto.dual("state")).engineRunning');await js('window.batto.suite("control",{action:"companion",op:"off"})');
   await js('setView("dashboard")');await check('existing widget saving mode remains active','!document.querySelector("iframe[src]")');
   assert.equal(errors.length,0,errors.join('\n'));fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:true,checks,errors},null,2));
  }catch(e){fs.writeFileSync(path.join(output,'error.txt'),e.stack+'\n'+errors.join('\n'));process.exitCode=1;}

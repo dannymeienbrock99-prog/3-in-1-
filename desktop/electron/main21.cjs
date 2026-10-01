@@ -150,6 +150,8 @@ function createWindow(detached = false) {
     }
   });
 
+  for(const name of ['minimize','hide'])win.on(name,()=>{if(!win.isDestroyed())win.webContents.send('suite:presentation',true);});
+  for(const name of ['restore','show'])win.on(name,()=>{if(!win.isDestroyed())win.webContents.send('suite:presentation',false);});
   win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), {
     query: { detached: detached ? '1' : '0' }
   });
@@ -338,6 +340,7 @@ function handleNormalizedEvent(event) {
   welcomeService?.handle(event).catch(error => bridgeLog('warn','Begrüßung','WELCOME_FAILED',{message:error.message}));
   overlayServer.emitEvent(event);
   send('platform:event', normalizedToUiEvent(event));
+  require('../src/suite-bootstrap.cjs').onEvent(event);
   actionEngine.handleEvent(event).catch((error) => bridgeLog('warn', 'Rules', 'EVENT_RULE_FAILED', { message: error.message }));
 }
 
@@ -584,10 +587,10 @@ function initCore() {
   });
   actionEngine = new ActionEngine({
     getConfig: currentConfig,
-    isLive:()=>Boolean(obs.getStatus().connected && obs.getStatus().outputActive),
+    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.running()||d?.companionLive);},
     sendChat: (platform, text) => sendOutbound(platform, text, { source: 'automation' }),
     onTts: (payload) => send('tts:speak', payload),
-    onOverlay: (event,options) => audioOutput.run(event,options),
+    onOverlay: (event,options) => {const d=require('../src/dual-stream/bootstrap.cjs').getService();if(d?.state.prepared&&event.type==='media'){const media=currentConfig().media.find(m=>m.id===event.data?.mediaId);if(!media)throw Error('Medium fehlt.');return d.media(media.path,{...event.data,...options});}if(d?.state.prepared&&event.type!=='media'){d.eventText=String(event.data?.text||'').slice(0,200);d.scheduleOverlay();clearTimeout(d.eventTimer);d.eventTimer=setTimeout(()=>{d.eventText='';d.scheduleOverlay();},10000);d.eventTimer.unref();return {ok:true};}return audioOutput.run(event,options);},
     onChatWidget:payload=>chatExtras.trigger(payload),
     onDiscord: sendDiscord,
     onHttp: safeHttpAction,
@@ -600,7 +603,7 @@ function initCore() {
   chainService=new ChainService({getConfig:currentConfig,engine:actionEngine,onStatus:status=>send('chains:status',status)});
   actionEngine.runChain=(id,ctx)=>chainService.trigger(id,ctx);
   actionEngine.onStreamerBot=(id,ctx,signal,timeout,options)=>streamerbot.execute(id,ctx,signal,timeout,options);
-  actionEngine.onObs=(request,data)=>obs.call(request,data);
+  actionEngine.onObs=(request,data)=>require('../src/dual-stream/bootstrap.cjs').getService().obs(request,data);
   const cancelLegacy=actionEngine.cancelAll.bind(actionEngine);
   actionEngine.cancelAll=()=>{chainService.cancelAll();return cancelLegacy();};
   inputHotkeys=new InputHotkeys({backend:new PhysicalInputBackend({appPid:process.pid,onError:message=>bridgeLog('warn','Hotkeys','INPUT_HOOK_FAILED',{message})}),register:(key,fn)=>globalShortcut.register(key,fn),unregister:key=>globalShortcut.unregister(key),trigger:(id,ctx)=>chainService.trigger(id,ctx),stop:()=>actionEngine.cancelAll(),onStatus:status=>send('hotkeys:status',status)});
@@ -608,7 +611,7 @@ function initCore() {
   broadcastService = new BroadcastService({store:configStore,send:sendOutbound,
     onActions:(item,context)=>chainService.trigger(item.chainId,{source:context.source,message:context.text,text:context.text,platform:'internal',user:'Auto-Broadcast'}, {signal:context.signal}),
     onSound: (item, context) => audioOutput.playSound(item, context),
-    isLive:()=>Boolean(obs.getStatus().connected && obs.getStatus().outputActive),
+    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.running()||d?.companionLive);},
     onStatus:status=>send('broadcast:status',status),
     onConfig:next=>{settingsService.syncIfClean();applyConfig(next,{autoBroadcast:next.autoBroadcast});}
   });
@@ -662,7 +665,8 @@ async function startExternalServices() {
   for (const name of ['tikfinity','twitch','youtube']) {
     if (cfg.platforms[name]?.autoConnect) connectorManager.connect(name).catch(() => {});
   }
-  if (cfg.obs.autoConnect) obs.connect().catch(() => {});
+  // The suite uses its own sender. Preserve imported OBS settings for manual use.
+  if (app.getName() !== 'Batto 3-in-1' && cfg.obs.autoConnect) obs.connect().catch(() => {});
 }
 
 function registerIpc() {
@@ -1022,3 +1026,14 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 // Adapter shares the existing OBS connection with Jarvis.
 module.exports.getObsClient=()=>require('../src/services/suite-host.cjs').obsForJarvis(()=>obs);
 module.exports.getMainWindow=()=>mainWindow;
+
+module.exports.getSuiteHost=()=>({
+ catalog:()=>({...navigation?.controls?.snapshot(),items:[...(navigation?.catalog?.()||[]),...(currentConfig().media||[]).map(x=>({id:x.id,name:x.name||x.id,kind:'media'}))]}),
+ control:value=>navigation.controls.control(value),
+ run:(kind,id)=>kind==='media'?actionEngine.executeRule({id:'deck-media:'+id,cooldownSeconds:0,onlyWhenLive:false,actions:[{type:'media',mediaId:id}]},{platform:'internal',source:'stream-deck'},'deck-media'):navigation.test(kind,id),
+ cancel:()=>{actionEngine.cancelAll();return {ok:true};},
+ connect:async(name,op)=>{const a=adapters[name];if(!a)throw Error('Chat-Verbindung fehlt.');const on=op==='on'||op==='toggle'&&!a.getStatus().connected;await (on?a.connect():a.disconnect());return {ok:true};},
+ navigate:view=>{if(!require('../src/services/suite-controls.cjs').VIEWS[view])throw Error('Unbekannter Bereich.');return navigation.navigate(view,true);},
+ show:()=>{mainWindow.restore();mainWindow.show();mainWindow.focus();},
+ tikfinity:()=>shell.openExternal('https://tikfinity.zerody.one/tiktok/')
+});

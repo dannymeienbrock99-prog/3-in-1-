@@ -7,10 +7,10 @@ const on = (channel, callback) => {
 };
 
 contextBridge.exposeInMainWorld('batto', {
-  suite: (command,value) => {if(!['import-status','import-obs-settings','state','command','settings','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
+  suite: (command,value) => {if(!['control','catalog','reset-likes','import-status','import-obs-settings','state','command','settings','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
   onSuiteState:cb=>on('suite:state',cb),onJarvisMessage:cb=>on('suite:message',cb),onJarvisVoice:cb=>on('suite:voice',cb),
-  dual:(command,value)=>{if(!['state','save','probe','prepare','release','start','stop','mute','key','snapshot','library','import','export'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('dual:action',{command,value});},
-  onDualState:cb=>on('dual:state',cb),
+  dual:(command,value)=>{if(!['program','scene','background','state','save','probe','prepare','release','start','stop','mute','key','snapshot','library','import','export'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('dual:action',{command,value});},
+  onDualState:cb=>on('dual:state',cb),onPresentationState:cb=>on('suite:presentation',cb),
   communityStatus:()=>ipcRenderer.invoke('community:status'),
   archiveSearch:payload=>ipcRenderer.invoke('archive:search',payload),
   archiveSessions:()=>ipcRenderer.invoke('archive:sessions'),

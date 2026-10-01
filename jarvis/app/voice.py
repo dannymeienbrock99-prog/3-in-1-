@@ -53,10 +53,11 @@ class StreamingVAD:
         return peak > .5
 
 class Microphone(threading.Thread):
-    def __init__(self, settings, busy, on_text, on_state, on_error, on_interrupt=None, recognizer=None, speaker=None, on_backend=None):
+    def __init__(self, settings, busy, on_text, on_state, on_error, on_interrupt=None, recognizer=None, speaker=None, on_backend=None, on_ready=None):
         super().__init__(daemon=True, name='Jarvis Audioaufnahme')
         self.settings, self.busy = settings, busy
         self.on_text, self.on_state, self.on_error = on_text, on_state, on_error
+        self.on_ready = on_ready or (lambda text: self.on_state('idle', text))
         self.on_interrupt = on_interrupt or (lambda: None)
         self.quit = threading.Event(); self.record = threading.Event(); self.cancel_record = threading.Event()
         self.amplitude = 0.; self.dropped = 0
@@ -116,7 +117,7 @@ class Microphone(threading.Thread):
             with sd.RawInputStream(samplerate=rate, blocksize=int(rate*.032), dtype='int16',
                                    channels=1, device=device, callback=callback):
                 self.connected.set()
-                self.on_state('idle', 'Mikrofon bereit: ' + info['name'])
+                self.on_ready('Mikrofon bereit: ' + info['name'])
                 frames, pre = [], deque(maxlen=40)
                 capture = heard = was_busy = False
                 silence = elapsed = cooldown = 0.; resample_state = None; last_frame=time.monotonic()

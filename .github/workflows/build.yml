@@ -38,7 +38,7 @@ jobs:
         with:
           name: Batto-3-in-1-Windows
           path: |
-            dist/Batto-3-in-1-Setup-1.3.0.exe
+            dist/Batto-3-in-1-Setup-1.4.0.exe
             dist/Extras/de.crazybatto.suite.streamDeckPlugin
           retention-days: 14
       - name: Publish release
@@ -46,7 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.3.0 --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create v1.3.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.3.0' --notes 'Dual Stream: TikTok 9:16 und Twitch 16:9 mit gemeinsamen nativen Quellen, getrennten Layouts und Hardware-Encodern. OBS-32-Bibliotheken werden lokal verwendet; OBS Studio muss dabei nicht laufen. Vorschau per Klick, kein automatischer Start, verschlüsselte Stream-Keys. Einrichtung und bekannte Grenzen siehe Anleitung.' }
-          gh release upload v1.3.0 dist/Batto-3-in-1-Setup-1.3.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
+          gh release view v1.4.0 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create v1.4.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.4.0' --notes 'Jarvis auf Tastendruck, einstellbare Geschenk-, Follower- und Like-Ansagen. Gemeinsames Stream-Deck-Plugin für Elgato und Creator Hub mit Szenen, Übergängen, Streams, Quellen, Bot und kombinierten Aktionen. Native Szenen, Chat- und Medienausgabe ohne laufendes OBS. Gaming-Sparmodus und bedarfsgesteuerte Dienste. OBS-32-Bibliotheken lokal erforderlich; Anleitung beachten.' }
+          gh release upload v1.4.0 dist/Batto-3-in-1-Setup-1.4.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

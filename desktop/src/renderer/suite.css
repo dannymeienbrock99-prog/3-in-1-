@@ -13,3 +13,11 @@
 .suite-fan .fan-rpm{font-size:18px;color:#61ecff}.suite-fan .fan-source{font-size:13px;color:#ffd083}
 
 .suite-fan .fan-name{line-height:22px}.suite-fan .fan-rpm{line-height:21px}.suite-fan .fan-source{line-height:15px;font-size:12px}
+
+#view-jarvis:not(.settings-open) .jarvis-settings-layout article:not(:has(#j-log)){display:none}#view-jarvis:not(.settings-open) .jarvis-settings-layout{grid-template-columns:1fr}#view-jarvis.settings-open .jarvis-settings-layout article:has(#j-log){display:none}
+
+#view-jarvis:not(.settings-open) .jarvis-settings-layout>div:nth-child(2){display:none}
+
+.jarvis-settings-layout>div{display:contents}#view-jarvis .jarvis-settings-layout{grid-template-columns:repeat(2,minmax(0,1fr))}#view-jarvis:not(.settings-open) .jarvis-settings-layout{grid-template-columns:1fr}#view-jarvis:not(.settings-open) .suite-chatlog{height:130px}#view-jarvis:not(.settings-open) .suite-hero{min-height:150px;padding:20px}#view-jarvis:not(.settings-open) .suite-hero h2{font-size:27px;margin:6px 0}#view-jarvis:not(.settings-open) .suite-hero p{margin:6px 0}#view-jarvis.settings-open .jarvis-settings-layout article:has(#j-events-enabled){grid-row:1;grid-column:1}#view-jarvis.settings-open .jarvis-settings-layout article:has(#j-address){grid-row:1;grid-column:2}@media(max-width:1120px){#view-jarvis .jarvis-settings-layout{grid-template-columns:1fr}#view-jarvis.settings-open .jarvis-settings-layout article:has(#j-address){grid-row:2;grid-column:1}}
+
+body.presentation-paused *,body.presentation-paused *::before,body.presentation-paused *::after{animation-play-state:paused!important}

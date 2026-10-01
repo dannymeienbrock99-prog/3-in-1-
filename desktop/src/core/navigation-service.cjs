@@ -2,7 +2,7 @@
 
 const {WebSocketServer}=require('ws'),crypto=require('crypto');
 
-const ROUTES=['jarvis','sensors','fans','start','dashboard','wishlist','widgets','livecenter','moderation','chatarchive','filters','hologram','platforms','commands','broadcast','hotkeys','events','media','pools','tts','discord','streamerbot','backups','settings','diagnostics'];
+const ROUTES=['dualstream','jarvis','sensors','fans','start','dashboard','wishlist','widgets','livecenter','moderation','chatarchive','filters','hologram','platforms','commands','broadcast','hotkeys','events','media','pools','tts','discord','streamerbot','backups','settings','diagnostics'];
 
 class NavigationService{
 

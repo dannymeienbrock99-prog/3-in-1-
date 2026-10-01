@@ -17,10 +17,13 @@ handle('import-obs-settings',()=>{
  importer.prepareImport(path.join(app.getPath('appData'),'batto-obs-tool'),app.getPath('userData'));
  return importer.status(app.getPath('userData'));
 });
-handle('listen',()=>{runtime.voice.send({command:'listen'});return {ok:true};});
-handle('stop',()=>{runtime.voice.send({command:'stop'});return {ok:true};});
+handle('listen',()=>runtime.listen());
+handle('control',value=>runtime.controls.execute(value));
+handle('catalog',()=>runtime.controls.catalog());
+handle('reset-likes',()=>{runtime.jarvis.events.resetLikes();return {ok:true};});
+handle('stop',()=>runtime.stopSpeech());
 handle('devices',()=>{runtime.voice.send({command:'devices'});return {ok:true};});
-handle('scenes',async()=>{const obs=getObsClient();if(!obs?.connected)return [];return (await obs.request('GetSceneList')).scenes.map(s=>s.sceneName);});
+handle('scenes',()=>runtime.jarvis.obs.scenes());
 handle('fan-config',async value=>{if(!['stage','curve','csv'].includes(value?.command))throw Error('Unbekannte Einstellung.');return runtime.fan.configure(value.command,value.value);});
 handle('profile',async()=>{const result=await dialog.showOpenDialog({title:'Exportiertes iCUE-Profil wählen',properties:['openFile'],filters:[{name:'iCUE-Profil',extensions:['cueprofile']}]});if(result.canceled)return {canceled:true};return runtime.fan.configure('profile',{path:result.filePaths[0]});});
 handle('csv',async()=>{const result=await dialog.showOpenDialog({title:'Laufendes Sensorprotokoll wählen',properties:['openFile','multiSelections'],filters:[{name:'Sensorprotokolle',extensions:['csv','log']}]});if(result.canceled)return {canceled:true};const paths=[...new Set([...(runtime.fan.catalog?.csvPaths||[]),...result.filePaths])];return runtime.fan.configure('csv',{paths});});
@@ -34,9 +37,9 @@ handle('plugin',()=>{const file=path.join(app.isPackaged?process.resourcesPath:p
 handle('forget-memory',()=>{runtime.jarvis.memory=[];runtime.jarvis.save('jarvis-memory.json',[]);return {ok:true};});
 app.whenReady().then(async()=>{
  const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..');
- runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient()});
+ runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
  runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));
 app.on('before-quit',()=>{void runtime?.close();});
-module.exports={onChat:batch=>runtime?.jarvis.onChat(batch),getRuntime:()=>runtime};
+module.exports={onEvent:event=>{runtime?.jarvis.onEvent(event);require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};

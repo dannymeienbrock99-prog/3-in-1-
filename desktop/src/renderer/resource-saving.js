@@ -3,8 +3,12 @@
   // Only presentation resources rest. Chat ingestion, OBS, alerts and broadcasts
   // continue in the main process, including while the window is minimized.
   const frames = new Map();
+  let senderState;
+  function senderChip(){const chip=document.getElementById('obsChip');if(!chip)return;const live=Object.values(senderState?.state?.outputs||{}).some(s=>s.state==='live');chip.className='chip '+(live||senderState?.companionLive?'ok':'');chip.innerHTML='<i></i>'+(live?'Batto sendet':senderState?.companionLive?'LIVE-Studio-Sitzung':'Sender bereit');chip.title='Eigener Sender und Szenen unter Dual Stream';}
+  window.batto.onDualState(value=>{senderState=value;if(!document.hidden)senderChip();});
   let requested = false, override = false, savedAutoStart;
-  const chatVisible = () => !document.hidden && (detached || S.view === 'dashboard');
+  let suspended=false;window.batto.onPresentationState?.(value=>{suspended=!!value;document.body.classList.toggle("presentation-paused",suspended);refresh();});
+  const chatVisible = () => !suspended && !document.hidden && (detached || S.view === 'dashboard');
   const enabled = () => override ? requested : S.config?.performance?.webWidgetsAutoStart === true;
   function applyFrame(frame, url) {
     const slot = frame.closest('.chat-extra-slot');
@@ -39,6 +43,7 @@
   }
   window.BattoResources = {
     chatVisible,
+    get suspended(){return suspended;},
     setFrameSource(frame, url) {
       frames.set(frame, url); applyFrame(frame, url);
     },
@@ -51,7 +56,8 @@
   // Defer chat DOM work while preserving every incoming message in S.messages.
   for (const name of ['renderChat', 'renderModeration', 'renderHistory', 'renderConnections']) {
     const original = window[name];
-    window[name] = function (...args) { if (chatVisible()) return original.apply(this, args); };
+    let pending,argsLatest,receiver;
+    window[name] = function (...args) { if(!chatVisible())return;argsLatest=args;receiver=this;if(pending)return;pending=setTimeout(()=>{pending=null;if(chatVisible()){original.apply(receiver,argsLatest);if(name==='renderConnections')senderChip();}},name==='renderChat'?100:200); };
   }
   function onView() {
     refresh();
@@ -72,7 +78,7 @@
   renderSettingsModule = function (...args) {
     const result = settings.apply(this, args);
     const section = document.createElement('section'); section.className = 'panel-section';
-    section.innerHTML = '<h3>Leistung sparen</h3><p>Web-Widgets wie Schnee und Geschenk-Webseiten brauchen zusätzliche Browserprozesse. Im Sparmodus startest du sie bei Bedarf im Multi-Chat. Unsichtbare Widgets werden immer entladen. Bot, Auto-Broadcast, OBS und Messwerte laufen weiter.</p><label class="check"><input id="resourceAutoStart" type="checkbox">Web-Widgets automatisch starten (höherer Verbrauch)</label><button id="resourceSave" class="primary">Leistungseinstellung speichern</button>';
+    section.innerHTML = '<h3>Leistung sparen</h3><p>Web-Widgets wie Schnee und Geschenk-Webseiten brauchen zusätzliche Browserprozesse. Im Sparmodus startest du sie bei Bedarf im Multi-Chat. Unsichtbare Widgets werden immer entladen. Bot, Auto-Broadcast, Stream und Messwerte laufen weiter.</p><label class="check"><input id="resourceAutoStart" type="checkbox">Web-Widgets automatisch starten (höherer Verbrauch)</label><button id="resourceSave" class="primary">Leistungseinstellung speichern</button>';
     document.getElementById('settingsModule').append(section);
     section.querySelector('input').checked = S.config?.performance?.webWidgetsAutoStart === true;
     section.querySelector('button').onclick = async () => {

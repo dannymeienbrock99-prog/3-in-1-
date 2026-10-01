@@ -30,7 +30,7 @@ public sealed class DeckPlugin : IDisposable
     private readonly HttpClient http = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly ConcurrentDictionary<string, ActionState> actions = new();
     private readonly CancellationTokenSource lifetime = new();
-    private JsonObject? snapshot;
+    private JsonObject? snapshot,suiteSnapshot,suiteCatalog;
     private readonly string descriptorPath = Environment.GetEnvironmentVariable("FANATLAS_TEST_BRIDGE") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrazyBatto", "BattoSuite", "FanAtlas", "bridge.json");
     private readonly string suiteDescriptor = Environment.GetEnvironmentVariable("BATTO_TEST_BRIDGE") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrazyBatto", "BattoSuite", "bridge.json");
     private string address = "", token = "";
@@ -80,8 +80,8 @@ public sealed class DeckPlugin : IDisposable
         if (evt is "propertyInspectorDidAppear" or "sendToPlugin")
         {
             if (evt == "sendToPlugin" && payload["command"]?.GetValue<string>() != "catalog") return;
-            await RefreshSnapshot();
-            await Send(new { @event = "sendToPropertyInspector", action, context, payload = new { online = Online, catalog = snapshot?.DeepClone() } });
+            await RefreshSnapshot();await RefreshSuite(true);
+            await Send(new { @event = "sendToPropertyInspector", action, context, payload = new { online = Online, suiteOnline=SuiteOnline, catalog = snapshot?.DeepClone(), controls=suiteCatalog?.DeepClone() } });
         }
         if (evt == "keyDown" && actions.TryGetValue(context, out var state))
         {
@@ -90,19 +90,19 @@ public sealed class DeckPlugin : IDisposable
                 var next = (JsonObject)state.Settings.DeepClone(); next["mode"] = next["mode"]?.GetValue<string>() switch { "percent" => "rpm", "rpm" => "temperature", "temperature" => "percent", _ => "rpm" }; state.Settings = next;
                 await Send(new { @event = "setSettings", context, payload = state.Settings }); state.LastImageHash = ""; await Render(context);
             }
+            else if (new[]{".listen",".scene",".control",".combo"}.Any(state.Action.EndsWith))
+            {
+                JsonObject value;
+                if(state.Action.EndsWith(".listen"))value=new(){["action"]="listen"};
+                else if(state.Action.EndsWith(".combo"))value=new(){["steps"]=state.Settings["steps"]?.DeepClone()??new JsonArray()};
+                else value=state.Settings["control"]?.DeepClone() as JsonObject??new(){["action"]=state.Action.EndsWith(".scene")?"scene":"navigate",["target"]=state.Action.EndsWith(".scene")?"Pause":"jarvis"};
+                bool ok=await SuitePost("/api/control",value);await Send(new{@event=ok?"showOk":"showAlert",context});await RefreshSuite();await Render(context);
+            }
             else if (state.Action.EndsWith(".command") || state.Action.EndsWith(".sensor"))
             {
                 string text = state.Settings["command"]?.GetValue<string>() ?? "";
                 if (state.Action.EndsWith(".sensor")) text = (snapshot?["sensors"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(s => s["id"]?.GetValue<string>() == state.Settings["sensorId"]?.GetValue<string>())?["name"]?.GetValue<string>() ?? "";
-                bool ok = false;
-                try {
-                    var descriptor = JsonNode.Parse(await File.ReadAllTextAsync(suiteDescriptor));
-                    if (descriptor?["port"]?.GetValue<int>() == (Environment.GetEnvironmentVariable("BATTO_TEST_INSTANCE") == "1" ? 17666 : 17656) && descriptor["token"]?.GetValue<string>() is string secret && secret.Length == 64 && text.Length is > 0 and <= 500) {
-                        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{descriptor["port"]!.GetValue<int>()}/api/command"); request.Headers.Authorization = new("Bearer", secret);
-                        request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { text }), Encoding.UTF8, "application/json");
-                        using var result = await http.SendAsync(request, lifetime.Token); ok = result.IsSuccessStatusCode;
-                    }
-                } catch (Exception) when (!lifetime.IsCancellationRequested) { }
+                bool ok = await SuitePost("/api/command",new JsonObject{["text"]=text});
                 await Send(new { @event = ok ? "showOk" : "showAlert", context });
             }
             else if (state.Action.EndsWith(".curve"))
@@ -125,6 +125,18 @@ public sealed class DeckPlugin : IDisposable
             }
         }
     }
+    private bool SuiteOnline=>suiteSnapshot!=null&&DateTime.TryParse(suiteSnapshot["generatedUtc"]?.GetValue<string>(),out var dt)&&DateTime.UtcNow-dt.ToUniversalTime()<TimeSpan.FromSeconds(10);
+    private async Task<JsonObject?> SuiteRequest(string route,JsonObject? body=null){
+        var file=new FileInfo(suiteDescriptor);if(!file.Exists||file.Length>8192)return null;
+        var d=JsonNode.Parse(await File.ReadAllTextAsync(suiteDescriptor));int port=d?["port"]?.GetValue<int>()??0;var secret=d?["token"]?.GetValue<string>()??"";
+        if(port!=(Environment.GetEnvironmentVariable("BATTO_TEST_INSTANCE")=="1"?17666:17656)||secret.Length!=64||!secret.All(Uri.IsHexDigit))return null;
+        using var request=new HttpRequestMessage(body==null?HttpMethod.Get:HttpMethod.Post,$"http://127.0.0.1:{port}"+route);request.Headers.Authorization=new("Bearer",secret);
+        if(body!=null)request.Content=new StringContent(body.ToJsonString(),Encoding.UTF8,"application/json");
+        using var client=new HttpClient(new HttpClientHandler{UseProxy=false}){Timeout=TimeSpan.FromSeconds(body==null?3:110)};
+        using var response=await client.SendAsync(request,lifetime.Token);if(!response.IsSuccessStatusCode)return null;string content=await response.Content.ReadAsStringAsync(lifetime.Token);return content.Length<=1000000?JsonNode.Parse(content) as JsonObject:null;
+    }
+    private async Task<bool> SuitePost(string route,JsonObject body){try{return (await SuiteRequest(route,body))?["ok"]?.GetValue<bool>()==true;}catch(Exception)when(!lifetime.IsCancellationRequested){return false;}}
+    private async Task RefreshSuite(bool catalog=false){try{suiteSnapshot=await SuiteRequest("/api/state");if(catalog)suiteCatalog=await SuiteRequest("/api/catalog");}catch(Exception)when(!lifetime.IsCancellationRequested){suiteSnapshot=null;}}
     private bool Online => snapshot != null && DateTime.TryParse(snapshot["generatedUtc"]?.GetValue<string>(), out var dt) && DateTime.UtcNow - dt.ToUniversalTime() < TimeSpan.FromSeconds(10);
     private async Task RefreshSnapshot()
     {
@@ -150,7 +162,7 @@ public sealed class DeckPlugin : IDisposable
     {
         while (!lifetime.IsCancellationRequested)
         {
-            await RefreshSnapshot();
+            if(actions.Count>0){if(actions.Values.Any(a=>a.Action.EndsWith(".fan")||a.Action.EndsWith(".sensor")||a.Action.EndsWith(".curve")))await RefreshSnapshot();await RefreshSuite();}
             foreach (string id in actions.Keys) await Render(id);
             await Task.Delay(2000, lifetime.Token);
         }
@@ -189,7 +201,7 @@ public sealed class DeckPlugin : IDisposable
         else if (action.Action.EndsWith(".command"))
         {
             name = action.Settings["label"]?.GetValue<string>() ?? "Jarvis"; main = "JARVIS";
-            bottom = action.Settings["command"]?.GetValue<string>() ?? "Befehl wählen"; status = Online ? "Bereit" : "FanAtlas offline";
+            bottom = action.Settings["command"]?.GetValue<string>() ?? "Befehl wählen"; status = SuiteOnline ? "Bereit" : "Batto offline";
         }
         else if (action.Action.EndsWith(".curve"))
         {
@@ -198,9 +210,16 @@ public sealed class DeckPlugin : IDisposable
             name = curve?["name"]?.GetValue<string>() ?? "Kurve wählen"; main = "KURVE"; bottom = "Entwurf";
             status = !Online ? "FanAtlas offline" : snapshot?["selectedCurveId"]?.GetValue<string>() == id ? "Ausgewählt" : "Öffnen";
         }
+        else if(new[]{".listen",".scene",".control",".combo"}.Any(action.Action.EndsWith)){
+            name=action.Settings["label"]?.GetValue<string>()??"Batto";
+            main=action.Action.EndsWith(".listen")?"JARVIS":action.Action.EndsWith(".scene")?"SZENE":action.Action.EndsWith(".combo")?"KOMBI":"BATTO";
+            bottom=action.Action.EndsWith(".listen")?"Fragen & zuhören":action.Settings["control"]?["target"]?.GetValue<string>()??"Tastenaktion";
+            status=SuiteOnline?(action.Action.EndsWith(".scene")?suiteSnapshot?["program"]?["scene"]?.GetValue<string>()??"Bereit":"Bereit"):"Batto offline";
+        }
+        string signature=string.Join("|",name,main,bottom,status);if(signature==action.LastImageHash)return;
         using var bitmap = KeyImage.Draw(name, main, bottom, status, status is "FanAtlas offline" or "Quelle fehlt");
         using var stream = new MemoryStream(); bitmap.Save(stream, ImageFormat.Png); byte[] bytes = stream.ToArray();
-        string hash = Convert.ToHexString(SHA256.HashData(bytes)); if (hash == action.LastImageHash) return; action.LastImageHash = hash;
+        action.LastImageHash = signature;
         await Send(new { @event = "setImage", context, payload = new { image = "data:image/png;base64," + Convert.ToBase64String(bytes), target = 0 } });
         await Send(new { @event = "setTitle", context, payload = new { title = "", target = 0 } });
     }

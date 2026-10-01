@@ -2,14 +2,16 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
+const {JarvisEvents,eventSettings,DEFAULT_EVENTS}=require('./jarvis-events.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
-const DEFAULTS={address:'Sir Crazy',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,
+const DEFAULTS={address:'Sir Crazy',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
  chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
  fanAlerts:{enabled:true,threshold:80,hysteresis:5,cooldown:90},sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
 function finite(value,min,max,fallback){return typeof value==='number'&&Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
 function cleanSettings(input={}){
  const s={...DEFAULTS};
- for(const key of ['voiceEnabled','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi']) if(typeof input[key]==='boolean')s[key]=input[key];
+ for(const key of ['voiceEnabled','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi','gamingMode']) if(typeof input[key]==='boolean')s[key]=input[key];
+ s.greeting=String(input.greeting??s.greeting).replace(/[\x00-\x1f]/g,' ').slice(0,120);s.events=eventSettings(input.events);
  s.address=String(input.address||s.address).slice(0,40);s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
  s.chatMode=['moderators','allowlist','all'].includes(input.chatMode)?input.chatMode:'moderators';
  s.chatPlatforms=Array.isArray(input.chatPlatforms)?input.chatPlatforms.filter(p=>DEFAULTS.chatPlatforms.includes(p)):s.chatPlatforms;
@@ -55,7 +57,7 @@ class JarvisCore extends EventEmitter{
  constructor({directory,getSensors=()=>[],getFans=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi}){
   super();this.directory=directory;this.getSensors=getSensors;this.getFans=getFans;this.obs=obs;this.speak=speak;this.stopSpeech=stopSpeech;this.clock=clock;this.askAi=askAi;
   this.settings=cleanSettings(this.read('jarvis-settings.json',{}));this.memory=this.read('jarvis-memory.json',[]);if(!Array.isArray(this.memory))this.memory=[];
-  this.history=[];this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;
+  this.history=[];this.events=new JarvisEvents();this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;
  }
  read(name,fallback){try{return JSON.parse(fs.readFileSync(path.join(this.directory,name),'utf8'));}catch{return fallback;}}
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
@@ -67,7 +69,9 @@ class JarvisCore extends EventEmitter{
   const body=m.message.replace(/https?:\/\/\S+/gi,'Link').replace(/[\x00-\x1f]/g,' ').slice(0,this.settings.chatMaxLength);
   this.say(`${this.settings.address}, ${isModerator(m)?'Moderator ':''}${String(m.username||'Chat').slice(0,60)} sagt: ${body}`,'chat');
  }for(const [key,time]of this.chatSeen)if(this.clock()-time>300000)this.chatSeen.delete(key);}
+ onEvent(event){this.events.ingest(event,this.settings.events,this.clock());}
  poll(){
+  const eventText=this.events.next(this.settings.events,this.clock());if(eventText)this.say(`${this.settings.address}, ${eventText}`,'event');
   const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());
   for(const a of alerts.slice(0,3))this.say(`${this.settings.address}, ${a.text}`,'alert');
   const high=this.fanAlerts.evaluate(this.getFans(),this.settings.fanAlerts,this.clock());
@@ -117,10 +121,11 @@ class JarvisCore extends EventEmitter{
    const explicit=/^(?:szene|wechsle (?:zu|zur szene)|schalte auf)\s+(.+)$/.exec(q)?.[1];
    if(alias||explicit){const key=alias==='weiter'?'spiel':alias;const list=await this.obs.scenes();let name=key?this.settings.sceneAliases[key]:'';
     if(!name){const wanted=explicit||key;name=list.find(s=>normalize(s)===wanted)|| (key==='pause'?list.find(s=>/pause|bin gleich|zuruck/.test(normalize(s))):'');}
-    if(!name||!list.includes(name))return this.say(prefix+'für diesen Befehl ist noch keine vorhandene OBS-Szene zugeordnet. Wähle sie in den Jarvis-Einstellungen.');
-    await this.obs.setScene(name);this.remember(text,'scene:'+name);return this.say(prefix+`OBS zeigt jetzt die Szene ${name}.`);
+    if(!name||!list.includes(name))return this.say(prefix+'für diesen Befehl ist noch keine vorhandene Szene zugeordnet. Wähle sie in den Jarvis-Einstellungen.');
+    await this.obs.setScene(name);this.remember(text,'scene:'+name);return this.say(prefix+`Die Szene ${name} ist ausgewählt.`);
    }
-   if(/^(befehle|hilfe|was kannst du)$/.test(q))return this.say(prefix+'ich kann gewünschte Messwerte nennen, konfigurierte Grenzwerte melden und OBS-Szenen wechseln. Zum Beispiel: GPU-Temperatur, CPU-Auslastung oder Pause.');
+   if(/^(befehle|hilfe|was kannst du)$/.test(q))return this.say(prefix+'ich kann gewünschte Messwerte nennen, Grenzwerte und Stream-Ereignisse melden und Szenen wechseln. Zum Beispiel: GPU-Temperatur, CPU-Auslastung oder Pause.');
+   if(this.control){let action;const sw=/^(mikrofon|kamera|pc ton|chat einblendung) (an|ein|aus|stumm|einblenden|ausblenden)$/.exec(q);if(sw)action={action:sw[1]==='chat einblendung'?'overlay':'source',target:{mikrofon:'microphone',kamera:'camera','pc ton':'desktop','chat einblendung':'chat'}[sw[1]],op:['an','ein','einblenden'].includes(sw[2])?'on':'off'};if(/^(beide streams|streams) stoppen$/.test(q))action={action:'stop',target:'both'};if(/^(beide streams|streams) starten$/.test(q))action={action:'start',target:'both'};if(action){await this.control(action);return this.say(prefix+'ausgeführt.');}}
    const selected=this.resolveSensors(text);
    if(selected.length){const available=selected.filter(s=>fresh(s,this.clock()));this.remember(text,'sensors:'+selected.map(s=>s.id).join(','));return this.say(prefix+(available.length?available.map(s=>spoken(s,this.settings.sensorRules[s.id])).join('. ')+'.'+(available.length<selected.length?' Weitere passende Sensoren liefern gerade keine aktuellen Werte.':''):'dafür liegen gerade keine aktuellen Messwerte vor.'));}
    if(/temperatur|spannung|strom|volt|ampere|watt|\bpin|gpu|cpu|arbeitsspeicher|\bram\b|lufter|messwert|pc werte/.test(q))return this.say(prefix+'dafür finde ich keinen passenden verfügbaren Sensor. Wähle die Messquelle oder gib dem Sensor einen Sprachnamen.');

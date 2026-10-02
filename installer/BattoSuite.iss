@@ -7,7 +7,7 @@
 [Setup]
 AppId={{2B151B53-163C-489D-80A2-B046578C2906}
 AppName=Batto 3-in-1
-AppVersion=1.4.0
+AppVersion=1.5.0
 AppPublisher=Crazy_Batto
 AppPublisherURL=https://github.com/dannymeienbrock99-prog/3-in-1-
 DefaultDirName={localappdata}\Programs\CrazyBatto\BattoSuite
@@ -17,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#OutputPath}
-OutputBaseFilename=Batto-3-in-1-Setup-1.4.0
+OutputBaseFilename=Batto-3-in-1-Setup-1.5.0
 SetupIconFile=..\assets\fanatlas.ico
 UninstallDisplayIcon={app}\Batto 3-in-1.exe
 WizardStyle=modern
@@ -43,6 +43,9 @@ Name: "{group}\Batto 3-in-1"; Filename: "{app}\Batto 3-in-1.exe"
 Name: "{group}\Kurzanleitung"; Filename: "{app}\resources\Extras\ANLEITUNG.html"
 Name: "{autodesktop}\Batto 3-in-1"; Filename: "{app}\Batto 3-in-1.exe"; Tasks: desktopicon
 [Run]
+Filename: "{app}\resources\FanAtlas\BattoDualStream.exe"; Parameters: "--register-cameras"; Flags: runhidden waituntilterminated
 Filename: "{app}\Batto 3-in-1.exe"; Description: "Batto 3-in-1 starten"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\resources\Extras\de.crazybatto.suite.streamDeckPlugin"; Description: "Stream-Deck-Plugin zur Installation öffnen"; Flags: shellexec nowait postinstall skipifsilent unchecked
+[UninstallRun]
+Filename: "{app}\resources\FanAtlas\BattoDualStream.exe"; Parameters: "--unregister-cameras"; Flags: runhidden waituntilterminated; RunOnceId: "BattoVirtualCameras"
 ; Einstellungen, Zugangsdaten und Nutzerlayouts bleiben bei Deinstallation erhalten.

@@ -4,7 +4,7 @@ const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
 const {JarvisEvents,eventSettings,DEFAULT_EVENTS}=require('./jarvis-events.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
-const DEFAULTS={address:'Sir Crazy',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
+const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
  chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
  fanAlerts:{enabled:true,threshold:80,hysteresis:5,cooldown:90},sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
 function finite(value,min,max,fallback){return typeof value==='number'&&Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
@@ -12,7 +12,7 @@ function cleanSettings(input={}){
  const s={...DEFAULTS};
  for(const key of ['voiceEnabled','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi','gamingMode']) if(typeof input[key]==='boolean')s[key]=input[key];
  s.greeting=String(input.greeting??s.greeting).replace(/[\x00-\x1f]/g,' ').slice(0,120);s.events=eventSettings(input.events);
- s.address=String(input.address||s.address).slice(0,40);s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
+ s.address=String(input.address??s.address).slice(0,40);if(s.address==='Sir Crazy')s.address='';s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
  s.chatMode=['moderators','allowlist','all'].includes(input.chatMode)?input.chatMode:'moderators';
  s.chatPlatforms=Array.isArray(input.chatPlatforms)?input.chatPlatforms.filter(p=>DEFAULTS.chatPlatforms.includes(p)):s.chatPlatforms;
  s.chatAllowlist=Array.isArray(input.chatAllowlist)?input.chatAllowlist.filter(x=>typeof x==='string'&&/^(twitch|youtube|tiktok|cng):[^\s:]{1,160}$/.test(x)).slice(0,100):[];
@@ -67,19 +67,19 @@ class JarvisCore extends EventEmitter{
  onChat(batch){for(const m of batch){if(!allowedChat(m,this.settings))continue;const key=m.platform+':'+(m.id||crypto.createHash('sha256').update(m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));if(this.chatSeen.has(key))continue;this.chatSeen.set(key,this.clock());
   if(this.clock()-this.lastChat<this.settings.chatCooldown*1000)continue;this.lastChat=this.clock();
   const body=m.message.replace(/https?:\/\/\S+/gi,'Link').replace(/[\x00-\x1f]/g,' ').slice(0,this.settings.chatMaxLength);
-  this.say(`${this.settings.address}, ${isModerator(m)?'Moderator ':''}${String(m.username||'Chat').slice(0,60)} sagt: ${body}`,'chat');
+  this.say(`${this.settings.address?this.settings.address+', ':''}${isModerator(m)?'Moderator ':''}${String(m.username||'Chat').slice(0,60)} sagt: ${body}`,'chat');
  }for(const [key,time]of this.chatSeen)if(this.clock()-time>300000)this.chatSeen.delete(key);}
  onEvent(event){this.events.ingest(event,this.settings.events,this.clock());}
  poll(){
-  const eventText=this.events.next(this.settings.events,this.clock());if(eventText)this.say(`${this.settings.address}, ${eventText}`,'event');
+  const eventText=this.events.next(this.settings.events,this.clock());if(eventText)this.say(`${this.settings.address?this.settings.address+', ':''}${eventText}`,'event');
   const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());
-  for(const a of alerts.slice(0,3))this.say(`${this.settings.address}, ${a.text}`,'alert');
+  for(const a of alerts.slice(0,3))this.say(`${this.settings.address?this.settings.address+', ':''}${a.text}`,'alert');
   const high=this.fanAlerts.evaluate(this.getFans(),this.settings.fanAlerts,this.clock());
   const saved=JSON.stringify(this.fanAlerts.snapshot());if(saved!==this.lastFanState){this.save('jarvis-fan-alert-state.json',this.fanAlerts.snapshot());this.lastFanState=saved;}
   if(high.length){
    const describe=f=>`${f.name}: ${Math.round(f.percent.value)} Prozent${f.percent.basis==='rpm-reference'?' der eingestellten Maximaldrehzahl':''}${fresh(f.rpm,this.clock())?', '+Math.round(f.rpm.value).toLocaleString('de-DE')+' Umdrehungen pro Minute':''}`;
    const detail=high.length<=3?high.map(describe).join('. '):`${high.length} iCUE-LINK-Lüfter haben die Meldeschwelle erreicht. Höchster Wert: ${describe(high.reduce((a,b)=>a.percent.value>b.percent.value?a:b))}`;
-   this.say(`${this.settings.address}, hohe Lüfterdrehzahl. ${detail}.`,'alert');
+   this.say(`${this.settings.address?this.settings.address+', ':''}hohe Lüfterdrehzahl. ${detail}.`,'alert');
   }
   return [...alerts,...high.map(f=>({fanId:f.id}))];
  }
@@ -112,7 +112,7 @@ class JarvisCore extends EventEmitter{
  }
  async execute(input,{source='typed'}={}){
   if(typeof input!=='string'||input.length>1500)throw Error('Befehl zu lang.');
-  const text=input.trim().replace(/^(?:hey\s+)?jarvis[,!:.\s]*/i,'');const q=normalize(text);const prefix=this.settings.address+', ';
+  const text=input.trim().replace(/^(?:hey\s+)?jarvis[,!:.\s]*/i,'');const q=normalize(text);const prefix=this.settings.address?this.settings.address+', ':'';
   if(!q)return this.say(prefix+'ich höre. Frage zum Beispiel nach der GPU-Temperatur.');
   if(/^(stopp|stop|ruhe|sei still|schweigen)$/.test(q)){this.stopSpeech();return this.say('Sprachausgabe gestoppt.','status',false);}
   if(this.commandBusy)return {ok:false,text:'Ein Befehl wird gerade verarbeitet.'};this.commandBusy=true;

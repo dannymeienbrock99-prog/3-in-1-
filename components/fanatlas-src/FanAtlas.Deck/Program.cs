@@ -12,7 +12,7 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        if (args.Length == 2 && args[0] == "--render-test") { KeyImage.Draw("GPU-Lüfter 1", "31°", "0 %", "Live", false).Save(args[1], ImageFormat.Png); return 0; }
+        if (args.Length == 2 && args[0] == "--render-test") { KeyImage.Draw("Jarvis", "", "Zuhören", "Bereit", false, false).Save(args[1], ImageFormat.Png); return 0; }
         try
         {
             string Arg(string name) { int i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : ""; }
@@ -217,7 +217,7 @@ public sealed class DeckPlugin : IDisposable
             status=SuiteOnline?(action.Action.EndsWith(".scene")?suiteSnapshot?["program"]?["scene"]?.GetValue<string>()??"Bereit":"Bereit"):"Batto offline";
         }
         string signature=string.Join("|",name,main,bottom,status);if(signature==action.LastImageHash)return;
-        using var bitmap = KeyImage.Draw(name, main, bottom, status, status is "FanAtlas offline" or "Quelle fehlt");
+        using var bitmap = KeyImage.Draw(name, main, bottom, status, status is "FanAtlas offline" or "Quelle fehlt", action.Action.EndsWith(".fan"), action.Action.EndsWith(".sensor"));
         using var stream = new MemoryStream(); bitmap.Save(stream, ImageFormat.Png); byte[] bytes = stream.ToArray();
         action.LastImageHash = signature;
         await Send(new { @event = "setImage", context, payload = new { image = "data:image/png;base64," + Convert.ToBase64String(bytes), target = 0 } });
@@ -227,14 +227,14 @@ public sealed class DeckPlugin : IDisposable
 }
 public static class KeyImage
 {
-    public static Bitmap Draw(string name, string main, string bottom, string state, bool stale)
+    public static Bitmap Draw(string name, string main, string bottom, string state, bool stale, bool fanArtwork = true, bool showValue = false)
     {
         var bmp = new Bitmap(144, 144); using var g = Graphics.FromImage(bmp); g.SmoothingMode = SmoothingMode.AntiAlias;
         g.Clear(Color.FromArgb(7, 19, 35));
-        string imagePath = Path.Combine(AppContext.BaseDirectory, "fan.png");
-        if (File.Exists(imagePath)) { using var img = Image.FromFile(imagePath); g.DrawImage(img, new Rectangle(9, 9, 126, 126)); }
-        using var shade = new SolidBrush(Color.FromArgb(235, 7, 19, 35)); g.FillEllipse(shade, 32, 35, 74, 74);
-        using var outline = new Pen(stale ? Color.Gray : Color.Cyan, 2); g.DrawEllipse(outline, 32, 35, 74, 74);
+        string imagePath = Path.Combine(AppContext.BaseDirectory, fanArtwork ? "fan.png" : "deck-pause.png");
+        if (File.Exists(imagePath)) { using var img = Image.FromFile(imagePath); g.DrawImage(img, fanArtwork ? new Rectangle(9, 9, 126, 126) : new Rectangle(0, 0, 144, 144)); }
+        using var shade = new SolidBrush(Color.FromArgb(235, 7, 19, 35)); if(fanArtwork)g.FillEllipse(shade, 32, 35, 74, 74);
+        using var outline = new Pen(stale ? Color.Gray : Color.Cyan, 2); if(fanArtwork)g.DrawEllipse(outline, 32, 35, 74, 74);
         void Text(string text, int size, FontStyle style, Color color, RectangleF box)
         { using var font = new Font("Segoe UI", size, style, GraphicsUnit.Pixel); using var brush = new SolidBrush(color); using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap }; g.FillRectangle(shade, box); g.DrawString(text, font, brush, box, format); }
         Text(name, 13, FontStyle.Bold, Color.White, new(0, 0, 144, 22));
@@ -242,7 +242,7 @@ public static class KeyImage
         using (var font = new Font("Segoe UI", main.Length > 5 ? 16 : 23, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var brush = new SolidBrush(Color.White))
         using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString(main, font, brush, new RectangleF(32, 35, 74, 74), format);
+            if(fanArtwork||showValue){if(!fanArtwork)g.FillRectangle(shade,new RectangleF(24,48,96,44));g.DrawString(main, font, brush, new RectangleF(24,35,96,74), format);}
         Text(bottom, 14, FontStyle.Bold, Color.Cyan, new(0, 112, 144, 16));
         Text(state, 11, FontStyle.Regular, stale ? Color.Goldenrod : Color.LightGreen, new(0, 128, 144, 16));
         return bmp;

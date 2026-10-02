@@ -8,9 +8,10 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{sender(e);if(command=
   case 'program':return service.program(value);
   case 'background':{if(!['Pause','Start','Ende'].includes(value))throw Error('Unbekannte Szene.');if(service.state.prepared)throw Error('Video-Dienst erst ausschalten.');const r=await dialog.showOpenDialog({title:value+' – Hintergrund wählen',properties:['openFile'],filters:[{name:'Bild',extensions:['png','jpg','jpeg','webp']}]});if(r.canceled)return null;return service.program({...service.config.program,backgrounds:{...service.config.program.backgrounds,[value]:r.filePaths[0]}});}
   case 'save':return service.save(value);
+  case 'register-cameras':return service.registerCameras();
   case 'probe':await service.probe();return service.snapshot();
   case 'prepare':return service.prepare();
-  case 'release':await service.release();return service.snapshot();
+  case 'release':if(service.running())throw Error('Bitte zuerst die Kameras stoppen.');await service.release();return service.snapshot();
   case 'start':return service.start(value);
   case 'stop':return service.stop(value);
   case 'mute':return service.mute(value?.platform,value?.muted);

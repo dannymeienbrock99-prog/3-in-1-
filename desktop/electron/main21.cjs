@@ -1,5 +1,5 @@
 // RELEASE_213_COMPLETE
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, nativeImage, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, nativeImage, globalShortcut, Tray, Menu } = require('electron');
 const { BroadcastService } = require('../src/core/broadcast/service.cjs');
 const { isAutoBroadcast } = require('../src/core/broadcast/visibility.cjs');
 const { PlatformWriter } = require('../src/core/broadcast/platform-writer.cjs');
@@ -56,6 +56,18 @@ const { YouTubeAdapter } = require('../src/adapters/youtube.cjs');
 const { MockAdapter } = require('../src/adapters/mock.cjs');
 
 let mainWindow;
+let gamingMode=false, gamingTray, restoreDetached=false;
+async function showMainWindow(){
+ gamingMode=false;
+ if(!mainWindow||mainWindow.isDestroyed()){mainWindow=createWindow(false);const win=mainWindow;win.on('closed',()=>{if(mainWindow===win)mainWindow=null;});await new Promise(resolve=>win.webContents.once('did-finish-load',resolve));}
+ if(restoreDetached){restoreDetached=false;setChatDetached(true);}
+ mainWindow.restore();mainWindow.show();mainWindow.focus();return mainWindow;
+}
+function enterGaming(){
+ if(!gamingTray){gamingTray=new Tray(nativeImage.createFromPath(path.join(__dirname,'..','src','assets','icon.png')).resize({width:32,height:32}));gamingTray.setToolTip('Batto 3-in-1 – Gaming-Modus');gamingTray.setContextMenu(Menu.buildFromTemplate([{label:'Batto öffnen',click:()=>void showMainWindow()},{label:'Beenden',click:()=>app.quit()}]));gamingTray.on('double-click',()=>void showMainWindow());}
+ // Return IPC first, then actually release renderer memory instead of only hiding it.
+ setTimeout(()=>{gamingMode=true;restoreDetached=!!detachedWindow&&!detachedWindow.isDestroyed();if(restoreDetached)detachedWindow.destroy();mainWindow?.destroy();},200);return {ok:true};
+}
 let detachedWindow;
 let configStore;
 let settingsService;
@@ -409,7 +421,7 @@ function setChatDetached(open) {
   if(open){
     if(!detachedWindow||detachedWindow.isDestroyed()){
       const window=createWindow(true);detachedWindow=window;
-      window.on('closed',()=>{if(detachedWindow===window)detachedWindow=null;configStore.merge({windows:{detachedOpen:false}});navigation?.broadcast();});
+      window.on('closed',()=>{if(detachedWindow===window)detachedWindow=null;if(!gamingMode)configStore.merge({windows:{detachedOpen:false}});navigation?.broadcast();});
     } else detachedWindow.focus();
     configStore.merge({windows:{detachedOpen:true}});
   } else {const window=detachedWindow;detachedWindow=null;window?.close();configStore.merge({windows:{detachedOpen:false}});}
@@ -587,7 +599,7 @@ function initCore() {
   });
   actionEngine = new ActionEngine({
     getConfig: currentConfig,
-    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.running()||d?.companionLive);},
+    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.live()||d?.companionLive);},
     sendChat: (platform, text) => sendOutbound(platform, text, { source: 'automation' }),
     onTts: (payload) => send('tts:speak', payload),
     onOverlay: (event,options) => {const d=require('../src/dual-stream/bootstrap.cjs').getService();if(d?.state.prepared&&event.type==='media'){const media=currentConfig().media.find(m=>m.id===event.data?.mediaId);if(!media)throw Error('Medium fehlt.');return d.media(media.path,{...event.data,...options});}if(d?.state.prepared&&event.type!=='media'){d.eventText=String(event.data?.text||'').slice(0,200);d.scheduleOverlay();clearTimeout(d.eventTimer);d.eventTimer=setTimeout(()=>{d.eventText='';d.scheduleOverlay();},10000);d.eventTimer.unref();return {ok:true};}return audioOutput.run(event,options);},
@@ -611,7 +623,7 @@ function initCore() {
   broadcastService = new BroadcastService({store:configStore,send:sendOutbound,
     onActions:(item,context)=>chainService.trigger(item.chainId,{source:context.source,message:context.text,text:context.text,platform:'internal',user:'Auto-Broadcast'}, {signal:context.signal}),
     onSound: (item, context) => audioOutput.playSound(item, context),
-    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.running()||d?.companionLive);},
+    isLive:()=>{const d=require('../src/dual-stream/bootstrap.cjs').getService();return Boolean(d?.live()||d?.companionLive);},
     onStatus:status=>send('broadcast:status',status),
     onConfig:next=>{settingsService.syncIfClean();applyConfig(next,{autoBroadcast:next.autoBroadcast});}
   });
@@ -647,7 +659,7 @@ async function startExternalServices() {
   inputHotkeys.configure(cfg.hotkeys);
   let navigationToken=secretsService.get('navigation-token');if(!navigationToken){navigationToken=crypto.randomBytes(32).toString('hex');secretsService.set('navigation-token',navigationToken);}
   const deckControls=require('../src/core/deck-controls.cjs').createDeckControls({getConfig:currentConfig,saveConfig:async patch=>{const next=saveCommunityConfig(patch);if(patch.community)await community.applyConfig(next,patch);},isDetached:()=>!!detachedWindow&&!detachedWindow.isDestroyed(),setDetached:setChatDetached});
-  navigation=new NavigationService({controls:deckControls,...require('../src/core/deck-tests.cjs').createDeckTests({getConfig:currentConfig,chains:chainService,engine:actionEngine,broadcast:broadcastService,widgetTest:payload=>chatExtras.trigger(payload),battleTest:()=>{send('battle:preview',{durationMs:8000});return {ok:true,message:'Match-Anzeige für 8 Sekunden eingeblendet.'};}}),token:navigationToken,navigate:async(view,focus)=>{if(!mainWindow||mainWindow.isDestroyed())throw new Error('Hauptfenster ist geschlossen.');require('../src/core/navigation-service.cjs').showNavigationWindow(mainWindow,focus&&currentConfig().navigation.focus!==false);return mainWindow.webContents.executeJavaScript('setView('+JSON.stringify(view)+'); S.view');},onError:message=>bridgeLog('error','Stream Deck','NAVIGATION_SERVER',{message})});
+  navigation=new NavigationService({controls:deckControls,...require('../src/core/deck-tests.cjs').createDeckTests({getConfig:currentConfig,chains:chainService,engine:actionEngine,broadcast:broadcastService,widgetTest:payload=>chatExtras.trigger(payload),battleTest:()=>{send('battle:preview',{durationMs:8000});return {ok:true,message:'Match-Anzeige für 8 Sekunden eingeblendet.'};}}),token:navigationToken,navigate:async(view,focus)=>{if(!mainWindow||mainWindow.isDestroyed())await showMainWindow();require('../src/core/navigation-service.cjs').showNavigationWindow(mainWindow,focus&&currentConfig().navigation.focus!==false);return mainWindow.webContents.executeJavaScript('setView('+JSON.stringify(view)+'); S.view');},onError:message=>bridgeLog('error','Stream Deck','NAVIGATION_SERVER',{message})});
   navigation.configure(cfg.navigation).catch(error=>bridgeLog('error','Stream Deck','NAVIGATION_START_FAILED',{message:error.message}));
 
   if(cfg.streamerbot.autoConnect)streamerbot.connect().catch(()=>{});
@@ -1001,7 +1013,7 @@ if (!gotLock) app.quit();
 else {
   require('../src/services/obs-settings-import.cjs').initialize(app);
   app.on('second-instance', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); }
+    void showMainWindow();
   });
 
   app.whenReady().then(() => {
@@ -1010,7 +1022,7 @@ else {
     mainWindow = createWindow(false);
     mainWindow.on('closed', () => { mainWindow = null; });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
-    app.on('activate', () => { if (!mainWindow) mainWindow = createWindow(false); });
+    app.on('activate', () => { void showMainWindow(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));
   });
 }
@@ -1021,11 +1033,12 @@ app.on('before-quit', (event) => {
   quitting = true;
   shutdown().finally(() => app.quit());
 });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { if (process.platform !== 'darwin'&&!gamingMode) app.quit(); });
 
 // Adapter shares the existing OBS connection with Jarvis.
 module.exports.getObsClient=()=>require('../src/services/suite-host.cjs').obsForJarvis(()=>obs);
 module.exports.getMainWindow=()=>mainWindow;
+module.exports.getGamingMode=()=>gamingMode;
 
 module.exports.getSuiteHost=()=>({
  catalog:()=>({...navigation?.controls?.snapshot(),items:[...(navigation?.catalog?.()||[]),...(currentConfig().media||[]).map(x=>({id:x.id,name:x.name||x.id,kind:'media'}))]}),
@@ -1034,6 +1047,7 @@ module.exports.getSuiteHost=()=>({
  cancel:()=>{actionEngine.cancelAll();return {ok:true};},
  connect:async(name,op)=>{const a=adapters[name];if(!a)throw Error('Chat-Verbindung fehlt.');const on=op==='on'||op==='toggle'&&!a.getStatus().connected;await (on?a.connect():a.disconnect());return {ok:true};},
  navigate:view=>{if(!require('../src/services/suite-controls.cjs').VIEWS[view])throw Error('Unbekannter Bereich.');return navigation.navigate(view,true);},
- show:()=>{mainWindow.restore();mainWindow.show();mainWindow.focus();},
+ show:async()=>{await showMainWindow();return {ok:true};},
+ gaming:enterGaming,
  tikfinity:()=>shell.openExternal('https://tikfinity.zerody.one/tiktok/')
 });

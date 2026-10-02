@@ -22,7 +22,7 @@ test('threshold 75 and 95, per-fan opt-out, global switch and stale values',()=>
 });
 test('new crossing respects cooldown; unrelated settings do not repeat high-fan message',()=>{
  let time=Date.now(),rows=[fan(80,time)],said=[];const core=new JarvisCore({directory:temp(),getFans:()=>rows,speak:t=>said.push(t),clock:()=>time});
- core.poll();assert.equal(said.length,1);assert.match(said[0],/Sir Crazy.*80 Prozent.*1.600 Umdrehungen/);
+ core.poll();assert.equal(said.length,1);assert.match(said[0],/^hohe Lüfterdrehzahl.*80 Prozent.*1.600 Umdrehungen/);
  core.update({chatCooldown:12});time+=10000;rows=[fan(95,time)];core.poll();assert.equal(said.length,1);
  rows=[fan(60,time)];core.poll();rows=[fan(81,time)];core.poll();assert.equal(said.length,1);
  time+=90000;rows=[fan(81,time)];core.poll();assert.equal(said.length,2);

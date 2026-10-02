@@ -4,7 +4,7 @@
   // continue in the main process, including while the window is minimized.
   const frames = new Map();
   let senderState;
-  function senderChip(){const chip=document.getElementById('obsChip');if(!chip)return;const live=Object.values(senderState?.state?.outputs||{}).some(s=>s.state==='live');chip.className='chip '+(live||senderState?.companionLive?'ok':'');chip.innerHTML='<i></i>'+(live?'Batto sendet':senderState?.companionLive?'LIVE-Studio-Sitzung':'Sender bereit');chip.title='Eigener Sender und Szenen unter Dual Stream';}
+  function senderChip(){const chip=document.getElementById('obsChip');if(!chip)return;const live=Object.values(senderState?.state?.outputs||{}).some(s=>s.state==='camera');chip.className='chip '+(live||senderState?.companionLive?'ok':'');chip.innerHTML='<i></i>'+(live?'Virtuelle Kamera läuft':senderState?.companionLive?'LIVE-Studio-Sitzung':'Sender bereit');chip.title='Eigener Sender und Szenen unter Dual Stream';}
   window.batto.onDualState(value=>{senderState=value;if(!document.hidden)senderChip();});
   let requested = false, override = false, savedAutoStart;
   let suspended=false;window.batto.onPresentationState?.(value=>{suspended=!!value;document.body.classList.toggle("presentation-paused",suspended);refresh();});

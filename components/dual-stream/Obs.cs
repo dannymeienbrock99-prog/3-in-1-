@@ -3,6 +3,11 @@ using System.Runtime.InteropServices;
 
 // libobs C ABI, OBS 32.x. The runtime is loaded from an explicitly selected local OBS installation.
 internal static class Obs {
+ [StructLayout(LayoutKind.Sequential)] public struct VideoScale {public int format;public uint width,height;public int range,colorspace;}
+ [StructLayout(LayoutKind.Sequential)] public struct VideoData {public nint data0,data1,data2,data3,data4,data5,data6,data7;public uint stride0,stride1,stride2,stride3,stride4,stride5,stride6,stride7;public ulong timestamp;}
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void VideoCallback(nint param,nint frame);
+ [DllImport("obs.dll")] [return:MarshalAs(UnmanagedType.I1)] public static extern bool video_output_connect(nint video,ref VideoScale info,VideoCallback callback,nint param);
+ [DllImport("obs.dll")] public static extern void video_output_disconnect(nint video,VideoCallback callback,nint param);
  const string D="obs.dll";
  [StructLayout(LayoutKind.Sequential)] public struct Video { public nint graphics; public uint fpsNum,fpsDen,width,height,outWidth,outHeight; public int format; public uint adapter; [MarshalAs(UnmanagedType.I1)] public bool gpu; public int colorspace,range,scale; }
  [StructLayout(LayoutKind.Sequential)] public struct Audio { public uint rate; public int speakers; }

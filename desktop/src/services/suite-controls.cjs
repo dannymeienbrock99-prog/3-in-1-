@@ -7,9 +7,8 @@ class SuiteControls{
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
   {id:'scene',name:'Szene und Übergang',choices:SCENES.map(id=>({id,name:id})),transition:true},
-  {id:'start',name:'Stream starten',choices:this.targets()}, {id:'stop',name:'Stream stoppen',choices:this.targets()},
-  {id:'mute',name:'Stream-Ton an/aus',choices:this.targets(false),switch:true},
-  {id:'source',name:'Bildquelle / Mikrofon / PC-Ton',choices:[['camera','Kamera'],['game','Spiel'],['microphone','Mikrofon'],['desktop','PC-Ton']].map(([id,name])=>({id,name})),switch:true},
+  {id:'start',name:'Virtuelle Kamera starten',choices:this.targets()}, {id:'stop',name:'Virtuelle Kamera stoppen',choices:this.targets()},
+  {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
   {id:'overlay',name:'Einblendung an/aus',choices:[{id:'chat',name:'Chat'},{id:'events',name:'Ereignisse'}],switch:true},
   {id:'jarvis',name:'Jarvis-Einstellung an/aus',choices:[['voiceEnabled','Sprachausgabe'],['microphoneEnabled','Dauerhaft zuhören'],['chatEnabled','Chat vorlesen'],['events.enabled','Stream-Ereignisse'],['events.gifts','Geschenke'],['events.follows','Follower'],['events.likes','Likes'],['gamingMode','Gaming-Sparmodus']].map(([id,name])=>({id,name})),switch:true},
   {id:'likes-reset',name:'Jarvis Like-Zähler zurücksetzen'},
@@ -20,7 +19,7 @@ class SuiteControls{
   {id:'cancel',name:'Laufende Automationen abbrechen'},
   {id:'connect',name:'Chat-Verbindung',choices:[{id:'tikfinity',name:'TikFinity / TikTok'},{id:'twitch',name:'Twitch'},{id:'youtube',name:'YouTube'}],switch:true},
   {id:'navigate',name:'Programmbereich öffnen',choices:Object.entries(VIEWS).map(([id,name])=>({id,name}))},
-  {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'},
+  {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'}, {id:'gaming',name:'Gaming-Modus: Oberfläche schließen, Dienste weiterführen'},
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
  ],scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
@@ -54,6 +53,7 @@ class SuiteControls{
    case 'cancel':return host.cancel();
    case 'navigate':return host.navigate(s.target);
    case 'show':return host.show();
+   case 'gaming':return host.gaming();
    case 'tikfinity':return host.tikfinity();
   }
  }

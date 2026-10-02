@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),{EventEmitter}=require('node:events');
 const {defaults,validate,importProject,profile,platforms}=require('./config.cjs');
+const {execFile}=require('node:child_process'),{promisify}=require('node:util');
 const {NativeClient}=require('./native-client.cjs');
 function atomic(file,value){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
 class DualStream extends EventEmitter {
@@ -9,7 +10,9 @@ class DualStream extends EventEmitter {
   try{this.credentials=JSON.parse(fs.readFileSync(this.keyFile,'utf8'));}catch{}
  }
  root(){return this.config.obsRoot||path.join(process.env.ProgramFiles||'C:\\Program Files','obs-studio');}
- running(){return Object.values(this.state.outputs||{}).some(x=>['live','connecting','test'].includes(x.state));}
+ running(){return Object.values(this.state.outputs||{}).some(x=>['camera','live','connecting','test'].includes(x.state));}
+ live(){return Object.values(this.state.outputs||{}).some(x=>['live','connecting'].includes(x.state));}
+ async registerCameras(){if(this.running())throw Error('Kameras erst stoppen.');await this.release();await promisify(execFile)(this.executable,['--register-cameras'],{windowsHide:true,timeout:15000});await this.probe();return this.snapshot();}
  snapshot(){return {companionLive:this.companionLive,config:this.config,profile:profile(this.config),keys:Object.fromEntries(platforms.map(p=>[p,!!this.credentials[p]])),libraryFound:fs.existsSync(path.join(this.root(),'bin','64bit','obs.dll')),engineRunning:!!this.native?.process,state:this.state,probe:this.probeResult,busy:this.busy,error:this.error};}
  emitState(){this.emit('state',this.snapshot());}
  serial(fn,silent=false){const action=this.queue.then(async()=>{this.busy=true;if(!silent)this.emitState();try{return await fn();}catch(e){this.error=e.message;throw e;}finally{this.busy=false;this.emitState();}});this.queue=action.catch(()=>{});return action;}
@@ -22,10 +25,10 @@ class DualStream extends EventEmitter {
  saveKey(platform,key){if(!platforms.includes(platform)||typeof key!=='string'||key.length>4096||/[\r\n\u0000]/.test(key))throw Error('Ungültiger Stream-Key.');if(!this.safeStorage.isEncryptionAvailable())throw Error('Windows-Verschlüsselung ist zurzeit nicht verfügbar.');const next={...this.credentials};if(key)next[platform]=this.safeStorage.encryptString(key).toString('base64');else delete next[platform];atomic(this.keyFile,next);this.credentials=next;return this.snapshot();}
  getKey(p){try{return this.safeStorage.decryptString(Buffer.from(this.credentials[p],'base64'));}catch{throw Error('Stream-Key bitte erneut direkt im Programm speichern.');}}
  async prepare(){if(this.running())throw Error('Die Ausgabe läuft bereits.');const c=await this.client();this.state=await c.request('prepare',{config:this.nativeConfig()});this.sourceState=Object.fromEntries(Object.entries(this.config.sources).map(([k,v])=>[k,v.enabled]));await this.flushOverlay();for(const p of platforms)if(this.config.destinations[p].muted)this.state=await c.request('mute',{platform:p,muted:true});this.error='';this.idle();return this.snapshot();}
- nativeConfig(){const config=JSON.parse(JSON.stringify(this.config));const assets=this.assets;const pictures={Pause:'bin-gleich-zurueck.jpg',Start:'stream-startet.jpg',Ende:'crazy-batto.png'};for(const [name,file]of Object.entries(pictures))if(!config.program.backgrounds[name])config.program.backgrounds[name]=path.join(assets,file);return config;}
+ nativeConfig(){const config=JSON.parse(JSON.stringify(this.config));config.sources.microphone.enabled=false;config.sources.desktop.enabled=false;if(config.sources.camera.enabled&&/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]/i.test(config.sources.camera.target))throw Error('Bitte eine echte Kamera wählen, nicht eine der beiden eigenen Ausgaben.');const assets=this.assets;const pictures={Pause:'bin-gleich-zurueck.jpg',Start:'stream-startet.jpg',Ende:'crazy-batto.png'};for(const [name,file]of Object.entries(pictures))if(!config.program.backgrounds[name])config.program.backgrounds[name]=path.join(assets,file);return config;}
  async scene(name,transition=this.config.program.transition,durationMs=this.config.program.durationMs){if(!['Spiel','Pause','Start','Ende'].includes(name)||!['fade','cut'].includes(transition)||!Number.isInteger(durationMs)||durationMs<100||durationMs>2000)throw Error('Ungültige Szene oder Übergang.');if(this.state.prepared)this.state=await this.native.request('scene',{scene:name,transition,durationMs});this.config.program={...this.config.program,scene:name,transition,durationMs};atomic(this.file,this.config);return this.snapshot();}
  async program(value){const next=validate({...this.config,program:value});if(this.state.prepared&&(next.program.scene!==this.config.program.scene))await this.scene(next.program.scene,next.program.transition,next.program.durationMs);this.config.program=next.program;atomic(this.file,this.config);await this.flushOverlay();return this.snapshot();}
- async source(source,enabled){if(!['game','camera','microphone','desktop'].includes(source)||typeof enabled!=='boolean')throw Error('Ungültige Quelle.');if(!this.state.prepared)throw Error('Erst die Bildquellen vorbereiten.');if(!this.config.sources[source].enabled)throw Error('Diese Quelle wurde beim Vorbereiten nicht eingeschaltet.');this.state=await this.native.request('source',{source,enabled});this.sourceState[source]=enabled;return this.snapshot();}
+ async source(source,enabled){if(['microphone','desktop'].includes(source))throw Error('Ton bitte in LIVE Studio einstellen. Virtuelle Kameras übertragen nur Bild.');if(!['game','camera'].includes(source)||typeof enabled!=='boolean')throw Error('Ungültige Quelle.');if(!this.state.prepared)throw Error('Erst die Bildquellen vorbereiten.');if(!this.config.sources[source].enabled)throw Error('Diese Quelle wurde beim Vorbereiten nicht eingeschaltet.');this.state=await this.native.request('source',{source,enabled});this.sourceState[source]=enabled;return this.snapshot();}
  overlayChat(m){if(!this.config.program.chat||!this.state.prepared)return;const clean=x=>String(x||'').replace(/[\x00-\x1f]/g,' ').slice(0,200);this.chatLines.push(clean(m.username)+': '+clean(m.message));this.chatLines=this.chatLines.slice(-4);this.scheduleOverlay();}
  overlayEvent(e){if(!this.config.program.events||!this.state.prepared)return;const name=String(e.user?.displayName||e.user?.username||'Zuschauer').slice(0,60);const texts={follow:name+' folgt jetzt',gift:name+' · '+(e.gift?.count||1)+' × '+String(e.gift?.name||'Geschenk').slice(0,80),sub:name+' hat abonniert',raid:name+' startet einen Raid'};if(!texts[e.type])return;this.eventText=texts[e.type];this.scheduleOverlay();clearTimeout(this.eventTimer);this.eventTimer=setTimeout(()=>{this.eventText='';this.scheduleOverlay();},10000);this.eventTimer.unref();}
  scheduleOverlay(){this.overlayDirty=true;if(this.overlayTimer||this.overlayQueued)return;this.overlayTimer=setTimeout(()=>{this.overlayTimer=null;this.overlayDirty=false;if(this.state.prepared){this.overlayQueued=true;this.serial(()=>this.flushOverlay(),true).catch(()=>{}).finally(()=>{this.overlayQueued=false;if(this.overlayDirty)this.scheduleOverlay();});}},500);this.overlayTimer.unref();}
@@ -46,13 +49,14 @@ class DualStream extends EventEmitter {
   case 'GetSceneTransitionList':return {transitions:[{transitionName:'Überblendung'},{transitionName:'Schnitt'}]};
   case 'StopStream':return this.serial(()=>this.stop('both'));
   case 'StartStream':return this.serial(()=>this.start('both'));
-  case 'GetStreamStatus':return {outputActive:this.running()};
+  case 'GetStreamStatus':return {outputActive:this.live()||this.companionLive};
   default:throw Error('Diese frühere OBS-Aktion hat kein direktes Gegenstück im eigenen Sender. Bitte eine Batto-Tastenaktion auswählen.');}}
  async start(platform){const targets=platform==='both'?platforms:[platform];if(targets.some(p=>!platforms.includes(p)))throw Error('Unbekanntes Sendeziel.');
-  // Preflight both destinations before starting either. Keys only travel over the private child pipe.
-  const ready=targets.map(p=>{if(!this.config.destinations[p].server||!this.credentials[p])throw Error('Server und Stream-Key für '+p+' fehlen.');if(['live','connecting','test'].includes(this.state.outputs?.[p]?.state))throw Error(p+' ist bereits gestartet.');return {platform:p,server:this.config.destinations[p].server,key:this.getKey(p)};});
-  if(!this.state.prepared)await this.prepare();clearTimeout(this.idleTimer);const started=[];
-  try{for(const fields of ready){this.state=await this.native.request('start',fields);started.push(fields.platform);}}catch(e){for(const p of started)await this.native?.request('stop',{platform:p}).catch(()=>{});this.state=await this.native?.request('status').catch(()=>({prepared:false,outputs:{}}))||{prepared:false,outputs:{}};this.idle();throw e;}
+  if(!this.state.prepared)await this.prepare();
+  const cameras=this.state.virtualCameras||this.probeResult?.virtualCameras;
+  const ready=targets.map(p=>{if(!cameras?.[p]?.ready)throw Error('Bitte zuerst die virtuellen Kameras einrichten.');if(['camera','live','connecting','test'].includes(this.state.outputs?.[p]?.state))throw Error(p+' ist bereits gestartet.');return {platform:p};});
+  clearTimeout(this.idleTimer);const started=[];
+  try{for(const fields of ready){this.state=await this.native.request('camera-start',fields);started.push(fields.platform);}}catch(e){for(const p of started)await this.native?.request('stop',{platform:p}).catch(()=>{});this.state=await this.native?.request('status').catch(()=>({prepared:false,outputs:{}}))||{prepared:false,outputs:{}};this.idle();throw e;}
   this.startPolling();return this.snapshot();
  }
  startPolling(){clearInterval(this.poller);this.poller=setInterval(()=>{if(this.busy||!this.native)return;this.serial(async()=>{this.state=await this.native.request('status');if(!this.running()){clearInterval(this.poller);this.idle();}},true).catch(()=>{});},2000);}

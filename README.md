@@ -1,4 +1,4 @@
-# Batto 3-in-1 · 1.5.1
+# Batto 3-in-1 · 1.5.2
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
 
@@ -7,19 +7,19 @@ Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Mult
 Unter **Dual Stream** gewünschte Spiel-/Fenster-/Bildschirmquelle und Kamera auswählen. Das TikTok-Layout zeigt die Kamera über die gesamte obere Breite (48 % der Höhe); das Spiel liegt darunter. Alte Werkslayouts werden automatisch korrigiert. Eigene Layouts bleiben erhalten und lassen sich mit **Kamera oben, Spiel darunter** umstellen. Die Twitch-Leinwand bleibt unabhängig.
 
 1. **Geräte erkennen**, Quellen zuordnen und aktivieren; Layout speichern.
-2. **Quellen vorbereiten** und bei Bedarf ein Vorschaubild abrufen.
+2. **Kamera einschalten**: Die Vorschau startet nach der Geräteauswahl automatisch. Für gespeicherte Quellen **Vorschau starten** drücken.
 3. **Kamera starten** oder **Beide Kameras starten**. In LIVE Studio **Batto TikTok**, für Querformat **Batto Twitch** als Kamera wählen. Falls Geräte fehlen: **Virtuelle Kameras einrichten**, dann die Kameraliste im Zielprogramm neu öffnen.
 4. Mikrofon, PC-Ton und eigentlichen Sendestart direkt im Zielprogramm einstellen. Virtuelle Kameras transportieren nur Video. Medien-Ton wird ebenfalls nicht über das Kameragerät übertragen.
 
 Der Installer richtet zwei DirectShow-Kameras für den aktuellen Windows-Benutzer ein. Bestehende funktionsfähige OBS-VirtualCam-Registrierungen werden erhalten und können deshalb „OBS-Camera“ / „OBS-Camera2“ heißen. Eine von einem anderen Sender belegte Kamera wird nicht übernommen. Die eingebaute OBS Virtual Camera bleibt unberührt.
 
-Für die Bildkomposition werden weiterhin **lokal installierte OBS-32-Bibliotheken** verwendet (geprüft mit 32.2.2). Die OBS-Oberfläche muss nicht laufen; diese Bibliotheken sind nicht im Installer enthalten. Die reine Kameraausgabe benötigt keinen H.264-Encoder, Streamkey oder RTMP-Zugang. Encoder-Module werden dafür gar nicht geladen. Auflösung: 720p30, optional 1080p30. Quellen werden gemeinsam aufgenommen, Leinwände separat ausgegeben. Vorschau nur auf Tastendruck; ungenutzter Video-Dienst endet nach 60 Sekunden.
+Für die Bildkomposition werden weiterhin **lokal installierte OBS-32-Bibliotheken** verwendet (geprüft mit 32.2.2). Die OBS-Oberfläche muss nicht laufen; diese Bibliotheken sind nicht im Installer enthalten. Die reine Kameraausgabe benötigt keinen H.264-Encoder, Streamkey oder RTMP-Zugang. Encoder-Module werden dafür gar nicht geladen. Auflösung: 720p30, optional 1080p30. Quellen werden gemeinsam aufgenommen, Leinwände separat ausgegeben. Sparsame Vorschau mit einem Bild pro Sekunde, nur solange Dual Stream sichtbar ist. Sie lässt sich ganz abschalten. Der ungenutzte Video-Dienst endet nach 60 Sekunden.
 
 ## Weniger Speicher beim Spielen
 
 **Dual Stream → Gaming-Modus** speichert das aktuelle Layout und schließt die Bedienoberfläche vollständig. Chat, Bot, Auto-Broadcast, Messdienst, Jarvis und gestartete Kameras laufen weiter. Mit Doppelklick auf das Batto-Symbol im Windows-Infobereich, erneutem App-Start oder der Stream-Deck-Aktion **Batto-Fenster anzeigen** kommt die Oberfläche zurück. Benachrichtigungstöne haben eine eigene kleine Wiedergabe, die nach fünf Sekunden Ruhe wieder entladen wird. Andere noch nicht gespeicherte Formulare vorher speichern. Beenden im Infobereich beendet auch die Dienste.
 
-Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der Ansicht entladen. Keine laufende Videovorschau. Sprachmodelle werden nach Nutzung freigegeben. Optionale KI nutzt im Jarvis-Gaming-Sparmodus zwei CPU-Threads ohne GPU-Offload. Die tatsächliche Last hängt von Quellen, aktiven Diensten, KI-Modell und LIVE Studio ab.
+Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der Ansicht entladen. Die Vorschau pausiert in anderen Ansichten, bei minimiertem Fenster und im Gaming-Modus. Sprachmodelle werden nach Nutzung freigegeben. Optionale KI nutzt im Jarvis-Gaming-Sparmodus zwei CPU-Threads ohne GPU-Offload. Die tatsächliche Last hängt von Quellen, aktiven Diensten, KI-Modell und LIVE Studio ab.
 
 ## Jarvis, Szenen und Stream Deck
 
@@ -65,7 +65,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.5.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.5.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.

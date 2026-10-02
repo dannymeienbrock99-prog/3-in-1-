@@ -56,17 +56,36 @@ const { YouTubeAdapter } = require('../src/adapters/youtube.cjs');
 const { MockAdapter } = require('../src/adapters/mock.cjs');
 
 let mainWindow;
-let gamingMode=false, gamingTray, restoreDetached=false;
+let gamingMode=false, gamingTray, restoreDetached=false, gamingTimer, restoringWindow;
 async function showMainWindow(){
- gamingMode=false;
- if(!mainWindow||mainWindow.isDestroyed()){mainWindow=createWindow(false);const win=mainWindow;win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow)app.quit();});await new Promise(resolve=>win.webContents.once('did-finish-load',resolve));}
- if(restoreDetached){restoreDetached=false;setChatDetached(true);}
- mainWindow.restore();mainWindow.show();mainWindow.focus();return mainWindow;
+ clearTimeout(gamingTimer);gamingTimer=null;gamingMode=false;
+ if(restoringWindow)return restoringWindow;
+ restoringWindow=(async()=>{
+  if(!mainWindow||mainWindow.isDestroyed()){
+   const win=createWindow(false);mainWindow=win;
+   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow)app.quit();});
+   await new Promise((resolve,reject)=>{win.webContents.once('did-finish-load',resolve);win.webContents.once('did-fail-load',()=>reject(Error('Batto-Fenster konnte nicht geladen werden.')));});
+  }
+  if(restoreDetached){restoreDetached=false;setChatDetached(true);}
+  if(mainWindow&&!mainWindow.isDestroyed()){mainWindow.restore();mainWindow.show();mainWindow.focus();}
+  return mainWindow;
+ })();
+ try{return await restoringWindow;}finally{restoringWindow=null;}
 }
+function openFromTray(){void showMainWindow().catch(error=>bridgeLog('error','Gaming','WINDOW_RESTORE_FAILED',{message:error.message}));}
 function enterGaming(){
- if(!gamingTray){gamingTray=new Tray(nativeImage.createFromPath(path.join(__dirname,'..','src','assets','icon.png')).resize({width:32,height:32}));gamingTray.setToolTip('Batto 3-in-1 – Gaming-Modus');gamingTray.setContextMenu(Menu.buildFromTemplate([{label:'Batto öffnen',click:()=>void showMainWindow()},{label:'Beenden',click:()=>app.quit()}]));gamingTray.on('double-click',()=>void showMainWindow());}
- // Return IPC first, then actually release renderer memory instead of only hiding it.
- setTimeout(()=>{gamingMode=true;restoreDetached=!!detachedWindow&&!detachedWindow.isDestroyed();if(restoreDetached)detachedWindow.destroy();mainWindow?.destroy();},200);return {ok:true};
+ if(gamingMode||gamingTimer)return {ok:true};
+ if(!gamingTray||gamingTray.isDestroyed()){
+  gamingTray=new Tray(nativeImage.createFromPath(path.join(__dirname,'..','src','assets','icon.png')).resize({width:32,height:32}));
+  gamingTray.setToolTip('Batto 3-in-1 – Gaming-Modus');gamingTray.setContextMenu(Menu.buildFromTemplate([{label:'Batto öffnen',click:openFromTray},{label:'Beenden',click:()=>app.quit()}]));gamingTray.on('double-click',openFromTray);
+ }
+ // Finish the IPC reply first. A quick Show action cancels this pending switch.
+ gamingTimer=setTimeout(()=>{
+  gamingTimer=null;gamingMode=true;
+  const chat=detachedWindow,main=mainWindow;restoreDetached=!!chat&&!chat.isDestroyed();
+  try{if(restoreDetached)chat.destroy();if(main&&!main.isDestroyed())main.destroy();}
+  catch(error){bridgeLog('error','Gaming','WINDOW_RELEASE_FAILED',{message:error.message});openFromTray();}
+ },200);return {ok:true};
 }
 let detachedWindow;
 let configStore;
@@ -163,12 +182,13 @@ function createWindow(detached = false) {
     }
   });
 
-  for(const name of ['minimize','hide'])win.on(name,()=>{if(!win.isDestroyed())win.webContents.send('suite:presentation',true);});
-  for(const name of ['restore','show'])win.on(name,()=>{if(!win.isDestroyed())win.webContents.send('suite:presentation',false);});
+  const present=value=>{if(win.isDestroyed()||win.webContents.isDestroyed())return;try{win.webContents.send('suite:presentation',value);}catch{ /* The renderer may already be closing. */ }};
+  for(const name of ['minimize','hide'])win.on(name,()=>present(true));
+  for(const name of ['restore','show'])win.on(name,()=>present(false));
   win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), {
     query: { detached: detached ? '1' : '0' }
   });
-  win.once('ready-to-show', () => { if(!process.argv.some(x=>x.startsWith('--batto-qa')))win.show(); });
+  win.once('ready-to-show', () => { if(!win.isDestroyed()&&!process.argv.some(x=>x.startsWith('--batto-qa')))win.show(); });
   win.webContents.setWindowOpenHandler(({url})=>{if(/^https?:\/\//i.test(url))shell.openExternal(url).catch(()=>{});return{action:'deny'};});
   win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith(pathToFileURL(path.join(__dirname,'..','src','renderer','index.html')).href))event.preventDefault();});
   let timer;
@@ -180,6 +200,7 @@ function createWindow(detached = false) {
   };
   win.on('move', saveBounds);
   win.on('resize', saveBounds);
+  win.once('closed',()=>clearTimeout(timer));
   return win;
 }
 
@@ -1015,7 +1036,7 @@ if (!gotLock) app.quit();
 else {
   require('../src/services/obs-settings-import.cjs').initialize(app);
   app.on('second-instance', () => {
-    void showMainWindow();
+    openFromTray();
   });
 
   app.whenReady().then(() => {
@@ -1024,7 +1045,7 @@ else {
     mainWindow = createWindow(false);
     mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow)app.quit(); });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
-    app.on('activate', () => { void showMainWindow(); });
+    app.on('activate', () => { openFromTray(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));
   });
 }

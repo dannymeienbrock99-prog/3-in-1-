@@ -201,7 +201,7 @@ internal sealed class Engine : IDisposable {
   using var bitmap=new System.Drawing.Bitmap(width,height,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
   var locked=bitmap.LockBits(new System.Drawing.Rectangle(0,0,width,height),System.Drawing.Imaging.ImageLockMode.WriteOnly,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
   try{for(int y=0;y<height;y++)Marshal.Copy(pixels,y*width*4,locked.Scan0+y*locked.Stride,width*4);}finally{bitmap.UnlockBits(locked);}
-  using var stream=new MemoryStream();bitmap.Save(stream,System.Drawing.Imaging.ImageFormat.Png);return new{image="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray()),width,height,capturedAt=DateTimeOffset.UtcNow};
+  using var stream=new MemoryStream();bitmap.Save(stream,System.Drawing.Imaging.ImageFormat.Png);return new{image="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray()),width,height,sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}).ToArray(),capturedAt=DateTimeOffset.UtcNow};
  }
  public object Status()=>new{prepared,encoder,virtualCameras=CameraRegistration.Status(),version=Obs.Str(Obs.obs_get_version_string()),sourceCount=sources.Count,overlays=destinations.ToDictionary(x=>x.Key,x=>new{chatWidth=Obs.obs_source_get_width(x.Value.chat),eventWidth=Obs.obs_source_get_width(x.Value.events)}),
   sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}),

@@ -2,7 +2,7 @@
 const {app,ipcMain,BrowserWindow,dialog,safeStorage}=require('electron'),fs=require('node:fs'),path=require('node:path'),{fileURLToPath}=require('node:url');
 const {DualStream}=require('./service.cjs');let service,quitting=false;
 function sender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}if(path.resolve(file)!==path.resolve(__dirname,'../renderer/index.html'))throw Error('Diese Oberfläche ist nicht berechtigt.');if(!service)throw Error('Dual Stream startet noch.');}
-ipcMain.handle('dual:action',async(e,{command,value}={})=>{sender(e);if(command==='state')return service.snapshot();const result=await service.serial(async()=>{
+ipcMain.handle('dual:action',async(e,{command,value}={})=>{sender(e);if(command==='state')return service.snapshot();if(command==='snapshot')return service.serial(()=>service.image(value),true,false);const result=await service.serial(async()=>{
  switch(command){
   case 'scene':return service.scene(value?.scene,value?.transition,value?.durationMs);
   case 'program':return service.program(value);
@@ -23,6 +23,6 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{sender(e);if(command=
   default:throw Error('Unbekannte Dual-Stream-Aktion.');
  }
 });return result?.config?service.snapshot():result;});
-app.whenReady().then(()=>{const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../../..');service=new DualStream({directory:process.env.BATTO_SUITE_DATA||path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'CrazyBatto/BattoSuite'),executable:process.env.BATTO_DUAL_HOST||path.join(resources,'FanAtlas/BattoDualStream.exe'),safeStorage,assets:path.join(resources,'FanAtlas/Assets')});service.on('state',value=>{for(const win of BrowserWindow.getAllWindows())if(!win.isDestroyed())win.webContents.send('dual:state',value);});});
+app.whenReady().then(()=>{const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../../..');service=new DualStream({directory:process.env.BATTO_SUITE_DATA||path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'CrazyBatto/BattoSuite'),executable:process.env.BATTO_DUAL_HOST||path.join(resources,'FanAtlas/BattoDualStream.exe'),safeStorage,assets:path.join(resources,'FanAtlas/Assets')});service.on('state',value=>{for(const win of BrowserWindow.getAllWindows())if(!win.isDestroyed()&&!win.webContents.isDestroyed()){try{win.webContents.send('dual:state',value);}catch{}}});});
 app.on('before-quit',e=>{if(service?.native&&!quitting){e.preventDefault();quitting=true;service.release().finally(()=>app.quit());}});
 module.exports={getService:()=>service};

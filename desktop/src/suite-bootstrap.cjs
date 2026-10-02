@@ -5,7 +5,7 @@ const {SuiteRuntime}=require('./services/suite-runtime.cjs');
 const {getObsClient}=require('../electron/main21.cjs');
 let runtime;
 const directory=process.env.BATTO_SUITE_DATA||path.join(process.env.LOCALAPPDATA||app.getPath('userData'),'CrazyBatto','BattoSuite');
-const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send(channel,value);};
+const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed()&&!w.webContents.isDestroyed()){try{w.webContents.send(channel,value);}catch{}}};
 function checkSender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}if(path.resolve(file)!==path.resolve(__dirname,'renderer/index.html'))throw Error('Diese Bedienoberfläche ist nicht berechtigt.');}
 function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSender(e);if(!runtime)throw Error('Batto 3-in-1 startet noch.');return fn(value);});}
 handle('state',()=>runtime.snapshot());

@@ -1,12 +1,13 @@
 (()=>{'use strict';
 const root=document.getElementById('dual-root'),$=id=>document.getElementById('dual-'+id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state,config,initialized=false,dirty=false,selected='tiktok',layer='game',drag=null,busy=false,snapshot=null;
+let previewEnabled=true,previewTimer,previewBusy=false,previewEpoch=0,sourceTimer;
 const labels={tiktok:'TikTok',twitch:'Twitch',game:'Spiel / Bildschirm',camera:'Kamera',microphone:'Mikrofon',desktop:'PC-Ton'};
 const active=()=>!window.BattoResources?.suspended&&!document.hidden&&document.getElementById('view-dualstream').classList.contains('active');
 const live=()=>Object.values(state?.state.outputs||{}).some(o=>['camera','live','connecting','test'].includes(o.state));
 function message(text){$('message').textContent=text;}
 async function api(command,value){return window.batto.dual(command,value);}
-function run(fn){return async event=>{event?.preventDefault();if(busy)return;busy=true;status();try{await fn(event);}catch(e){message(String(e.message).replace(/^Error invoking remote method [^:]+: Error: /,''));}finally{busy=false;status();}};}
+function run(fn){return async event=>{event?.preventDefault();if(busy)return;busy=true;status();try{await fn(event);}catch(e){message(String(e.message).replace(/^Error invoking remote method [^:]+: Error: /,''));}finally{busy=false;status();schedulePreview();}};}
 function on(id,fn){$(id).addEventListener('click',run(fn));}
 function build(){
  root.innerHTML=`<div class="dual-toolbar"><button id="dual-import">Projekt importieren</button><button id="dual-export">Projekt exportieren</button><button id="dual-save" class="primary">Änderungen speichern</button><span id="dual-dirty" class="suite-help"></span></div>
@@ -14,13 +15,13 @@ function build(){
  <article class="suite-panel"><div class="dual-toolbar"><label>Qualität <select id="dual-profile"><option value="economy_720p30">Sparprofil · 720p / 30 FPS</option><option value="fullhd_1080p30">Full HD · 1080p / 30 FPS</option></select></label><button id="dual-probe">Geräte erkennen</button><button id="dual-library">Videobibliotheken wählen</button><button id="dual-register">Virtuelle Kameras einrichten</button></div><div id="dual-readiness" class="dual-readiness"></div><div id="dual-sources">${['game','camera'].map(s=>`<div class="dual-source-row"><label class="suite-check"><input id="dual-source-${s}" type="checkbox"> ${labels[s]}</label>${s==='game'?'<select id="dual-kind" aria-label="Aufnahmeart"><option value="game">Spielaufnahme</option><option value="window">Fensteraufnahme</option><option value="screen">Bildschirmaufnahme</option></select>':'<span class="suite-help">Für beide Ziele gemeinsam</span>'}<select id="dual-target-${s}" aria-label="${labels[s]} auswählen"></select></div>`).join('')}</div></article>
  <article class="suite-panel"><h3>Szenen &amp; Einblendungen</h3><div class="dual-toolbar"><label>Szene<select id="dual-scene"><option>Spiel</option><option>Pause</option><option>Start</option><option>Ende</option></select></label><label>Übergang<select id="dual-transition"><option value="fade">Überblenden</option><option value="cut">Schnitt</option></select></label><label>Dauer (ms)<input id="dual-transition-ms" type="number" min="100" max="2000" step="50" value="350"></label><button id="dual-scene-apply" class="primary">Szene auf beide Ausgaben schalten</button><button id="dual-background">Hintergrundbild wählen</button></div><div class="dual-toolbar"><label class="suite-check"><input id="dual-chat-overlay" type="checkbox"> Chat im Stream zeigen</label><label class="suite-check"><input id="dual-events-overlay" type="checkbox"> Ereignisse im Stream zeigen</label><button id="dual-program-save">Einblendungen speichern</button></div><div class="dual-toolbar"><button id="dual-companion">LIVE-Studio-Sitzung markieren</button><button id="dual-chat-url">Chat-Adresse für LIVE Studio kopieren</button><button id="dual-events-url">Ereignis-Adresse kopieren</button></div><p id="dual-current-scene" class="suite-help"></p><p class="suite-help">Start, Pause und Ende verwenden deine Hintergrundbilder. Die Chat-Einblendung zeigt die letzten vier Nachrichten. Für TikTok LIVE Studio kannst du die vorhandene Stream-Ansicht als Browserquelle verwenden; der eigene Video-Dienst kann dabei ausgeschaltet bleiben.</p></article>
  <article class="suite-panel"><div class="dual-toolbar" role="tablist" aria-label="Leinwand"><button id="dual-tab-tiktok" class="dual-tab" role="tab">TikTok · 9:16</button><button id="dual-tab-twitch" class="dual-tab" role="tab">Twitch · 16:9</button><span id="dual-dimensions" class="suite-help"></span></div>
- <div class="dual-editor"><div><div class="dual-canvas-wrap"><div id="dual-canvas" class="dual-canvas tiktok" aria-label="Leinwand mit verschiebbaren Quellen"></div></div><p id="dual-preview-note" class="suite-help">Layoutansicht · Bildquellen auswählen, vorbereiten und ein Vorschaubild abrufen.</p><div class="dual-toolbar"><button id="dual-prepare">Quellen vorbereiten</button><button id="dual-preview">Vorschaubild aktualisieren</button><button id="dual-release">Video-Dienst ausschalten</button></div></div>
+ <div class="dual-editor"><div><div class="dual-canvas-wrap"><div id="dual-canvas" class="dual-canvas tiktok" aria-label="Leinwand mit verschiebbaren Quellen"></div></div><p id="dual-preview-note" class="suite-help">Kamera auswählen und einschalten oder „Vorschau starten“ drücken.</p><div class="dual-toolbar"><button id="dual-prepare">Quellen vorbereiten</button><button id="dual-preview">Vorschau starten</button><label class="suite-check"><input id="dual-auto-preview" type="checkbox" checked> Sparsame Vorschau · 1 Bild/s</label><button id="dual-release">Video-Dienst ausschalten</button></div></div>
  <div><h3>Quelle anordnen</h3><button id="dual-template">Kamera oben, Spiel darunter</button><label>Bildquelle<select id="dual-layer"><option value="game">Spiel / Bildschirm</option><option value="camera">Kamera</option></select></label><label class="suite-check"><input id="dual-visible" type="checkbox"> Auf dieser Leinwand zeigen</label><div class="dual-form-grid">${[['x','Links (%)'],['y','Oben (%)'],['width','Breite (%)'],['height','Höhe (%)']].map(([k,t])=>`<label>${t}<input id="dual-${k}" type="number" min="${k==='width'||k==='height'?2:0}" max="100" step="0.1"></label>`).join('')}</div><label>Einpassen<select id="dual-fit"><option value="contain">Vollständig zeigen</option><option value="cover">Fläche füllen / beschneiden</option></select></label><p class="suite-help">Quelle im Bild verschieben oder Prozentwerte eintragen. Beide Leinwände speichern ihre Anordnung getrennt.</p></div></div></article>
  <div class="dual-output-grid">${['tiktok','twitch'].map(p=>`<article class="suite-panel"><div class="dual-output-title"><h3>${labels[p]} · virtuelle Kamera</h3><span id="dual-status-${p}" class="dual-status">Aus</span></div><div id="dual-metrics-${p}" class="dual-metrics"></div><div class="dual-toolbar"><button id="dual-start-${p}" class="primary">Kamera starten</button><button id="dual-stop-${p}">Stoppen</button></div><div id="dual-error-${p}" class="suite-help"></div></article>`).join('')}</div>
  <div class="dual-toolbar"><button id="dual-start-both" class="primary">Beide Kameras starten</button><button id="dual-stop-both">Beide stoppen</button><button id="dual-gaming">Gaming-Modus</button></div><p class="suite-help">Ohne Streamkey: Kamera hier starten und in LIVE Studio „Batto TikTok“ als Kamera wählen. Für Querformat „Batto Twitch“ wählen. Mikrofon und PC-Ton direkt in LIVE Studio einstellen. Virtuelle Kameras übertragen nur Bild; den Stream startest du in LIVE Studio. Gaming-Modus speichert dieses Layout und schließt die Bedienoberfläche, um RAM freizugeben. Dienste, Jarvis und Kameras laufen weiter. Über das Taskleisten-Symbol oder Stream Deck öffnest du das Fenster wieder.</p>`;
  on('register',async()=>{if(dirty)await save();state=await api('register-cameras');fillDevices();message('Virtuelle Kameras eingerichtet. In LIVE Studio die Kameraliste neu öffnen.');});
  on('template',()=>{config.layouts.tiktok=[{source:'game',x:0,y:.48,width:1,height:.52,fit:'contain',visible:true},{source:'camera',x:0,y:0,width:1,height:.48,fit:'cover',visible:true}];config.layoutRevision=2;selected='tiktok';layer='camera';changed();editor();canvas();message('Kamera füllt den gesamten oberen Bereich. Änderungen speichern.');});
- on('gaming',async()=>{if(dirty)await save();await window.batto.suite('control',{action:'gaming'});});
+ on('gaming',async()=>{clearTimeout(sourceTimer);invalidatePreview(false);if(dirty)await save();await window.batto.suite('control',{action:'gaming'});});
  on('companion',async()=>{await window.batto.suite('control',{action:'companion'});state=await api('state');message('Live-Markierung gilt für Bot-Regeln und Auto-Broadcast. LIVE Studio selbst wird dadurch nicht gestartet oder gestoppt.');});
  for(const kind of ['chat','events'])on(kind+'-url',async()=>{await window.batto.copyText(overlayBase()+'/overlay/'+kind);message('Adresse kopiert. In LIVE Studio als Browserquelle hinzufügen.');});
  on('scene-apply',async()=>{if(dirty)await save();state=await api('scene',{scene:$('scene').value,transition:$('transition').value,durationMs:Number($('transition-ms').value)});config.program=JSON.parse(JSON.stringify(state.config.program));snapshot=null;canvas();message('Szene '+config.program.scene+' ausgewählt.');});
@@ -30,36 +31,64 @@ function build(){
  on('library',async()=>{if(dirty)await save();const next=await api('library');if(next)adopt(next);});
  on('import',async()=>{const next=await api('import');if(next){adopt(next);message('Projekt übernommen. Aufnahmequellen bitte zuordnen.');}});
  on('export',async()=>{if(dirty)await save();const r=await api('export');if(r.saved)message('Projekt exportiert.');});
- on('prepare',async()=>{if(dirty)await save();state=await api('prepare');message('Quellen vorbereitet. Die Kameras sind noch aus.');});
+ on('prepare',async()=>{if(dirty)await save();state=await api('prepare');message('Quellen vorbereitet. Vorschau wird geladen; die virtuellen Ausgaben sind noch aus.');schedulePreview(150);});
  on('release',async()=>{state=await api('release');snapshot=null;canvas();message('Video-Dienst ausgeschaltet.');});
- on('preview',async()=>{if(dirty)await save();if(!state.state.prepared)state=await api('prepare');snapshot=await api('snapshot',selected);canvas();});
+ on('preview',async()=>{if(dirty)await save();if(!state.state.prepared)state=await api('prepare');previewEnabled=true;$('auto-preview').checked=true;snapshot=await api('snapshot',selected);canvas();schedulePreview();});
  for(const p of ['tiktok','twitch']){
-  $('tab-'+p).onclick=()=>{selected=p;snapshot=null;editor();canvas();};
+  $('tab-'+p).onclick=()=>{selected=p;invalidatePreview();editor();canvas();schedulePreview(0);};
   on('start-'+p,()=>start(p));on('stop-'+p,async()=>{state=await api('stop',p);});
  }
  on('start-both',()=>start('both'));on('stop-both',async()=>{state=await api('stop','both');});
  $('profile').onchange=()=>{config.profile=$('profile').value;changed();canvas();};
  $('kind').onchange=()=>{config.sources.game.kind=$('kind').value;config.sources.game.target='';config.sources.game.name='';config.sources.game.enabled=false;changed();fillDevices();canvas();};
  for(const s of ['game','camera']){
-  $('source-'+s).onchange=()=>{config.sources[s].enabled=$('source-'+s).checked;changed();canvas();};
-  $('target-'+s).onchange=()=>{config.sources[s].target=$('target-'+s).value;config.sources[s].name=$('target-'+s).selectedOptions[0]?.textContent||'';changed();};
+  $('source-'+s).onchange=()=>{config.sources[s].enabled=$('source-'+s).checked;changed();canvas();scheduleSources();};
+  $('target-'+s).onchange=()=>{config.sources[s].target=$('target-'+s).value;config.sources[s].name=$('target-'+s).selectedOptions[0]?.textContent||'';changed();scheduleSources();};
  }
+ $('auto-preview').onchange=()=>{previewEnabled=$('auto-preview').checked;invalidatePreview(false);previewNote();schedulePreview(0);};
  $('layer').onchange=()=>{layer=$('layer').value;editor();canvas();};
  for(const k of ['x','y','width','height','visible','fit'])$(''+k).addEventListener('change',()=>{const item=config.layouts[selected].find(x=>x.source===layer);if(k==='visible')item[k]=$('visible').checked;else if(k==='fit')item[k]=$('fit').value;else{const n=Number($(k).value)/100;if(!Number.isFinite(n))return;item[k]=Math.max(k==='width'||k==='height'?.02:0,Math.min(1,n));if(item.x+item.width>1)item.x=1-item.width;if(item.y+item.height>1)item.y=1-item.height;}changed();editor();canvas();});
  const stage=$('canvas');stage.addEventListener('pointerdown',e=>{const el=e.target.closest('[data-dual-source]');if(!el||live())return;layer=el.dataset.dualSource;const item=config.layouts[selected].find(x=>x.source===layer);drag={pointer:e.pointerId,x:e.clientX,y:e.clientY,startX:item.x,startY:item.y,rect:stage.getBoundingClientRect()};stage.setPointerCapture(e.pointerId);editor();e.preventDefault();});
  stage.addEventListener('pointermove',e=>{if(!drag||drag.pointer!==e.pointerId)return;const item=config.layouts[selected].find(x=>x.source===layer);item.x=Math.max(0,Math.min(1-item.width,drag.startX+(e.clientX-drag.x)/drag.rect.width));item.y=Math.max(0,Math.min(1-item.height,drag.startY+(e.clientY-drag.y)/drag.rect.height));changed();editor();canvas();});
  const end=e=>{if(drag?.pointer===e.pointerId){drag=null;if(stage.hasPointerCapture(e.pointerId))stage.releasePointerCapture(e.pointerId);}};stage.addEventListener('pointerup',end);stage.addEventListener('pointercancel',end);
 }
-function changed(){dirty=true;snapshot=null;status();}
+function changed(){dirty=true;invalidatePreview();status();}
 async function save(){state=await api('save',config);adopt(state);message('Dual-Stream-Einstellungen gespeichert.');}
-async function start(p){if(dirty)await save();state=await api('start',p);message('Virtuelle Kamera läuft. Jetzt in LIVE Studio als Kamera auswählen.');}
-function adopt(next){state=next;config=JSON.parse(JSON.stringify(next.config));dirty=false;snapshot=null;$('scene').value=config.program.scene;$('transition').value=config.program.transition;$('transition-ms').value=config.program.durationMs;$('chat-overlay').checked=config.program.chat;$('events-overlay').checked=config.program.events;$('profile').value=config.profile;$('kind').value=config.sources.game.kind;fillDevices();editor();canvas();status();}
+async function start(p){if(dirty)await save();state=await api('start',p);message('Virtuelle Kamera läuft. Jetzt in LIVE Studio als Kamera auswählen.');schedulePreview(150);}
+function adopt(next){state=next;config=JSON.parse(JSON.stringify(next.config));dirty=false;invalidatePreview();$('scene').value=config.program.scene;$('transition').value=config.program.transition;$('transition-ms').value=config.program.durationMs;$('chat-overlay').checked=config.program.chat;$('events-overlay').checked=config.program.events;$('profile').value=config.profile;$('kind').value=config.sources.game.kind;fillDevices();editor();canvas();status();}
 function fillDevices(){for(const s of ['game','camera']){const current=config.sources[s],items=state.probe?.devices?.[s==='game'?current.kind:s]||[],valid=items.filter(x=>x.id&&!(s==='camera'&&/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]/i.test(x.id)));$('target-'+s).innerHTML='<option value="">Bitte auswählen</option>'+valid.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');if(current.target&&!valid.some(x=>x.id===current.target))$('target-'+s).insertAdjacentHTML('beforeend',`<option value="${esc(current.target)}">${esc(current.name||'Gespeicherte Quelle')} · noch nicht geprüft</option>`);$('target-'+s).value=current.target;$('source-'+s).checked=current.enabled;}}
 function editor(){const item=config.layouts[selected].find(x=>x.source===layer);$('layer').value=layer;for(const k of ['x','y','width','height'])$(k).value=(item[k]*100).toFixed(1);$('visible').checked=item.visible;$('fit').value=item.fit;}
-function canvas(){if(!config)return;const stage=$('canvas');stage.className='dual-canvas '+selected;for(const p of ['tiktok','twitch'])$('tab-'+p).setAttribute('aria-selected',String(p===selected));const hd=config.profile==='fullhd_1080p30';$('dimensions').textContent=(selected==='tiktok'?(hd?'1080 × 1920':'720 × 1280'):(hd?'1920 × 1080':'1280 × 720'))+' · 30 FPS';
- stage.innerHTML=(snapshot?`<img alt="Letztes Vorschaubild von ${labels[selected]}" src="${snapshot.image}">`:'')+config.layouts[selected].filter(x=>x.visible).map(x=>`<button type="button" data-dual-source="${x.source}" class="dual-layer ${x.source===layer?'selected':''} ${config.sources[x.source].enabled?'':'disabled'}" style="left:${x.x*100}%;top:${x.y*100}%;width:${x.width*100}%;height:${x.height*100}%" aria-label="${labels[x.source]} verschieben"><span>${labels[x.source]}${config.sources[x.source].enabled?'':' · aus'}</span></button>`).join('');
- $('preview-note').textContent=snapshot?'Momentaufnahme von '+new Date(snapshot.capturedAt).toLocaleTimeString('de-DE')+' · keine laufende Vorschau.':'Layoutansicht · „Vorschaubild aktualisieren“ zeigt das echte Ausgangsbild. Änderungen zuerst speichern.';
+function canvas(){if(!config)return;const stage=$('canvas');stage.className='dual-canvas '+selected+(snapshot?' has-preview':'');for(const p of ['tiktok','twitch'])$('tab-'+p).setAttribute('aria-selected',String(p===selected));const hd=config.profile==='fullhd_1080p30';$('dimensions').textContent=(selected==='tiktok'?(hd?'1080 × 1920':'720 × 1280'):(hd?'1920 × 1080':'1280 × 720'))+' · 30 FPS';
+ stage.innerHTML=(snapshot?`<img alt="Kameravorschau von ${labels[selected]}" src="${snapshot.image}">`:'')+config.layouts[selected].filter(x=>x.visible).map(x=>`<button type="button" data-dual-source="${x.source}" class="dual-layer ${x.source===layer?'selected':''} ${config.sources[x.source].enabled?'':'disabled'}" style="left:${x.x*100}%;top:${x.y*100}%;width:${x.width*100}%;height:${x.height*100}%" aria-label="${labels[x.source]} verschieben"><span>${labels[x.source]}${config.sources[x.source].enabled?'':' · aus'}</span></button>`).join('');
+ previewNote();
 }
+function invalidatePreview(clear=true){previewEpoch++;clearTimeout(previewTimer);previewTimer=null;if(clear)snapshot=null;}
+function previewNote(){
+ if(!initialized)return;
+ let text=snapshot?'Vorschau · '+new Date(snapshot.capturedAt).toLocaleTimeString('de-DE')+(previewEnabled?' · 1 Bild/s, pausiert außerhalb dieses Bereichs.':' · angehalten.'):'Kamera auswählen und einschalten oder „Vorschau starten“ drücken.';
+ if(snapshot&&config.sources.camera.enabled){const camera=snapshot.sources?.find(x=>x.id==='camera');text+=camera?.width>0&&camera?.height>0?' Kamera liefert '+camera.width+' × '+camera.height+'.':' Noch kein Kamerabild empfangen. Kamera in EOS Webcam Utility prüfen; ein anderes Programm kann sie belegen.';}
+ $('preview-note').textContent=text;$('preview').textContent=state?.state.prepared?'Vorschau aktualisieren':'Vorschau starten';
+}
+function canPreview(){return initialized&&active()&&previewEnabled&&!dirty&&state?.state.prepared;}
+function schedulePreview(ms=1000){
+ if(previewTimer||previewBusy||!canPreview())return;
+ previewTimer=setTimeout(refreshPreview,ms);
+}
+async function refreshPreview(){
+ previewTimer=null;if(!canPreview())return;if(busy||state.busy){schedulePreview();return;}
+ previewBusy=true;const epoch=previewEpoch,platform=selected;
+ try{const next=await api('snapshot',platform);if(epoch!==previewEpoch||platform!==selected||!canPreview())return;snapshot=next;const img=$('canvas').querySelector('img');if(img){img.src=next.image;previewNote();}else canvas();}
+ catch(e){if(epoch===previewEpoch&&active()){previewEnabled=false;$('auto-preview').checked=false;message('Vorschau angehalten: '+String(e.message).replace(/^Error invoking remote method [^:]+: Error: /,''));previewNote();}}
+ finally{previewBusy=false;schedulePreview();}
+}
+function scheduleSources(){
+ clearTimeout(sourceTimer);sourceTimer=setTimeout(run(async()=>{
+  if(!active()||live()||!dirty)return;
+  if(['camera','game'].some(k=>config.sources[k].enabled&&!config.sources[k].target)){message('Bitte für die eingeschaltete Quelle ein Gerät auswählen.');return;}
+  await save();if(['camera','game'].some(k=>config.sources[k].enabled)){state=await api('prepare');schedulePreview(150);message('Quelle eingeschaltet. Vorschau wird geladen.');}else message('Bildquellen ausgeschaltet.');
+ }),600);
+}
+
 function status(){if(!initialized||!state||!config)return;const working=busy||state.busy,streaming=live();$('dirty').textContent=dirty?'Ungespeicherte Änderungen':'Gespeichert';
  $('companion').textContent=state.companionLive?'LIVE-Studio-Sitzung beenden':'LIVE-Studio-Sitzung markieren';$('companion').setAttribute('aria-pressed',String(state.companionLive));
  $('current-scene').textContent='Ausgewählt: '+state.config.program.scene+' · '+(state.engineRunning?'im eigenen Sender':'wird beim Vorbereiten übernommen');for(const id of ['scene-apply','program-save','background'])$(id).disabled=working;
@@ -68,9 +97,11 @@ function status(){if(!initialized||!state||!config)return;const working=busy||st
  for(const id of ['save','import','probe','library','register','template','prepare','profile','kind','layer','visible','x','y','width','height','fit'])$(id).disabled=working||streaming;
  $('export').disabled=working;
  for(const s of ['game','camera']){$('source-'+s).disabled=working||streaming;$('target-'+s).disabled=working||streaming;}
+ $('gaming').disabled=working;previewNote();
  $('release').disabled=working||streaming||!state.engineRunning;$('preview').disabled=working||(!state.state.prepared&&streaming);$('start-both').disabled=working||streaming;$('stop-both').disabled=working||!streaming;
 }
-async function init(){if(initialized)return;if(!active())return;initialized=true;build();try{adopt(await api('state'));if(state.error)message(state.error);}catch(e){message(e.message);}}
-document.addEventListener('batto:view',()=>{if(active()){void init();status();}});document.addEventListener('visibilitychange',()=>{if(active())status();});
-window.batto.onDualState(next=>{const previous=state?.config.program;state=next;if(initialized&&config){const fields={scene:'scene',transition:'transition',durationMs:'transition-ms',chat:'chat-overlay',events:'events-overlay'};for(const [key,id]of Object.entries(fields)){const el=$(id),check=['chat','events'].includes(key),current=check?el.checked:el.value;if(previous&&String(current)===String(previous[key])){if(check)el.checked=next.config.program[key];else el.value=next.config.program[key];}}config.program=JSON.parse(JSON.stringify(next.config.program));}if(active())status();});
+async function init(){if(initialized)return;if(!active())return;initialized=true;build();try{adopt(await api('state'));schedulePreview(0);if(state.error)message(state.error);}catch(e){message(e.message);}}
+document.addEventListener('batto:view',()=>{if(active()){void init();status();schedulePreview(0);}else invalidatePreview(false);});document.addEventListener('visibilitychange',()=>{if(active()){status();schedulePreview(0);}else invalidatePreview(false);});
+window.batto.onPresentationState?.(()=>{if(active())schedulePreview(0);else invalidatePreview(false);});
+window.batto.onDualState(next=>{const previous=state?.config.program;state=next;if(initialized&&config){const fields={scene:'scene',transition:'transition',durationMs:'transition-ms',chat:'chat-overlay',events:'events-overlay'};for(const [key,id]of Object.entries(fields)){const el=$(id),check=['chat','events'].includes(key),current=check?el.checked:el.value;if(previous&&String(current)===String(previous[key])){if(check)el.checked=next.config.program[key];else el.value=next.config.program[key];}}config.program=JSON.parse(JSON.stringify(next.config.program));}if(!next.state.prepared){invalidatePreview();if(initialized)canvas();}if(active()){status();schedulePreview();}});
 })();

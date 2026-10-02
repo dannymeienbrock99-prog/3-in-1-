@@ -66,8 +66,9 @@ app.whenReady().then(async()=>{
   await js('setView("dashboard")');await check('existing widget saving mode remains active','!document.querySelector("iframe[src]")');
   await check('Jarvis default address is empty','(await window.batto.suite("state")).jarvis.settings.address===""');
   const runtime=require('../src/suite-bootstrap.cjs').getRuntime(), helperPid=runtime.fan.child?.pid;
+  fixture.destroy();fixture=null;process.env.BATTO_DUAL_TEST='1';await service.serial(async()=>{const native=await service.client();service.state=await native.request('test-prepare',{config:service.nativeConfig()});await service.start('both');});
   await js('window.batto.suite("control",{action:"gaming"})');await delay(1800);
-  assert(win.isDestroyed());assert(require('./main21.cjs').getGamingMode());assert.equal(runtime.fan.child?.pid,helperPid);checks.push('Gaming releases renderer and preserves sensor helper');
+  assert(win.isDestroyed());assert(require('./main21.cjs').getGamingMode());assert.equal(runtime.fan.child?.pid,helperPid);checks.push('Gaming releases renderer and preserves sensor helper');const cameraState=await service.serial(()=>service.native.request('status'));assert(Object.values(cameraState.outputs).every(x=>x.state==='camera'&&x.frames>10));checks.push('Gaming keeps both cameras producing frames without any browser window');const sound=await require('./main21.cjs').getAudioOutputForTest().play({testTone:true,volume:0,deviceId:'default'});assert(sound.ok);await delay(5600);assert.equal(BrowserWindow.getAllWindows().length,0);checks.push('silent notification playback works in Gaming and releases its player');
   await runtime.controls.execute({action:'navigate',target:'dualstream'});win=require('./main21.cjs').getMainWindow();await delay(900);
   await check('Stream Deck restores window with saved layout','S.view==="dualstream" && (await window.batto.dual("state")).config.layouts.tiktok[1].width===1');
   assert.equal(errors.length,0,errors.join('\n'));fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:true,checks,errors},null,2));

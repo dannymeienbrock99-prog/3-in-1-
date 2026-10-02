@@ -8,9 +8,9 @@ const gain = value => Number.isFinite(Number(value)) ? Math.max(0, Math.min(1, N
 
 // One app window owns playback, even when the detached chat is also open.
 class AudioOutputService {
-  constructor({ getConfig, getPlayers, overlay, onWarning = () => {} }) {
+  constructor({ getConfig, getPlayers, overlay, onWarning = () => {}, ensurePlayer = null, onIdle = () => {} }) {
     this.getConfig = getConfig; this.getPlayers = getPlayers;
-    this.overlay = overlay; this.onWarning = onWarning;
+    this.overlay = overlay; this.onWarning = onWarning; this.ensurePlayer=ensurePlayer;this.onIdle=onIdle;
     this.ready = new Set(); this.active = new Map(); this.playerCleanup = new Map();
   }
   registerPlayer(sender) {
@@ -70,8 +70,12 @@ class AudioOutputService {
     if (typeof output.deviceId !== 'string' || output.deviceId.length > 1024) throw new Error('Bitte ein gültiges Ausgabegerät auswählen.');
     return this.play({ testTone: true, deviceId: output.deviceId || 'default', volume }, { timeoutMs: 10000 });
   }
-  play(payload, { signal, timeoutMs = 30000 } = {}, visualEvent = null) {
-    if (signal?.aborted) return Promise.reject(new Error('Ton abgebrochen.'));
+  play(payload, options = {}, visualEvent = null) {
+    if(options.signal?.aborted)return Promise.reject(new Error("Ton abgebrochen."));
+    return this.ensurePlayer ? this.ensurePlayer().then(()=>this.playReady(payload,options,visualEvent)) : this.playReady(payload,options,visualEvent);
+  }
+  playReady(payload, { signal, timeoutMs = 30000 } = {}, visualEvent = null) {
+    if(signal?.aborted){if(!this.active.size)this.onIdle();return Promise.reject(new Error('Ton abgebrochen.'));}
     const sender = this.getPlayers().find(player => player && !player.isDestroyed() && this.ready.has(player.id));
     if (!sender) return Promise.reject(new Error('Die Tonausgabe ist noch nicht bereit. Bitte das Batto-Fenster öffnen.'));
     if (this.active.size >= 16) return Promise.reject(new Error('Zu viele gleichzeitige Töne. Bitte kurz warten.'));
@@ -84,6 +88,7 @@ class AudioOutputService {
         finished = true; clearTimeout(timer); signal?.removeEventListener('abort', cancel); this.active.delete(id);
         try { if (!sender.isDestroyed()) sender.send('audio:cancel', { id }); } catch {}
         try { if (visualEvent) this.overlay.broadcast({ type: 'action:cancel', id }); } catch {}
+        if(!this.active.size)this.onIdle();
         error ? reject(error) : resolve(result);
       };
       this.active.set(id, { sender, finish });

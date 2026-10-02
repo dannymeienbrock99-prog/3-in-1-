@@ -59,7 +59,7 @@ let mainWindow;
 let gamingMode=false, gamingTray, restoreDetached=false;
 async function showMainWindow(){
  gamingMode=false;
- if(!mainWindow||mainWindow.isDestroyed()){mainWindow=createWindow(false);const win=mainWindow;win.on('closed',()=>{if(mainWindow===win)mainWindow=null;});await new Promise(resolve=>win.webContents.once('did-finish-load',resolve));}
+ if(!mainWindow||mainWindow.isDestroyed()){mainWindow=createWindow(false);const win=mainWindow;win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow)app.quit();});await new Promise(resolve=>win.webContents.once('did-finish-load',resolve));}
  if(restoreDetached){restoreDetached=false;setChatDetached(true);}
  mainWindow.restore();mainWindow.show();mainWindow.focus();return mainWindow;
 }
@@ -77,6 +77,7 @@ let eventCore;
 let connectorManager;
 let overlayServer;
 let audioOutput;
+const audioPlayer=new (require('./audio-player.cjs').AudioPlayer)();
 let piperTts, tiktokMatch;
 let ttsEnabled = false;
 let obs;
@@ -593,7 +594,8 @@ function initCore() {
   connectorManager.on('state', (status) => { auditStore?.writeConnectorState(status); send('adapter:status', status); });
 
   audioOutput = new AudioOutputService({ getConfig: currentConfig,
-    getPlayers: () => [mainWindow, detachedWindow].filter(win => win && !win.isDestroyed()).map(win => win.webContents),
+    getPlayers: () => audioPlayer.players(),
+    ensurePlayer:()=>audioPlayer.ensure(),onIdle:()=>audioPlayer.idle(),
     overlay: overlayServer,
     onWarning: message => bridgeLog('warn', 'Tonausgabe', 'AUDIO_DEVICE_FALLBACK', { message })
   });
@@ -684,7 +686,7 @@ async function startExternalServices() {
 function registerIpc() {
   community.registerIpc(ipcMain);
   chatExtras.registerIpc(ipcMain);
-  ipcMain.on('audio:ready', event => audioOutput.registerPlayer(event.sender));
+  ipcMain.on('audio:ready', event => {audioOutput.registerPlayer(event.sender);audioPlayer.ready(event.sender);});
   ipcMain.on('audio:result', (event, result) => audioOutput.acknowledge(event.sender, result));
   ipcMain.handle('audio:testOutput', async (_event, output) => {
     try { return await audioOutput.test(output); }
@@ -988,7 +990,7 @@ async function shutdown() {
   tiktokMatch?.stop();
   chatExtras?.close();
   await community?.close();
-  audioOutput?.stop();
+  audioOutput?.stop();audioPlayer.dispose();
   navigation?.stop();
   streamerbot?.disconnect();
   inputHotkeys?.clear();
@@ -1020,7 +1022,7 @@ else {
     initCore();
     registerIpc();
     mainWindow = createWindow(false);
-    mainWindow.on('closed', () => { mainWindow = null; });
+    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow)app.quit(); });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
     app.on('activate', () => { void showMainWindow(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));
@@ -1051,3 +1053,5 @@ module.exports.getSuiteHost=()=>({
  gaming:enterGaming,
  tikfinity:()=>shell.openExternal('https://tikfinity.zerody.one/tiktok/')
 });
+
+if(process.env.BATTO_TEST_INSTANCE==='1')module.exports.getAudioOutputForTest=()=>audioOutput;

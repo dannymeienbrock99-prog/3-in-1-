@@ -38,7 +38,7 @@ jobs:
         with:
           name: Batto-3-in-1-Windows
           path: |
-            dist/Batto-3-in-1-Setup-1.5.0.exe
+            dist/Batto-3-in-1-Setup-1.5.1.exe
             dist/Extras/de.crazybatto.suite.streamDeckPlugin
           retention-days: 14
       - name: Publish release
@@ -46,7 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.5.0 --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create v1.5.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.5.0' --notes 'Zwei virtuelle Kameras ohne Streamkey, Kamera im Hochformat über die volle obere Breite. Gaming-Modus gibt die Bedienoberfläche frei; Dienste laufen weiter. Jarvis ohne voreingestellte Namensansprache. Stream-Deck-Steuertasten mit dem gelieferten Pausenbild. OBS-32-Bibliotheken lokal erforderlich; Audio direkt in LIVE Studio wählen. Anleitung liegt bei.' }
-          gh release upload v1.5.0 dist/Batto-3-in-1-Setup-1.5.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
+          gh release view v1.5.1 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create v1.5.1 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.5.1' --notes 'Zwei virtuelle Kameras ohne Streamkey, Kamera im Hochformat über die volle obere Breite. Gaming-Modus gibt die Bedienoberfläche frei; Dienste laufen weiter. Jarvis ohne voreingestellte Namensansprache. Stream-Deck-Steuertasten mit dem gelieferten Pausenbild. OBS-32-Bibliotheken lokal erforderlich; Audio direkt in LIVE Studio wählen. Anleitung liegt bei.' }
+          gh release upload v1.5.1 dist/Batto-3-in-1-Setup-1.5.1.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

@@ -7,7 +7,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
  const output=process.env.BATTO_DUAL_TEST_OUTPUT;if(!output)throw Error('Set BATTO_DUAL_TEST_OUTPUT outside the repository.');fs.mkdirSync(output,{recursive:true});
  const client=new NativeClient(process.env.BATTO_DUAL_HOST||path.resolve(__dirname,'../../work/dual-host/BattoDualStream.exe'),process.env.BATTO_OBS_ROOT||'C:\\Program Files\\obs-studio',{env:{BATTO_DUAL_TEST:'1'}});
  try{
-  await client.open();const probe=await client.request('probe');assert(probe.encoder,'hardware encoder must be available');const cfg=defaults();
+  await client.open();const probe=await client.request('probe');assert.equal(probe.encoder,'','camera mode must not load hardware encoders');const cfg=defaults();
   await client.request('test-prepare',{config:cfg});
   await client.request('test-record',{platform:'tiktok',path:path.join(output,'tiktok.mkv')});
   await client.request('test-record',{platform:'twitch',path:path.join(output,'twitch.mkv')});await delay(8000);
@@ -25,6 +25,6 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   const hidden=await client.request('snapshot',{platform:'twitch'});fs.writeFileSync(path.join(output,'camera-hidden.png'),Buffer.from(hidden.image.split(',')[1],'base64'));
   await client.request('media',{path:cfg.program.backgrounds.Pause,volume:0,duration:2});await delay(300);assert.equal((await client.request('media-state')).active,true);await client.request('media-stop');assert.equal((await client.request('media-state')).active,false);
   cfg.profile='fullhd_1080p30';await client.request('test-prepare',{config:cfg});for(const p of ['tiktok','twitch'])await client.request('test-record',{platform:p,path:path.join(output,p+'-fullhd.mkv')});await delay(4000);const hd=await client.request('status');assert.equal(hd.outputs.tiktok.width,1080);assert.equal(hd.outputs.twitch.width,1920);for(const p of ['tiktok','twitch'])assert(hd.outputs[p].frames>70);await client.request('stop',{platform:'both'});
-  fs.writeFileSync(path.join(output,'native-result.json'),JSON.stringify({ok:true,encoder:probe.encoder,version:probe.version,state,fullHd:hd,independentStop:true,independentMute:true,restart:true,scenes:true,transition:true,chatOverlay:true,sourceVisibility:true},null,2));
+  fs.writeFileSync(path.join(output,'native-result.json'),JSON.stringify({ok:true,encoder:state.encoder,version:probe.version,state,fullHd:hd,independentStop:true,independentMute:true,restart:true,scenes:true,transition:true,chatOverlay:true,sourceVisibility:true},null,2));
  }finally{await client.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

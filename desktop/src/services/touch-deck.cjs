@@ -34,13 +34,16 @@ function normalizeConfig(value,catalog){
   if(!Array.isArray(items)||items.length>size)throw Error('Dieses Tastenraster enthält zu viele Tasten.');
   return Array.from({length:size},(_,i)=>{
    const button=items[i];if(button==null)return null;
-   if(!record(button)||!['action','folder','sensor'].includes(button.type))throw Error('Unbekannte Tastenart.');
+   if(!record(button)||!['action','folder','sensor','plugin'].includes(button.type))throw Error('Unbekannte Tastenart.');
    if(++count>LIMITS.buttons)throw Error('Das Touch Deck enthält zu viele Tasten.');
    const result={id:uniqueId(button.id),type:button.type,title:short(button.title,80,'Taste')||'Taste',symbol:short(button.symbol,16)};
    const icon=pngIcon(button.icon);if(icon)result.icon=icon;
    if(button.type==='folder'){
     if(depth>=LIMITS.depth)throw Error('Ordner dürfen höchstens vier Ebenen tief sein.');
     result.buttons=buttons(button.buttons||[],size,depth+1);
+   }else if(button.type==='plugin'){
+    if(typeof button.pluginId!=='string'||!/^[a-zA-Z0-9_.-]{1,150}$/.test(button.pluginId)||typeof button.actionId!=='string'||!/^[a-zA-Z0-9_.-]{1,200}$/.test(button.actionId))throw Error('Bitte eine installierte Plugin-Aktion wählen.');
+    result.pluginId=button.pluginId;result.actionId=button.actionId;
    }else if(button.type==='sensor'){
     if(typeof button.sensorId!=='string'||!button.sensorId||button.sensorId.length>512)throw Error('Bitte einen PC-Messwert wählen.');result.sensorId=button.sensorId;
    }else{
@@ -54,7 +57,8 @@ function normalizeConfig(value,catalog){
   if(!record(profile))throw Error('Ungültiges Touch-Deck-Profil.');
   const columns=profile.columns??5,rows=profile.rows??3;
   if(!Number.isInteger(columns)||columns<2||columns>8||!Number.isInteger(rows)||rows<1||rows>6)throw Error('Das Raster darf 2 bis 8 Spalten und 1 bis 6 Zeilen haben.');
-  return {id:uniqueId(profile.id),name:short(profile.name,80,'Mein Deck')||'Mein Deck',columns,rows,buttons:buttons(profile.buttons||[],columns*rows,0)};
+  const keySize=profile.keySize??'auto';if(keySize!=='auto'&&(!Number.isInteger(keySize)||keySize<80||keySize>220))throw Error('Die Tastengröße muss zwischen 80 und 220 Pixeln liegen.');
+  return {keySize,id:uniqueId(profile.id),name:short(profile.name,80,'Mein Deck')||'Mein Deck',columns,rows,buttons:buttons(profile.buttons||[],columns*rows,0)};
  });
  return {version:1,activeProfile:profiles.some(p=>p.id===value.activeProfile)?value.activeProfile:profiles[0].id,profiles};
 }
@@ -63,9 +67,9 @@ function defaultConfig(){
  return {version:1,activeProfile:'main',profiles:[{id:'main',name:'Mein Deck',columns:5,rows:3,buttons:definitions.map(([title,symbol,step],index)=>({id:'key-'+index,type:'action',title,symbol,steps:[step]}))}]};
 }
 class TouchDeck extends EventEmitter{
- constructor({directory,controls,getSensors=()=>[],webRoot,host,port,now}={}){
+ constructor({directory,controls,getSensors=()=>[],getPresentation=()=>({}),getVisualRevision=()=>0,getWindowStatus=()=>({}),pressPlugin,onRemoteActivity=()=>{},onRemoteDisconnect=()=>{},webRoot,host,port,now}={}){
   super();if(!directory||!controls)throw Error('Touch Deck benötigt einen Speicherort und die Tastensteuerung.');
-  Object.assign(this,{directory,controls,getSensors});this.file=path.join(directory,'touch-deck.json');this.loadError='';this.config=defaultConfig();this.revision=1;
+  Object.assign(this,{directory,controls,getSensors,getPresentation,getVisualRevision,getWindowStatus,pressPlugin,onRemoteActivity,onRemoteDisconnect});this.file=path.join(directory,'touch-deck.json');this.loadError='';this.config=defaultConfig();this.revision=1;
   if(fs.existsSync(this.file))try{if(fs.statSync(this.file).size>LIMITS.file)throw Error('Touch-Deck-Datei zu groß.');this.config=normalizeConfig(JSON.parse(fs.readFileSync(this.file,'utf8')),this.catalog());}catch(error){this.loadError='Gespeichertes Touch Deck konnte nicht geladen werden: '+error.message;}
   this.mobile=new TouchMobile({deck:this,webRoot,host,port,now,onChange:()=>this.emit('change',this.snapshot())});
  }
@@ -73,8 +77,9 @@ class TouchDeck extends EventEmitter{
  sensors(){
   try{return (this.getSensors()||[]).slice(0,2048).filter(s=>record(s)&&typeof s.id==='string').map(s=>({id:s.id.slice(0,512),name:short(s.name,100,s.id),value:typeof s.value==='number'&&Number.isFinite(s.value)?s.value:null,unit:short(s.unit,24)}));}catch{return [];}
  }
- snapshot(){return {...copy(this.config),sensors:this.sensors(),mobile:this.mobileStatus(),...(this.loadError?{error:this.loadError}:{})};}
+ snapshot(){return {...copy(this.config),...this.getWindowStatus(),revision:this.revision,presentation:this.getPresentation(),visualRevision:this.getVisualRevision(),sensors:this.sensors(),mobile:this.mobileStatus(),...(this.loadError?{error:this.loadError}:{})};}
  save(value){
+  if(value?.baseRevision!==undefined&&value.baseRevision!==this.revision)throw Error('Das Deck wurde in einem anderen Fenster geändert. Bitte aktuelle Daten laden und den Entwurf erneut prüfen.');
   const config=normalizeConfig(value,this.catalog()),body=JSON.stringify(config,null,2);if(Buffer.byteLength(body)>LIMITS.file)throw Error('Touch-Deck-Datei zu groß.');
   fs.mkdirSync(this.directory,{recursive:true});const temporary=this.file+'.'+crypto.randomUUID()+'.tmp';
   try{fs.writeFileSync(temporary,body,{encoding:'utf8',mode:0o600});fs.renameSync(temporary,this.file);}finally{try{fs.unlinkSync(temporary);}catch{}}
@@ -90,6 +95,7 @@ class TouchDeck extends EventEmitter{
   const button=this.locate(position);
   if(button.type==='folder')return {ok:true,type:'folder',path:[...(position.path||[]),position.index]};
   if(button.type==='sensor'){const sensor=this.sensors().find(s=>s.id===button.sensorId);return {ok:true,type:'sensor',value:sensor?.value??null,unit:sensor?.unit||'',name:sensor?.name||button.title};}
+  if(button.type==='plugin'){if(!this.pressPlugin)throw Error('Plugin-Dienst ist noch nicht bereit.');return this.pressPlugin(button,position);}
   return this.controls.execute({steps:copy(button.steps)});
  }
  remoteReadings(){
@@ -103,7 +109,7 @@ class TouchDeck extends EventEmitter{
    if(type==='folder')result.buttons=render(button.buttons);
    return result;
   });
-  return {...this.remoteReadings(),version:1,activeProfile:this.config.activeProfile,profiles:this.config.profiles.map(({id,name,columns,rows,buttons})=>({id,name,columns,rows,buttons:render(buttons)}))};
+  return {...this.remoteReadings(),presentation:this.getPresentation(),visualRevision:this.getVisualRevision(),version:1,activeProfile:this.config.activeProfile,profiles:this.config.profiles.map(({id,name,columns,rows,keySize,buttons})=>({id,name,columns,rows,keySize:keySize??'auto',buttons:render(buttons)}))};
  }
  mobileStatus(){return this.mobile?.status()||{running:false,port:0,urls:[],pin:'',clients:0};}
  mobileStart(){return this.mobile.start();}

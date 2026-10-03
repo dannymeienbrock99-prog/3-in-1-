@@ -56,3 +56,78 @@ test('repeated start/stop has one listener and busy action errors remain readabl
 test('disconnect revokes only that phone and releases its pairing slot',async t=>{
  const {deck}=fixture(t);await deck.mobileStart();const first=await pair(deck),second=await pair(deck);assert.equal(deck.mobileStatus().clients,2);assert.equal((await request(deck,'/api/disconnect',{method:'POST',token:first.token})).status,200);assert.equal(deck.mobileStatus().clients,1);assert.equal((await request(deck,'/api/state',{token:first.token})).status,401);assert.equal((await request(deck,'/api/state',{token:second.token})).status,200);assert.equal((await request(deck,'/api/disconnect',{method:'POST'})).status,401);
 });
+
+test('profile key size accepts automatic and 80–220 pixels, persists and reaches the phone',t=>{
+ const {deck,directory}=fixture(t);
+ for(const keySize of [undefined,'auto',80,150,220]){
+  const config=defaultConfig();if(keySize!==undefined)config.profiles[0].keySize=keySize;
+  const saved=deck.save(config),expected=keySize??'auto';assert.equal(saved.profiles[0].keySize,expected);assert.equal(deck.remoteState().profiles[0].keySize,expected);
+  assert.equal(new TouchDeck({directory,controls:deck.controls}).config.profiles[0].keySize,expected);
+ }
+ const before=fs.readFileSync(deck.file,'utf8'),revision=deck.revision;
+ for(const keySize of [79,221,100.5,NaN,Infinity,'120','Auto',false,{},[]]){
+  const config=defaultConfig();config.profiles[0].keySize=keySize;assert.throws(()=>deck.save(config),/Tastengröße/);
+ }
+ assert.equal(deck.revision,revision);assert.equal(fs.readFileSync(deck.file,'utf8'),before);
+});
+
+test('plugin assignment keeps only action identity and exposes no plugin settings to phone or export',async t=>{
+ const pluginCalls=[];const {deck,calls}=fixture(t,{pressPlugin:async(button,position)=>{pluginCalls.push({button,position});return {ok:true};}});
+ const config=defaultConfig();config.profiles[0].buttons[0]={id:'plugin-key',type:'plugin',title:'Jarvis fragen',symbol:'◉',pluginId:'de.crazybatto.suite',actionId:'de.crazybatto.suite.listen',settings:{token:'PRIVATE_PLUGIN_TOKEN',nested:{password:'PRIVATE_PASSWORD'}},globalSettings:{secret:'PRIVATE_GLOBAL'},codePath:'C:/private/plugin.exe',steps:[{action:'listen'}]};
+ const saved=deck.save(config),button=saved.profiles[0].buttons[0];assert.deepEqual(Object.keys(button).sort(),['actionId','id','pluginId','symbol','title','type']);
+ const disk=fs.readFileSync(deck.file,'utf8'),remote=JSON.stringify(deck.remoteState());
+ for(const hidden of ['PRIVATE_PLUGIN_TOKEN','PRIVATE_PASSWORD','PRIVATE_GLOBAL','codePath','globalSettings']){assert(!disk.includes(hidden),hidden);assert(!remote.includes(hidden),hidden);}
+ assert(!remote.includes('pluginId'));assert(!remote.includes('actionId'));
+ const position={profileId:'main',path:[],index:0};assert.deepEqual(await deck.press(position),{ok:true});assert.deepEqual(pluginCalls,[{button,position}]);assert.deepEqual(calls,[]);
+ deck.pressPlugin=undefined;await assert.rejects(deck.press(position),/Plugin-Dienst/);
+ for(const patch of [{pluginId:'../wrong'},{actionId:'bad/action'},{pluginId:''},{actionId:'a'.repeat(201)}]){const invalid=structuredClone(config);Object.assign(invalid.profiles[0].buttons[0],patch);assert.throws(()=>deck.save(invalid),/Plugin-Aktion/);}
+ assert.equal(fs.readFileSync(deck.file,'utf8'),disk);
+});
+
+test('stale detached-window save cannot overwrite newer configuration or emit a change',t=>{
+ const {deck}=fixture(t);const firstWindow=deck.snapshot(),detachedWindow=deck.snapshot();let changes=0;deck.on('change',()=>changes++);
+ firstWindow.profiles[0].name='Neue Tasten';const latest=deck.save({...firstWindow,baseRevision:firstWindow.revision});const before=fs.readFileSync(deck.file,'utf8');
+ detachedWindow.profiles[0].name='Veralteter Entwurf';assert.throws(()=>deck.save({...detachedWindow,baseRevision:detachedWindow.revision}),/anderen Fenster/);
+ assert.equal(deck.revision,latest.revision);assert.equal(deck.config.profiles[0].name,'Neue Tasten');assert.equal(fs.readFileSync(deck.file,'utf8'),before);assert.equal(changes,1);
+ const refreshed=deck.snapshot();refreshed.profiles[0].keySize=180;deck.save({...refreshed,baseRevision:refreshed.revision});assert.equal(changes,2);assert.equal(deck.config.profiles[0].keySize,180);
+ assert(!fs.readFileSync(deck.file,'utf8').includes('baseRevision'));
+});
+
+test('authenticated phone activity identifies its visible profile and disconnect releases only that device',async t=>{
+ const activity=[],disconnected=[];const {deck}=fixture(t,{onRemoteActivity:(id,profile)=>activity.push({id,profile}),onRemoteDisconnect:id=>disconnected.push(id)});
+ const config=defaultConfig();config.profiles.push({id:'second',name:'Tablet',columns:2,rows:1,buttons:[{id:'second-listen',type:'action',title:'Jarvis',steps:[{action:'listen'}]}]});deck.save(config);
+ await deck.mobileStart();const first=await pair(deck),second=await pair(deck);assert.equal(activity.length,0);
+ assert.equal((await request(deck,'/api/readings',{headers:{'X-Batto-Profile':'second'}})).status,401);assert.equal(activity.length,0);
+ assert.equal((await request(deck,'/api/state',{token:first.token})).status,200);const firstId=activity.at(-1).id;assert.equal(activity.at(-1).profile,'main');assert.notEqual(firstId,first.token);
+ assert.equal((await request(deck,'/api/readings',{token:first.token,headers:{'X-Batto-Profile':'second'}})).status,200);assert.deepEqual(activity.at(-1),{id:firstId,profile:'second'});
+ assert.equal((await request(deck,'/api/press',{method:'POST',token:second.token,body:{profileId:'second',path:[],index:0}})).status,200);const secondId=activity.at(-1).id;assert.notEqual(firstId,secondId);assert.equal(activity.at(-1).profile,'second');
+ assert.equal((await request(deck,'/api/disconnect',{method:'POST',token:first.token})).status,200);assert.deepEqual(disconnected,[firstId]);
+ const prior=activity.length;assert.equal((await request(deck,'/api/state',{token:first.token})).status,401);assert.equal(activity.length,prior);assert.equal((await request(deck,'/api/readings',{token:second.token})).status,200);assert.deepEqual(disconnected,[firstId]);
+ await deck.mobileStop();assert.deepEqual(disconnected,[firstId,secondId]);await deck.mobileStop();assert.deepEqual(disconnected,[firstId,secondId]);
+});
+
+test('PIN rotation and session expiry release remote plugin activity exactly once',async t=>{
+ let now=1_000_000;const disconnected=[],activity=[];const {deck}=fixture(t,{now:()=>now,onRemoteActivity:id=>activity.push(id),onRemoteDisconnect:id=>disconnected.push(id)});
+ await deck.mobileStart();const one=await pair(deck),two=await pair(deck);await request(deck,'/api/state',{token:one.token});await request(deck,'/api/state',{token:two.token});
+ deck.rotatePin();assert.deepEqual(disconnected.sort(),activity.sort());assert.equal(new Set(disconnected).size,2);assert.equal((await request(deck,'/api/state',{token:one.token})).status,401);assert.equal(disconnected.length,2);
+ const current=await pair(deck);await request(deck,'/api/state',{token:current.token});const id=activity.at(-1);now+=SESSION_MS+1;assert.equal((await request(deck,'/api/readings',{token:current.token})).status,401);assert.equal(disconnected.filter(value=>value===id).length,1);
+ deck.mobileStatus();await deck.mobileStop();assert.equal(disconnected.length,3);
+});
+
+test('mobile visual revision sends changed plugin images once and keeps unchanged polls small',async t=>{
+ let visualRevision=4,presentationReads=0,presentation={'plugin-key':{image:'data:image/png;base64,fixture',title:'75 %'}};
+ const {deck}=fixture(t,{getPresentation:()=>{presentationReads++;return presentation;},getVisualRevision:()=>visualRevision});await deck.mobileStart();const {token,state}=await pair(deck);
+ assert.equal(state.visualRevision,4);assert.deepEqual(state.presentation,presentation);
+ let reads=presentationReads;const first=await request(deck,'/api/readings',{token});assert.equal(first.value.visualRevision,4);assert.deepEqual(first.value.visuals,presentation);assert.equal(presentationReads,reads+1);
+ reads=presentationReads;const unchanged=await request(deck,'/api/readings',{token,headers:{'X-Batto-Visual-Revision':'4'}});assert.equal(unchanged.status,200);assert(!('visuals'in unchanged.value));assert(!('profiles'in unchanged.value));assert.equal(presentationReads,reads);assert.equal(unchanged.value.visualRevision,4);
+ visualRevision=5;presentation={'plugin-key':{title:'80 %'}};const updated=await request(deck,'/api/readings',{token,headers:{'X-Batto-Visual-Revision':'4'}});assert.equal(updated.value.visualRevision,5);assert.deepEqual(updated.value.visuals,presentation);
+ visualRevision=6;presentation={};const cleared=await request(deck,'/api/readings',{token,headers:{'X-Batto-Visual-Revision':'5'}});assert.deepEqual(cleared.value.visuals,{});assert.equal(cleared.value.visualRevision,6);
+});
+
+test('real mobile manifest and icon are public local assets with strict MIME and no data-file exposure',async t=>{
+ const webRoot=path.join(__dirname,'../src/touch-mobile'),{deck}=fixture(t,{webRoot});await deck.mobileStart();
+ const manifest=await request(deck,'/manifest.webmanifest');assert.equal(manifest.status,200);assert.match(manifest.headers['content-type'],/^application\/manifest\+json/);assert.equal(manifest.value.name,'Batto Touch Deck');assert.equal(manifest.value.display,'standalone');assert.equal(manifest.value.start_url,'/');assert.equal(manifest.value.icons[0].src,'/icon.png');assert.match(manifest.headers['content-security-policy'],/manifest-src 'self'/);
+ const icon=await fetch('http://127.0.0.1:'+deck.mobile.port+'/icon.png');assert.equal(icon.status,200);assert.equal(icon.headers.get('content-type'),'image/png');assert.equal(icon.headers.get('x-content-type-options'),'nosniff');const data=Buffer.from(await icon.arrayBuffer());assert.equal(data.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert(data.equals(fs.readFileSync(path.join(webRoot,'icon.png'))));
+ const index=await request(deck,'/');assert.match(index.value,/apple-mobile-web-app-capable/);assert.match(index.value,/rel="apple-touch-icon"/);
+ for(const route of ['/manifest.webmanifest?secret=true','/AndroidManifest.xml','/touch-plugin-settings.json','/password.dpapi'])assert.equal((await request(deck,route)).status,404);
+});

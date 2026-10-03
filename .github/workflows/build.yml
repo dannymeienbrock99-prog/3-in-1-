@@ -38,7 +38,7 @@ jobs:
         with:
           name: Batto-3-in-1-Windows
           path: |
-            dist/Batto-3-in-1-Setup-1.6.0.exe
+            dist/Batto-3-in-1-Setup-1.7.0.exe
             dist/Extras/de.crazybatto.suite.streamDeckPlugin
           retention-days: 14
       - name: Publish release
@@ -46,7 +46,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.6.0 --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create v1.6.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.6.0' --notes 'Batto Touch Deck direkt integriert: Profile, Ordner, eigene Tastenbilder, Kombinationen und PC-Messwerte. Handy-/Tablet-Bedienung im Browser mit PIN, auch im Gaming-Modus. Keine zusätzliche Desktop-App nötig. Vorhandene Gold-/Marmor-Oberfläche und Chat/Bot-Einstellungen bleiben erhalten. Kein zusätzlicher Multi-Chat oder OBS-Gästebereich. Zwei virtuelle Kameras ohne Streamkey, sparsame Vorschau und Jarvis bleiben enthalten. Anleitung liegt bei.' }
-          gh release upload v1.6.0 dist/Batto-3-in-1-Setup-1.6.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
+          @'
+          Batto Touch Deck 1.7.0: separates andockbares Fenster, einstellbare Tastengröße, eigene Bilder und Icon-Bibliothek. Stream-Deck-Plugins und Icon-Pakete lassen sich importieren; einzelne Plugins können zusätzliche Dienste benötigen oder inkompatibel sein. Plugin-Prozesse laufen nur bei Nutzung und werden nach ausbleibender Handy-Verbindung freigegeben.
+
+          Android-Handy/-Tablet: separate signierte Batto-Touch-Deck-1.7.0.apk. iPhone/iPad: Safari-Web-App für den Home-Bildschirm. Verbindung im privaten WLAN per PIN. Die Gold-/Marmor-Oberfläche, Chat-/Bot-Einstellungen, Jarvis und zwei virtuelle Kameras ohne Streamkey bleiben erhalten. Die Anleitung ist im Installer enthalten. Das Android-Release wird separat mit dauerhaftem Schlüssel gebaut; CI-Test-APKs sind kein Release-Update.
+          '@ | Set-Content -LiteralPath work/release-notes.md -Encoding utf8
+          gh release view v1.7.0 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create v1.7.0 --repo $env:GITHUB_REPOSITORY --title 'Batto 3-in-1 1.7.0' --notes-file work/release-notes.md }
+          gh release upload v1.7.0 dist/Batto-3-in-1-Setup-1.7.0.exe dist/Extras/de.crazybatto.suite.streamDeckPlugin --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

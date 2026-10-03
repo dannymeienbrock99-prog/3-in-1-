@@ -1,0 +1,13 @@
+{
+  "id": "/",
+  "name": "Batto Touch Deck",
+  "short_name": "Batto Deck",
+  "lang": "de",
+  "description": "Deine Batto-Tasten auf Handy und Tablet im lokalen Netzwerk.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#11110f",
+  "theme_color": "#11110f",
+  "icons": [{"src":"/icon.png","sizes":"256x256","type":"image/png","purpose":"any"}]
+}

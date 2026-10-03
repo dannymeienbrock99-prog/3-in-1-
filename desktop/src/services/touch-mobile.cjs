@@ -8,7 +8,7 @@ class TouchMobile{
  constructor({deck,webRoot=path.join(__dirname,'../touch-mobile'),host='0.0.0.0',port=process.env.BATTO_TEST_INSTANCE==='1'?17670:17660,now=Date.now,onChange=()=>{}}){
   Object.assign(this,{deck,webRoot,host,requestedPort:port,now,onChange});this.server=null;this.pin='';this.port=0;this.sessions=new Map();this.attempts=new Map();this.assets=new Map();this.addresses=[];this.pending=null;this.stopping=null;
  }
- prune(){const now=this.now();for(const [token,session]of this.sessions)if(session.expires<=now)this.sessions.delete(token);for(const [ip,attempt]of this.attempts)if(attempt.until<=now)this.attempts.delete(ip);}
+ prune(){const now=this.now();for(const [token,session]of this.sessions)if(session.expires<=now){this.sessions.delete(token);this.deck.onRemoteDisconnect?.(session.id);}for(const [ip,attempt]of this.attempts)if(attempt.until<=now)this.attempts.delete(ip);}
  status(){this.prune();return {running:!!this.server?.listening,port:this.port||this.requestedPort,urls:this.server?.listening?this.addresses.filter(ip=>ip!=='127.0.0.1'||this.addresses.length===1).map(ip=>`http://${ip}:${this.port}`):[],pin:this.server?.listening?this.pin:'',clients:this.sessions.size};}
  async start(){
   if(this.stopping)await this.stopping;if(this.server?.listening)return this.status();if(this.pending)return this.pending;
@@ -24,10 +24,10 @@ class TouchMobile{
  }
  async stop(){
   if(this.stopping)return this.stopping;
-  this.stopping=(async()=>{if(this.pending)try{await this.pending;}catch{}const server=this.server;this.server=null;this.sessions.clear();this.attempts.clear();this.assets.clear();this.pin='';if(server)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});this.onChange();return this.status();})();
+  this.stopping=(async()=>{if(this.pending)try{await this.pending;}catch{}const server=this.server;this.server=null;for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.assets.clear();this.pin='';if(server)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});this.onChange();return this.status();})();
   try{return await this.stopping;}finally{this.stopping=null;}
  }
- rotatePin(){if(!this.server?.listening)throw Error('Bitte zuerst die Handy-Verbindung einschalten.');this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');this.sessions.clear();this.attempts.clear();this.onChange();return this.status();}
+ rotatePin(){if(!this.server?.listening)throw Error('Bitte zuerst die Handy-Verbindung einschalten.');this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.onChange();return this.status();}
  guard(req){
   if(!privateIp(req.socket.remoteAddress))throw fail(403,'Diese Verbindung ist nur im lokalen Netzwerk verfügbar.');
   let host;try{host=new URL('http://'+req.headers.host);}catch{throw fail(403,'Ungültige Netzwerkadresse.');}
@@ -36,6 +36,7 @@ class TouchMobile{
   if(req.headers['sec-fetch-site']==='cross-site')throw fail(403,'Diese Webseite ist nicht berechtigt.');
  }
  authorized(req){this.prune();const header=String(req.headers.authorization||'');if(!/^Bearer [a-f0-9]{64}$/.test(header))throw fail(401,'Bitte das Touch Deck erneut koppeln.');const token=header.slice(7),session=this.sessions.get(token);if(!session)throw fail(401,'Bitte das Touch Deck erneut koppeln.');return session;}
+ activity(req){const session=this.authorized(req);this.deck.onRemoteActivity?.(session.id,String(req.headers['x-batto-profile']||this.deck.config.activeProfile));return session;}
  async body(req){
   if(!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type']||'')))throw fail(415,'Die Anfrage muss JSON enthalten.');
   if(Number(req.headers['content-length'])>4096){req.resume();throw fail(413,'Die Anfrage ist zu groß.');}
@@ -45,11 +46,11 @@ class TouchMobile{
  }
  async handle(req,res){
   res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
-  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; manifest-src 'self'");
   const reply=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(value));};
   try{
    this.guard(req);const url=new URL(req.url,'http://127.0.0.1');if(url.search)throw fail(404,'Nicht gefunden.');
-   const routes={'/':['index.html','text/html; charset=utf-8'],'/client.js':['client.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8']};
+   const routes={'/':['index.html','text/html; charset=utf-8'],'/client.js':['client.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/manifest.webmanifest':['manifest.webmanifest','application/manifest+json'],'/icon.png':['icon.png','image/png']};
    if(req.method==='GET'&&Object.hasOwn(routes,url.pathname)){
     const [file,type]=routes[url.pathname];if(!this.assets.has(file)){const filename=path.join(this.webRoot,file);if(!fs.existsSync(filename)||fs.statSync(filename).size>1024*1024)throw fail(503,'Die Handy-Oberfläche fehlt. Bitte die Installation reparieren.');this.assets.set(file,fs.readFileSync(filename));}
     res.writeHead(200,{'Content-Type':type});res.end(this.assets.get(file));return;
@@ -61,13 +62,13 @@ class TouchMobile{
      this.attempts.set(ip,{count:(attempt?.count||0)+1,until:attempt?.until||this.now()+ATTEMPT_MS});throw fail(401,'Die PIN stimmt nicht.');
     }
     if(this.sessions.size>=MAX_CLIENTS)throw fail(409,'Es sind bereits acht Geräte gekoppelt. Eine neue PIN trennt die bisherigen Geräte.');
-    const token=crypto.randomBytes(32).toString('hex');this.sessions.set(token,{expires:this.now()+SESSION_MS,presses:[]});this.attempts.delete(ip);this.onChange();reply(200,{token,state:this.deck.remoteState()});return;
+    const token=crypto.randomBytes(32).toString('hex');this.sessions.set(token,{id:crypto.randomUUID(),expires:this.now()+SESSION_MS,presses:[]});this.attempts.delete(ip);this.onChange();reply(200,{token,state:this.deck.remoteState()});return;
    }
-   if(req.method==='GET'&&url.pathname==='/api/state'){this.authorized(req);reply(200,this.deck.remoteState());return;}
-   if(req.method==='GET'&&url.pathname==='/api/readings'){this.authorized(req);reply(200,this.deck.remoteReadings());return;}
-   if(req.method==='POST'&&url.pathname==='/api/disconnect'){this.authorized(req);this.sessions.delete(String(req.headers.authorization).slice(7));this.onChange();reply(200,{ok:true});return;}
+   if(req.method==='GET'&&url.pathname==='/api/state'){this.activity(req);reply(200,this.deck.remoteState());return;}
+   if(req.method==='GET'&&url.pathname==='/api/readings'){this.activity(req);const visualRevision=this.deck.getVisualRevision();reply(200,{...this.deck.remoteReadings(),visualRevision,...(String(visualRevision)!==req.headers['x-batto-visual-revision']?{visuals:this.deck.getPresentation()}:{})});return;}
+   if(req.method==='POST'&&url.pathname==='/api/disconnect'){this.authorized(req);const session=this.sessions.get(String(req.headers.authorization).slice(7));this.deck.onRemoteDisconnect?.(session?.id);this.sessions.delete(String(req.headers.authorization).slice(7));this.onChange();reply(200,{ok:true});return;}
    if(req.method==='POST'&&url.pathname==='/api/press'){
-    const session=this.authorized(req),data=await this.body(req),now=this.now();session.presses=session.presses.filter(time=>time>now-1000);if(session.presses.length>=8)throw fail(429,'Bitte die Taste kurz loslassen.');session.presses.push(now);
+    const session=this.authorized(req),data=await this.body(req),now=this.now();this.deck.onRemoteActivity?.(session.id,data.profileId);session.presses=session.presses.filter(time=>time>now-1000);if(session.presses.length>=8)throw fail(429,'Bitte die Taste kurz loslassen.');session.presses.push(now);
     if(Object.keys(data).some(key=>!['profileId','path','index'].includes(key)))throw fail(400,'Nur vorhandene Tasten können ausgeführt werden.');
     reply(200,await this.deck.press(data));return;
    }

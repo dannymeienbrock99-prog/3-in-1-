@@ -63,7 +63,7 @@ async function showMainWindow(){
  restoringWindow=(async()=>{
   if(!mainWindow||mainWindow.isDestroyed()){
    const win=createWindow(false);mainWindow=win;
-   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow)app.quit();});
+   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow())app.quit();});
    await new Promise((resolve,reject)=>{win.webContents.once('did-finish-load',resolve);win.webContents.once('did-fail-load',()=>reject(Error('Batto-Fenster konnte nicht geladen werden.')));});
   }
   if(restoreDetached){restoreDetached=false;setChatDetached(true);}
@@ -111,7 +111,7 @@ let broadcastService = null;
 let autoBroadcastTimer = null;
 let autoBroadcastDelayTimer = null;
 let autoBroadcastIndex = 0;
-let quitting = false;
+let quitting = false, shutdownComplete = false;
 let obsWasLive = false;
 
 const SECRET_REFS = {
@@ -1007,6 +1007,7 @@ function registerIpc() {
 }
 
 async function shutdown() {
+  await Promise.allSettled([require('../src/touch-bootstrap.cjs').close(),require('../src/dual-stream/bootstrap.cjs').close(),require('../src/suite-bootstrap.cjs').close()]);
   piperTts?.stop();
   tiktokMatch?.stop();
   chatExtras?.close();
@@ -1043,7 +1044,7 @@ else {
     initCore();
     registerIpc();
     mainWindow = createWindow(false);
-    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow)app.quit(); });
+    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow())app.quit(); });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
     app.on('activate', () => { openFromTray(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));
@@ -1051,10 +1052,11 @@ else {
 }
 
 app.on('before-quit', (event) => {
-  if (quitting) return;
+  if (shutdownComplete) return;
   event.preventDefault();
+  if (quitting) return;
   quitting = true;
-  shutdown().finally(() => app.quit());
+  shutdown().finally(() => {shutdownComplete=true;app.quit();});
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin'&&!gamingMode) app.quit(); });
 

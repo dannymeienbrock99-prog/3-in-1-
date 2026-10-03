@@ -1,0 +1,35 @@
+'use strict';
+const {app,BrowserWindow,dialog}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+app.whenReady().then(async()=>{
+ const output=process.env.BATTO_SUITE_TEST_OUTPUT;if(!output||process.env.BATTO_TEST_INSTANCE!=='1')throw Error('Isolated test data required');fs.mkdirSync(output,{recursive:true});
+ const main=require('./main21.cjs'),touch=require('../src/touch-bootstrap.cjs');let win=main.getMainWindow();const checks=[],errors=[];
+ const note=value=>{checks.push(value);fs.writeFileSync(path.join(output,'progress.json'),JSON.stringify(checks));};
+ const watchdog=setTimeout(()=>{fs.writeFileSync(path.join(output,'error.txt'),'Timed out: '+checks.join(' / '));app.exit(1);},150000);
+ const js=(code,target=win)=>target.webContents.executeJavaScript(code),call=(command,value,target=win)=>js(`window.batto.touch(${JSON.stringify(command)},${JSON.stringify(value)??'undefined'})`,target);
+ async function until(check,label){for(let i=0;i<100;i++){if(await check())return;await pause(100);}throw Error('Timeout: '+label);}
+ async function click(id,target=win){await js(`document.getElementById(${JSON.stringify(id)}).click()`,target);await pause(200);}
+ async function capture(name,target=win){target.webContents.invalidate();await pause(250);fs.writeFileSync(path.join(output,name+'.png'),(await target.webContents.capturePage()).toPNG());}
+ try{
+  if(win.webContents.isLoading())await new Promise(r=>win.webContents.once('did-finish-load',r));await pause(2200);win.setSize(1600,1000);win.showInactive();
+  app.on('web-contents-created',(_e,contents)=>contents.on('console-message',(_event,level,message)=>{if(level>=3&&!/ERR_CONNECTION_REFUSED|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED/.test(message))errors.push(message);}));
+  await js('setView("touchdeck")');await until(()=>js('!!document.getElementById("td-mode")'),'touch ready');
+  const deck=touch.getDeck();assert.equal(touch.getHost(false),undefined);
+  const originalDialog=dialog.showOpenDialog;
+  try{for(const file of ['C:/Users/Batto/Downloads/de.crazybatto.suite (1).streamDeckPlugin','C:/Users/Batto/Downloads/LS25-Buttons-1.1.10.streamDeckIconPack']){dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});await call('package-import');}}finally{dialog.showOpenDialog=originalDialog;}
+  const packages=await call('packages');assert.equal(packages.plugins[0].actions.length,8);assert.equal(packages.iconPacks[0].count,84);assert.equal(touch.getHost(false),undefined);note('real attached packages import through desktop IPC without starting plugin processes');
+  const packId=packages.iconPacks[0].id;const icons=await call('pack-icons',{packId,offset:0,limit:24});assert.equal(icons.icons.length,24);assert(icons.icons.every(i=>i.image.startsWith('data:image/png;base64,')));note('24 real LS25 thumbnails render using packaged image converter');
+  assert(require('../src/services/touch-images.cjs').thumbnail(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="gold"/></svg>')).startsWith('data:image/png;base64,'));note('native SVG converter works in this app build');
+  let config=deck.snapshot();config.profiles=[{id:'qa-main',name:'Mein Touch Deck',columns:3,rows:2,keySize:140,buttons:[{id:'qa-pause',title:'Pause',type:'action',symbol:'Ⅱ',icon:icons.icons[0].image,steps:[{action:'scene',target:'Pause'}]},{id:'qa-plugin',title:'Mein Plugin',symbol:'◆',type:'plugin',pluginId:packages.plugins[0].id,actionId:packages.plugins[0].actions[0].id}]}];config.activeProfile='qa-main';await call('save',config);
+  await until(()=>Boolean(touch.getHost(false)?.visuals()['qa-plugin']?.image),'plugin image');note('saved plugin assignment starts real EXE and receives its live PNG image');
+  await click('td-mode');await js('document.querySelector("[data-td-key="+JSON.stringify("0")+"]").click()');await pause(150);await click('td-icon-library');await until(()=>js('document.querySelectorAll("#td-library-icons img").length===24'),'icon library');await capture('Touch-Deck-Iconbibliothek');await click('td-library-next');await until(()=>js('document.getElementById("td-library-page").textContent.startsWith("25")'),'second icon page');await click('td-library-close');await click('td-mode');note('real icon library shows first and second page with bounded thumbnails');
+  await call('plugin-settings',{buttonId:'qa-plugin'});await pause(750);const pi=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('TouchPackages')&&w.isVisible());assert(pi);assert.equal(await js('typeof require',pi),'undefined');assert.equal(await js('typeof window.batto',pi),'undefined');await capture('Touch-Deck-Plugin-Einstellungen',pi);pi.close();note('original plugin inspector opens with isolated browser and no Batto preload');
+  await call('detach');const detached=touch.getDetachedWindow();assert(detached);await until(()=>js('!!document.getElementById("td-grid")',detached),'detached ready');assert.equal(await js('typeof window.batto.suite',detached),'undefined');
+  await call('always-on-top',true,detached);assert(detached.isAlwaysOnTop());detached.setAlwaysOnTop(false);detached.setSize(850,680);await capture('Touch-Deck-Entkoppelt',detached);
+  await js('document.getElementById("td-key-size").value=100;document.getElementById("td-key-size").dispatchEvent(new Event("input"));document.getElementById("td-key-size").dispatchEvent(new Event("change"));',detached);await until(()=>deck.config.profiles[0].keySize===100,'size saved');note('native detached deck supports own window, minimal API, always-on-top and saved key size');
+  win.close();await pause(450);assert(win.isDestroyed());assert(!detached.isDestroyed());await js('document.querySelector("[data-td-key="+JSON.stringify("0")+"]").click()',detached);await pause(350);assert.equal(require('../src/dual-stream/bootstrap.cjs').getService().config.program.scene,'Pause');note('closing main window keeps detached control functional');
+  await call('edit-main',undefined,detached);win=main.getMainWindow();assert(win&&!win.isDestroyed());await until(()=>js('!!document.getElementById("td-mode")'),'main restored');await call('attach');assert.equal(touch.getDetachedWindow(),null);note('editing restores main window and docking closes detached window');
+  await js('setView("dashboard")');await pause(16000);assert.equal(touch.getHost(false).plugins.size,0);note('hidden desktop and expired inspector lease stop all unused plugin processes');
+  assert.equal(errors.length,0,errors.join('\n'));clearTimeout(watchdog);fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:true,checks,errors,actualPhoneTested:false},null,2));app.quit();
+ }catch(error){fs.writeFileSync(path.join(output,'error.txt'),error.stack+'\n'+errors.join('\n'));app.exit(1);}
+});

@@ -41,5 +41,6 @@ app.whenReady().then(async()=>{
  runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));
-app.on('before-quit',()=>{void runtime?.close();});
-module.exports={onEvent:event=>{runtime?.jarvis.onEvent(event);require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};
+let closePromise;
+function close(){return closePromise||(closePromise=Promise.resolve().then(()=>runtime?.close()));}
+module.exports={close,onEvent:event=>{runtime?.jarvis.onEvent(event);require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};

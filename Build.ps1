@@ -20,6 +20,8 @@ npx --yes @elgato/cli@1.10.1 validate $plugin; Check-Exit
 npx --yes @elgato/cli@1.10.1 pack $plugin --output dist/Extras --force; Check-Exit
 Copy-Item ANLEITUNG.html dist/Extras/ANLEITUNG.html
 Copy-Item THIRD-PARTY.md dist/Extras/THIRD-PARTY.md
+New-Item -ItemType Directory -Force dist/Extras/Touch-Deck-Licenses | Out-Null
+Copy-Item licenses/touch-deck/* dist/Extras/Touch-Deck-Licenses/ -Force
 Copy-Item components/dual-stream/LICENSE dist/Extras/DualStream-LICENSE.txt
 python scripts/prepare-obs-piper.py; Check-Exit
 Push-Location desktop
@@ -41,4 +43,4 @@ Pop-Location
 if (-not $InnoCompiler) { $InnoCompiler = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $InnoCompiler) { throw 'Inno Setup 7.1 oder neuer: -InnoCompiler mit Pfad zu ISCC.exe angeben.' }
 & $InnoCompiler installer/BattoSuite.iss; Check-Exit
-Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.6.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.7.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'

@@ -2,6 +2,7 @@
   'use strict';
   const root = document.getElementById('touch-deck-root');
   if (!root) return;
+  const detached = document.body.hasAttribute('data-td-detached');
   const $ = id => document.getElementById('td-' + id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -10,6 +11,10 @@
   let state, draft, catalog = {actions:[]}, path = [], selected = -1;
   let dirty = false, editing = false, busy = false, loading = false, initialized = false;
   let sensorTimer, pollBusy = false, catalogBusy = false, dragIndex = -1, confirmCallback, pendingFocus;
+  let packages = {plugins:[],iconPacks:[]}, packagesLoaded = false, presentation = {};
+  let draftRevision, conflict = false, libraryItem = null, libraryPack = '', libraryOffset = 0, libraryRequest = 0, libraryTotal = 0;
+  let presenceKey = '';
+  let layoutFrame;
   const active = () => !document.hidden && !window.BattoResources?.suspended && document.getElementById('view-touchdeck')?.classList.contains('active');
   const call = (command, value) => window.batto.touch(command, value);
   const configOf = value => ({version:1, activeProfile:value.activeProfile, profiles:clone(value.profiles)});
@@ -42,14 +47,18 @@
   function changed() { dirty = true; status(); }
   function status() {
     if (!initialized) return;
-    $('save').disabled = busy || !dirty;
+    $('save').disabled = busy || !dirty || conflict;
     $('discard').disabled = busy || !dirty;
-    $('dirty').textContent = dirty ? 'Ungespeicherte Änderungen' : 'Gespeichert';
+    $('dirty').textContent = conflict ? 'In einem anderen Fenster geändert · bitte neu laden' : dirty ? 'Ungespeicherte Änderungen' : 'Gespeichert';
     $('dirty').classList.toggle('td-unsaved', dirty);
     $('mode').textContent = editing ? 'Zur Bedienung' : 'Tasten bearbeiten';
     $('mode').setAttribute('aria-pressed', String(editing));
     $('mode-note').textContent = editing ? 'Bearbeiten: Taste wählen oder an eine andere Position ziehen. Dabei werden keine Aktionen ausgelöst.' : dirty ? 'Bitte zuerst speichern oder Änderungen verwerfen. Danach sind die Tasten wieder bedienbar.' : 'Bedienen: Eine Taste auslösen oder einen Ordner öffnen.';
     root.classList.toggle('td-editing', editing);
+    if ($('detach')) $('detach').textContent = state?.window?.detached || state?.detached ? 'Touch-Fenster zeigen' : 'Entkoppeln';
+    if ($('top')) { const pinned = !!(state?.window?.alwaysOnTop ?? state?.alwaysOnTop); $('top').textContent = pinned ? 'Immer oben: An' : 'Immer oben: Aus'; $('top').setAttribute('aria-pressed', String(pinned)); }
+    if ($('library').open) { $('library-prev').disabled = busy || libraryOffset <= 0; $('library-next').disabled = busy || libraryOffset + 24 >= libraryTotal; }
+    fitDetachedKeys();
   }
   function ask(text, callback) {
     confirmCallback = callback;
@@ -59,24 +68,39 @@
   }
   function closeConfirm() { $('confirm').hidden = true; confirmCallback = null; }
   function build() {
-    root.innerHTML = `<div class="td-heading"><div><h2>Batto Touch Deck</h2><p>Deine Tasten für Jarvis, Szenen, Bot und PC-Messwerte.</p></div><button id="td-mode" aria-pressed="false">Tasten bearbeiten</button></div>
-      <div class="td-toolbar"><button id="td-save" class="primary">Änderungen speichern</button><button id="td-discard">Verwerfen</button><span id="td-dirty" class="td-help"></span><div class="td-spacer"></div><button id="td-import">Importieren</button><button id="td-export">Exportieren</button></div>
+    root.classList.toggle('td-detached', detached);
+    root.innerHTML = `<div class="td-heading"><div><h2>Batto Touch Deck</h2><p>${detached ? 'Dein separates Bedienfeld.' : 'Deine Tasten für Jarvis, Szenen, Bot und PC-Messwerte.'}</p></div><div class="td-heading-tools">${detached ? '<button id="td-top" aria-pressed="false">Immer oben: Aus</button><button id="td-attach">Andocken</button>' : '<button id="td-detach">Entkoppeln</button>'}<button id="td-mode" aria-pressed="false">Tasten bearbeiten</button></div></div>
+      <div class="td-toolbar td-main-only"><button id="td-save" class="primary">Änderungen speichern</button><button id="td-discard">Verwerfen</button><span id="td-dirty" class="td-help"></span><div class="td-spacer"></div><button id="td-package-open">Plugins &amp; Icons</button><button id="td-import">Projekt importieren</button><button id="td-export">Exportieren</button></div>
       <div id="td-message" class="td-message" role="status" aria-live="polite"></div>
       <div id="td-confirm" class="td-confirm" hidden><span id="td-confirm-text"></span><div class="td-toolbar"><button id="td-confirm-yes">Bestätigen</button><button id="td-confirm-no" class="primary">Abbrechen</button></div></div>
-      <article class="td-panel"><div class="td-profilebar"><label>Profil<select id="td-profile" aria-label="Touch-Deck-Profil"></select></label><label class="td-edit-only">Name<input id="td-profile-name" maxlength="60"></label><button id="td-profile-add" class="td-edit-only">Neues Profil</button><button id="td-profile-delete" class="td-edit-only td-danger">Profil löschen</button><label class="td-edit-only">Raster<select id="td-grid-size"><option value="3x2">3 × 2 · große Tasten</option><option value="5x3">5 × 3 · Standard</option><option value="8x4">8 × 4 · viele Tasten</option></select></label></div>
+      <article class="td-panel"><div class="td-profilebar"><label>Profil<select id="td-profile" aria-label="Touch-Deck-Profil"></select></label><label class="td-edit-only">Name<input id="td-profile-name" maxlength="60"></label><button id="td-profile-add" class="td-edit-only">Neues Profil</button><button id="td-profile-delete" class="td-edit-only td-danger">Profil löschen</button><label class="td-edit-only">Raster<select id="td-grid-size"><option value="3x2">3 × 2 · große Tasten</option><option value="5x3">5 × 3 · Standard</option><option value="8x4">8 × 4 · viele Tasten</option></select></label><label class="td-key-size-mode">Tastengröße<select id="td-key-size-mode"><option value="auto">Automatisch</option><option value="custom">Selbst einstellen</option></select></label><label id="td-key-size-wrap" class="td-key-size-range" hidden><span>Tasten: <output id="td-key-size-value">140 px</output></span><input id="td-key-size" type="range" min="80" max="220" step="10" value="140" aria-label="Tastengröße in Pixeln"></label></div>
       <div class="td-workspace"><div class="td-deck-area"><nav id="td-breadcrumb" class="td-breadcrumb" aria-label="Touch-Deck-Ordner"></nav><p id="td-mode-note" class="td-help"></p><div id="td-grid" class="td-grid" aria-label="Touch-Deck-Tasten"></div></div><aside id="td-editor" class="td-editor td-edit-only" aria-label="Taste bearbeiten"></aside></div></article>
       <details class="td-panel td-mobile-panel"><summary>Handy &amp; Tablet verbinden <span id="td-mobile-summary" class="td-help"></span></summary><p class="td-help">Im selben privaten WLAN die Adresse im Browser öffnen und mit der PIN verbinden. Nur wenn du die Verbindung einschaltest, läuft der kleine Handy-Dienst. Deine Tasten funktionieren dann auch im Gaming-Modus.</p><div id="td-mobile"></div></details>
-      <p class="td-footnote">Das Touch Deck nutzt die vorhandenen Batto-Aktionen. PC-Werte werden nur bei sichtbaren Messwert-Tasten aktualisiert.</p>`;
+      <p class="td-footnote td-main-only">Das Touch Deck nutzt die vorhandenen Batto-Aktionen. PC-Werte werden nur bei sichtbaren Messwert-Tasten aktualisiert.</p>
+      <dialog id="td-packages-dialog" class="td-dialog" aria-labelledby="td-packages-title"><div class="td-dialog-heading"><h3 id="td-packages-title">Plugins &amp; Icon-Pakete</h3><button id="td-packages-close" aria-label="Paketverwaltung schließen">Schließen</button></div><p class="td-help">Lade eine .streamDeckPlugin- oder .streamDeckIconPack-Datei. Plugins können zusätzliche Programme oder Dienste benötigen. Nicht jedes Stream-Deck-Plugin unterstützt diesen Host.</p><button id="td-package-import" class="primary">Paket laden</button><div id="td-packages-list"></div><p id="td-packages-message" class="td-help" role="status"></p></dialog>
+      <dialog id="td-library" class="td-dialog" aria-labelledby="td-library-title"><div class="td-dialog-heading"><h3 id="td-library-title">Icon auswählen</h3><button id="td-library-close">Schließen</button></div><label>Icon-Paket<select id="td-library-pack"></select></label><div id="td-library-icons" class="td-icon-library"></div><div class="td-toolbar"><button id="td-library-prev">Zurück</button><span id="td-library-page" class="td-help"></span><button id="td-library-next">Weiter</button><div class="td-spacer"></div><button id="td-library-import">Icon-Paket laden</button></div><p id="td-library-message" class="td-help" role="status"></p></dialog>`;
     on('save', save);
     on('discard', () => ask('Alle ungespeicherten Änderungen am Touch Deck verwerfen?', () => { adopt(state, true); message('Änderungen verworfen.'); }));
-    on('mode', async () => { if (!editing) await refreshCatalog(); editing = !editing; selected = -1; render(); });
+    on('mode', async () => { if (detached) { await call('edit-main'); return; } if (!editing) { await refreshCatalog(); await refreshPackages(); } editing = !editing; selected = -1; render(); });
+    on('detach', () => call('detach'));
+    on('attach', () => call('attach'));
+    on('top', async () => { const next = await call('always-on-top', !(state?.window?.alwaysOnTop ?? state?.alwaysOnTop)); if (next?.profiles) adopt(next); });
+    on('package-open', async () => { await refreshPackages(); renderPackages(); $('packages-dialog').showModal(); });
+    on('package-import', async () => { try { const next = await call('package-import'); if (next && !next.canceled) { packages = next; packagesLoaded = true; renderPackages(); renderEditor(); $('packages-message').textContent = 'Paket geladen. Die Aktionen und Icons stehen jetzt im Tasten-Editor bereit.'; } } catch (error) { $('packages-message').textContent = cleanError(error); } });
+    on('packages-close', () => $('packages-dialog').close());
+    on('library-close', closeLibrary);
+    $('library').addEventListener('close', () => { libraryRequest++; libraryItem = null; $('library-icons').replaceChildren(); });
+    $('library-pack').onchange = run(async () => { libraryPack = $('library-pack').value; libraryOffset = 0; await loadLibraryPage(); });
+    on('library-prev', async () => { libraryOffset = Math.max(0, libraryOffset - 24); await loadLibraryPage(); });
+    on('library-next', async () => { libraryOffset += 24; await loadLibraryPage(); });
+    on('library-import', async () => { try { const next = await call('package-import'); if (next && !next.canceled) { packages = next; packagesLoaded = true; libraryPack = packages.iconPacks?.at(-1)?.id || ''; libraryOffset = 0; renderLibraryPacks(); await loadLibraryPage(); } } catch (error) { $('library-message').textContent = cleanError(error); } });
     on('confirm-yes', async () => { const next = confirmCallback; closeConfirm(); await next?.(); });
     on('confirm-no', closeConfirm);
     on('profile-add', () => {
       if (draft.profiles.length >= 20) throw Error('Es sind höchstens 20 Profile möglich.');
       let name = 'Neues Profil', suffix = 2;
       while (draft.profiles.some(p => p.name === name)) name = 'Neues Profil ' + suffix++;
-      const p = {id:uid(),name,columns:5,rows:3,buttons:Array(15).fill(null)};
+      const p = {id:uid(),name,columns:5,rows:3,keySize:'auto',buttons:Array(15).fill(null)};
       draft.profiles.push(p); draft.activeProfile = p.id; path = []; selected = -1; changed(); render(); pendingFocus = 'profile-name';
     });
     on('profile-delete', () => {
@@ -86,6 +110,9 @@
     });
     $('profile').onchange = run(async () => { const wasDirty = dirty; draft.activeProfile = $('profile').value; path = []; selected = -1; closeConfirm(); changed(); render(); if (!wasDirty) { await save(); message(`Profil „${profile().name}“ ausgewählt.`); } });
     $('profile-name').oninput = () => { profile().name = $('profile-name').value; changed(); const selectedOption = $('profile').selectedOptions[0]; if (selectedOption) selectedOption.textContent = profile().name || 'Unbenannt'; renderBreadcrumb(); };
+    $('key-size-mode').onchange = run(async () => { profile().keySize = $('key-size-mode').value === 'auto' ? 'auto' : Number($('key-size').value); changed(); renderSize(); applySize(); if (detached) await save(); });
+    $('key-size').oninput = () => { profile().keySize = Number($('key-size').value); changed(); $('key-size-value').textContent = profile().keySize + ' px'; applySize(); };
+    $('key-size').onchange = run(async () => { if (detached) await save(); });
     $('grid-size').onchange = () => {
       const p = profile(), [columns, rows] = $('grid-size').value.split('x').map(Number), size = columns * rows;
       const overflow = list => list.slice(size).some(Boolean) || list.some(item => item?.type === 'folder' && overflow(item.buttons || []));
@@ -135,20 +162,30 @@
   function adopt(next, force = false) {
     if (!next?.profiles?.length) return;
     const previous = draft && JSON.stringify(draft);
+    const previousSaved = state?.profiles && JSON.stringify(configOf(state));
+    const nextSaved = JSON.stringify(configOf(next));
+    if (!force && dirty && previousSaved && previousSaved !== nextSaved) conflict = true;
     state = clone(next);
+    if (next.presentation) presentation = next.presentation;
     if (force || !dirty) {
       const incoming = configOf(next);
       // Keep handlers attached to the same draft objects on metadata-only updates.
       if (force || previous !== JSON.stringify(incoming)) draft = incoming;
-      dirty = false; normalizePath(); if (force) { path = []; selected = -1; }
+      dirty = false; conflict = false; draftRevision = next.revision; normalizePath(); if (force) { path = []; selected = -1; }
     }
     if (force || previous !== JSON.stringify(draft)) render();
-    else { renderMobile(); updateSensorValues(); status(); }
+    else { renderMobile(); updateSensorValues(); updatePluginValues(); status(); }
     if (next.error) message(next.error, true);
   }
   async function save() {
+    if (conflict) {
+      if (detached) { adopt(state, true); throw Error('Das Touch Deck wurde inzwischen im Hauptfenster geändert. Der aktuelle Stand wurde geladen; stelle die Größe bei Bedarf erneut ein.'); }
+      throw Error('Das Touch Deck wurde inzwischen in einem anderen Fenster geändert. Verwirf deinen Entwurf, um den aktuellen Stand zu laden.');
+    }
     if (!draft.profiles.every(p => p.name.trim())) throw Error('Bitte jedem Profil einen Namen geben.');
-    const next = await call('save', clone(draft));
+    let next;
+    try { next = await call('save', {...clone(draft),baseRevision:draftRevision}); }
+    catch (error) { if (detached) adopt(state, true); throw error; }
     const oldPath = [...path], oldSelected = selected;
     adopt(next, true); path = oldPath; selected = oldSelected; normalizePath(); render(); message('Touch Deck gespeichert. Die Tasten sind auch auf verbundenen Geräten verfügbar.');
   }
@@ -161,9 +198,34 @@
     if (!sizes.some(([id]) => id === size)) sizes.push([size,`${profile().columns} × ${profile().rows} · importiertes Raster`]);
     $('grid-size').innerHTML = sizes.map(([id,name]) => option(id,name,size)).join('');
     $('profile-delete').disabled = draft.profiles.length <= 1;
+    renderSize();
     renderDeck(); renderMobile(); status();
   }
-  function renderDeck() { renderBreadcrumb(); renderGrid(); renderEditor(); scheduleSensors(); }
+  function renderSize() {
+    const size = profile().keySize, custom = Number.isFinite(size);
+    $('key-size-mode').value = custom ? 'custom' : 'auto';
+    $('key-size-wrap').hidden = !custom;
+    if (custom) $('key-size').value = String(size);
+    $('key-size-value').textContent = (custom ? size : $('key-size').value) + ' px';
+  }
+  function applySize() {
+    const size = profile().keySize;
+    $('grid').classList.toggle('td-grid-sized', Number.isFinite(size));
+    if (Number.isFinite(size)) $('grid').style.setProperty('--td-key-size', `${Math.max(80, Math.min(220, size))}px`);
+    else $('grid').style.removeProperty('--td-key-size');
+  }
+  function fitDetachedKeys() {
+    if (!detached || !initialized || !active()) return;
+    cancelAnimationFrame(layoutFrame);
+    layoutFrame = requestAnimationFrame(() => {
+      const grid = $('grid');
+      if (!grid || Number.isFinite(profile()?.keySize)) return;
+      const css = getComputedStyle(grid), rows = profile().rows;
+      const available = innerHeight - grid.getBoundingClientRect().top - 34 - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom) - (rows - 1) * parseFloat(css.rowGap);
+      grid.style.setProperty('--td-tile-height', `${Math.max(80, Math.min(240, Math.floor(available / rows)))}px`);
+    });
+  }
+  function renderDeck() { renderBreadcrumb(); renderGrid(); renderEditor(); scheduleSensors(); sendPresence(); }
   function renderBreadcrumb() {
     const crumbs = [{name:profile().name || 'Unbenannt', depth:0}];
     let items = profile().buttons;
@@ -182,12 +244,36 @@
     $('grid').style.setProperty('--td-columns', profile().columns);
     $('grid').style.setProperty('--td-rows', profile().rows);
     $('grid').classList.toggle('td-grid-dense', profile().columns > 5);
+    applySize();
     $('grid').innerHTML = page().map((item, index) => {
-      const icon = safeIcon(item?.icon), title = item?.title || (item?.type === 'folder' ? 'Ordner' : `Taste ${index + 1}`);
-      return `<button class="td-key${!item ? ' td-empty' : ''}${editing && selected === index ? ' td-selected' : ''}" data-td-key="${index}" draggable="${editing && !!item}" aria-label="${esc(!item ? (editing ? 'Leere Taste ' + (index + 1) + ' belegen' : 'Leere Taste ' + (index + 1)) : title)}"${editing ? ` aria-pressed="${selected === index}"` : ''}${!item && !editing ? ' disabled' : ''}><span class="td-key-number">${index + 1}</span>${item ? `<span class="td-key-art">${icon ? `<img src="${icon}" alt="" draggable="false">` : `<span class="td-symbol" aria-hidden="true">${esc(item.symbol || (item.type === 'folder' ? '📁' : '◆'))}</span>`}${item.type === 'sensor' ? `<strong class="td-key-value" data-td-sensor-value="${index}">${esc(sensorText(item))}</strong>` : ''}</span><span class="td-key-title">${esc(title)}</span><span class="td-key-kind">${item.type === 'folder' ? 'Ordner öffnen' : item.type === 'sensor' ? 'PC-Messwert' : item.steps?.length > 1 ? item.steps.length + ' Aktionen' : ''}</span>` : '<span class="td-plus" aria-hidden="true">+</span><span class="td-key-title">' + (editing ? 'Belegen' : 'Frei') + '</span>'}</button>`;
+      const live = item?.type === 'plugin' ? presentation[item.id] || {} : {};
+      const icon = safeIcon(item?.icon) || safeIcon(live.image), title = item?.title || (item?.type === 'folder' ? 'Ordner' : `Taste ${index + 1}`);
+      return `<button class="td-key${!item ? ' td-empty' : ''}${editing && selected === index ? ' td-selected' : ''}" data-td-key="${index}" draggable="${editing && !!item}" aria-label="${esc(!item ? (editing ? 'Leere Taste ' + (index + 1) + ' belegen' : 'Leere Taste ' + (index + 1)) : title)}"${editing ? ` aria-pressed="${selected === index}"` : ''}${!item && !editing ? ' disabled' : ''}><span class="td-key-number">${index + 1}</span>${item ? `<span class="td-key-art">${icon ? `<img src="${icon}" alt="" draggable="false">` : `<span class="td-symbol" aria-hidden="true">${esc(item.symbol || (item.type === 'folder' ? '📁' : '◆'))}</span>`}${item.type === 'sensor' ? `<strong class="td-key-value" data-td-sensor-value="${index}">${esc(sensorText(item))}</strong>` : ''}</span><span class="td-key-title">${esc(title)}</span><span class="td-key-kind">${item.type === 'folder' ? 'Ordner öffnen' : item.type === 'sensor' ? 'PC-Messwert' : item.type === 'plugin' ? esc(live.error || live.title || 'Plugin') : item.steps?.length > 1 ? item.steps.length + ' Aktionen' : ''}</span>` : '<span class="td-plus" aria-hidden="true">+</span><span class="td-key-title">' + (editing ? 'Belegen' : 'Frei') + '</span>'}</button>`;
     }).join('');
   }
   function updateSensorValues() { $('grid')?.querySelectorAll('[data-td-sensor-value]').forEach(el => { const item = page()[Number(el.dataset.tdSensorValue)]; if (item?.type === 'sensor') el.textContent = sensorText(item); }); }
+  function updatePluginValues() {
+    if (!initialized || !active()) return;
+    $('grid')?.querySelectorAll('[data-td-key]').forEach(tile => {
+      const item = page()[Number(tile.dataset.tdKey)];
+      if (item?.type !== 'plugin') return;
+      const live = presentation[item.id] || {}, value = live.error || live.title || 'Plugin';
+      const kind = tile.querySelector('.td-key-kind');
+      if (kind && kind.textContent !== value) { kind.textContent = value; kind.title = value; }
+      if (item.icon) return;
+      const icon = safeIcon(live.image), art = tile.querySelector('.td-key-art');
+      if (!art) return;
+      if (icon) { let img = art.querySelector('img'); if (!img) { img = document.createElement('img'); img.alt = ''; img.draggable = false; art.replaceChildren(img); } if (img.getAttribute('src') !== icon) img.src = icon; }
+      else if (art.querySelector('img')) { const span = document.createElement('span'); span.className = 'td-symbol'; span.textContent = item.symbol || '◆'; span.setAttribute('aria-hidden','true'); art.replaceChildren(span); }
+    });
+  }
+  function sendPresence() {
+    if (!initialized || !profile()) return;
+    const next = {profileId:profile().id,visible:active()}, key = JSON.stringify(next);
+    if (key === presenceKey) return;
+    presenceKey = key;
+    void call('presence', next).catch(() => { presenceKey = ''; });
+  }
   function defaultStep(id = 'listen') {
     const definition = catalog.actions.find(item => item.id === id) || catalog.actions[0];
     if (!definition) return {action:'listen'};
@@ -200,9 +286,10 @@
   }
   function createButton(type) {
     if (type === 'folder' && path.length >= 4) { message('Ordner können höchstens vier Ebenen tief angelegt werden.', true); return false; }
-    const item = {id:uid(),type,title:type === 'folder' ? 'Neuer Ordner' : type === 'sensor' ? 'PC-Messwert' : 'Jarvis fragen',symbol:type === 'folder' ? '📁' : type === 'sensor' ? '🌡' : '🎙'};
+    const item = {id:uid(),type,title:type === 'folder' ? 'Neuer Ordner' : type === 'sensor' ? 'PC-Messwert' : type === 'plugin' ? 'Plugin-Aktion' : 'Jarvis fragen',symbol:type === 'folder' ? '📁' : type === 'sensor' ? '🌡' : type === 'plugin' ? '◆' : '🎙'};
     if (type === 'folder') item.buttons = Array(profile().columns * profile().rows).fill(null);
     else if (type === 'sensor') item.sensorId = state?.sensors?.[0]?.id || '';
+    else if (type === 'plugin') { item.pluginId = packages.plugins?.[0]?.id || ''; item.actionId = packages.plugins?.[0]?.actions?.[0]?.id || ''; }
     else item.steps = [defaultStep()];
     page()[selected] = item; changed(); renderGrid(); renderEditor(); scheduleSensors(); return true;
   }
@@ -217,12 +304,12 @@
     if (selected < 0) { editor.innerHTML = '<h3>Taste bearbeiten</h3><p class="td-help">Wähle eine Taste im Deck. Du kannst Aktionen verbinden, Ordner anlegen oder einzelne PC-Werte anzeigen.</p>'; return; }
     const item = current();
     if (!item) {
-      editor.innerHTML = `<h3>Taste ${selected + 1} belegen</h3><div class="td-create"><button id="td-create-action">Aktion / Kombination</button><button id="td-create-folder">Ordner</button><button id="td-create-sensor">PC-Messwert</button></div><p class="td-help">Eine Kombination führt bis zu acht Aktionen nacheinander aus.</p>`;
-      ['action','folder','sensor'].forEach(type => on('create-' + type, () => createButton(type)));
+      editor.innerHTML = `<h3>Taste ${selected + 1} belegen</h3><div class="td-create"><button id="td-create-action">Aktion / Kombination</button><button id="td-create-plugin">Plugin-Aktion</button><button id="td-create-folder">Ordner</button><button id="td-create-sensor">PC-Messwert</button></div><p class="td-help">Eine Kombination führt bis zu acht Aktionen nacheinander aus.</p>`;
+      ['action','folder','sensor','plugin'].forEach(type => on('create-' + type, () => createButton(type)));
       return;
     }
-    editor.innerHTML = `<h3>Taste ${selected + 1}</h3><label>Beschriftung<input id="td-title" maxlength="80" value="${esc(item.title)}"></label><label>Art<select id="td-type">${[['action','Aktion / Kombination'],['folder','Ordner'],['sensor','PC-Messwert']].map(([id, name]) => option(id,name,item.type)).join('')}</select></label>
-      <div class="td-symbol-row"><label>Symbol<select id="td-symbol">${[...new Set([item.symbol || '◆', ...symbols])].map(symbol => option(symbol,symbol,item.symbol || '◆')).join('')}</select></label><button id="td-icon">Eigenes Bild</button>${safeIcon(item.icon) ? '<button id="td-icon-remove" title="Eigenes Bild entfernen">Bild entfernen</button>' : ''}</div>
+    editor.innerHTML = `<h3>Taste ${selected + 1}</h3><label>Beschriftung<input id="td-title" maxlength="80" value="${esc(item.title)}"></label><label>Art<select id="td-type">${[['action','Aktion / Kombination'],['plugin','Plugin-Aktion'],['folder','Ordner'],['sensor','PC-Messwert']].map(([id, name]) => option(id,name,item.type)).join('')}</select></label>
+      <div class="td-symbol-row"><label>Symbol<select id="td-symbol">${[...new Set([item.symbol || '◆', ...symbols])].map(symbol => option(symbol,symbol,item.symbol || '◆')).join('')}</select></label><button id="td-icon">Eigenes Bild</button><button id="td-icon-library">Icon-Bibliothek</button>${safeIcon(item.icon) ? '<button id="td-icon-remove" title="Eigenes Bild entfernen">Bild entfernen</button>' : ''}</div>
       <div id="td-type-editor"></div><hr><label>Tauschen mit<select id="td-move-target">${page().map((target, index) => index === selected ? '' : option(index, `${index + 1} · ${target?.title || 'Frei'}`, '')).join('')}</select></label><button id="td-move">Tasten tauschen</button><button id="td-delete" class="td-danger">Taste löschen</button>`;
     $('title').oninput = () => { item.title = $('title').value; changed(); renderGrid(); };
     $('symbol').onchange = () => { item.symbol = $('symbol').value; changed(); renderGrid(); };
@@ -233,6 +320,7 @@
       if (!createButton(type)) { renderEditor(); return; } Object.assign(current(), {id,title,symbol}); if (icon) current().icon = icon; renderGrid(); renderEditor();
     };
     on('icon', async () => { const result = await call('icon'); const value = typeof result === 'string' ? result : result?.dataPNG || result?.icon; if (safeIcon(value)) { item.icon = value; changed(); renderGrid(); renderEditor(); } });
+    on('icon-library', async () => { await refreshPackages(); libraryItem = item; libraryPack = packages.iconPacks?.some(pack => pack.id === libraryPack) ? libraryPack : packages.iconPacks?.[0]?.id || ''; libraryOffset = 0; renderLibraryPacks(); $('library').showModal(); await loadLibraryPage(); });
     on('icon-remove', () => { delete item.icon; changed(); renderGrid(); renderEditor(); });
     on('move', () => swap(selected, Number($('move-target').value)));
     on('delete', () => ask(`„${item.title || 'Taste ' + (selected + 1)}“${item.type === 'folder' ? ' mit allen enthaltenen Tasten' : ''} löschen?`, () => { page()[selected] = null; changed(); renderGrid(); renderEditor(); scheduleSensors(); }));
@@ -244,7 +332,60 @@
       $('type-editor').innerHTML = `<label>Messwert<select id="td-sensor">${!known ? option(item.sensorId || '', item.sensorId ? 'Gespeicherter Sensor · derzeit nicht verfügbar' : 'Messwert auswählen', item.sensorId) : ''}${sensors.map(sensor => option(sensor.id, sensor.name + (sensor.unit ? ' (' + sensor.unit + ')' : ''), item.sensorId)).join('')}</select></label><p class="td-help">Nicht verfügbare Messwerte zeigen „—“. Lüfterdrehzahlen und Prozentwerte erscheinen nur, wenn der Sensor sie liefert.</p><button id="td-sensors-refresh">Messwerte neu laden</button>`;
       $('sensor').onchange = () => { item.sensorId = $('sensor').value; changed(); renderGrid(); scheduleSensors(); };
       on('sensors-refresh', async () => { const next = await call('state', {sensorsOnly:true}); state.sensors = next.sensors || []; renderEditor(); updateSensorValues(); message('Verfügbare PC-Messwerte geladen.'); });
-    } else renderSteps(item);
+    } else if (item.type === 'plugin') renderPluginEditor(item);
+    else renderSteps(item);
+  }
+  async function refreshPackages() {
+    const next = await call('packages');
+    if (next && Array.isArray(next.plugins) && Array.isArray(next.iconPacks)) { packages = next; packagesLoaded = true; }
+  }
+  function renderPackages() {
+    const plugins = packages.plugins || [], packs = packages.iconPacks || [];
+    $('packages-list').innerHTML = `<h4>Plugins</h4>${plugins.length ? '<ul class="td-package-list">' + plugins.map(plugin => `<li><strong>${esc(plugin.name)}</strong><span>${esc(plugin.version || '')} · ${plugin.actions?.length || 0} Aktionen</span>${typeof plugin.compatibility === 'string' ? `<small>${esc(plugin.compatibility)}</small>` : ''}</li>`).join('') + '</ul>' : '<p class="td-help">Noch keine Plugins geladen. Batto-Aktionen kannst du auch ohne Plugin direkt belegen.</p>'}<h4>Icon-Pakete</h4>${packs.length ? '<ul class="td-package-list">' + packs.map(pack => `<li><strong>${esc(pack.name)}</strong><span>${Number(pack.count) || 0} Icons${pack.version ? ' · ' + esc(pack.version) : ''}</span></li>`).join('') + '</ul>' : '<p class="td-help">Noch kein Icon-Paket geladen. Eigene Bilder lassen sich im Tasten-Editor auswählen.</p>'}`;
+  }
+  function renderLibraryPacks() {
+    $('library-pack').innerHTML = packages.iconPacks?.length ? packages.iconPacks.map(pack => option(pack.id, `${pack.name} · ${pack.count || 0} Icons`, libraryPack)).join('') : option('', 'Noch keine Icon-Pakete', '');
+  }
+  function closeLibrary() { $('library').close(); pendingFocus = 'icon-library'; }
+  async function loadLibraryPage() {
+    const request = ++libraryRequest;
+    libraryTotal = 0;
+    $('library-icons').replaceChildren();
+    $('library-message').textContent = libraryPack ? 'Icons werden geladen …' : 'Lade zuerst ein Icon-Paket oder wähle im Editor „Eigenes Bild“.';
+    $('library-page').textContent = '';
+    $('library-prev').disabled = true; $('library-next').disabled = true;
+    if (!libraryPack) return;
+    try {
+      const result = await call('pack-icons', {packId:libraryPack,offset:libraryOffset,limit:24});
+      if (request !== libraryRequest || !$('library').open) return;
+      const icons = result?.icons || [], total = Number(result?.total) || 0;
+      libraryTotal = total;
+      $('library-message').textContent = icons.length ? 'Tippe auf ein Icon, um es auf die gewählte Taste zu setzen.' : 'Dieses Paket enthält keine passenden Icons.';
+      $('library-page').textContent = total ? `${libraryOffset + 1}–${Math.min(libraryOffset + icons.length, total)} von ${total}` : '0 Icons';
+      $('library-prev').disabled = libraryOffset <= 0;
+      $('library-next').disabled = libraryOffset + icons.length >= total;
+      $('library-icons').innerHTML = icons.map((icon, index) => `<button class="td-library-icon" data-td-library-icon="${index}" title="${esc(icon.name)}" aria-label="Icon ${esc(icon.name)} auswählen">${safeIcon(icon.image) ? `<img src="${icon.image}" alt="" loading="lazy">` : '<span aria-hidden="true">◆</span>'}<span>${esc(icon.name)}</span></button>`).join('');
+      $('library-icons').querySelectorAll('[data-td-library-icon]').forEach(button => { button.onclick = run(async () => {
+        if (!libraryItem) return;
+        const selectedIcon = icons[Number(button.dataset.tdLibraryIcon)];
+        try {
+          const next = await call('pack-icon', {packId:libraryPack,iconId:selectedIcon.id});
+          const value = typeof next === 'string' ? next : next?.dataPNG || next?.icon;
+          if (!safeIcon(value)) throw Error('Dieses Icon konnte nicht als Bild geladen werden.');
+          if (!libraryItem) return;
+          libraryItem.icon = value; changed(); renderGrid(); renderEditor(); closeLibrary(); message('Icon auf die Taste gesetzt. Zum Übernehmen speichern.');
+        } catch (error) { $('library-message').textContent = cleanError(error); }
+      }); });
+    } catch (error) { if (request === libraryRequest) $('library-message').textContent = cleanError(error); }
+  }
+  function renderPluginEditor(item) {
+    const plugins = packages.plugins || [], plugin = plugins.find(value => value.id === item.pluginId);
+    const actions = plugin?.actions || [], action = actions.find(value => value.id === item.actionId);
+    $('type-editor').innerHTML = `<label>Plugin<select id="td-plugin">${!plugin ? option(item.pluginId || '', item.pluginId ? 'Gespeichertes Plugin · nicht verfügbar' : 'Plugin auswählen', item.pluginId) : ''}${plugins.map(value => option(value.id,value.name,item.pluginId)).join('')}</select></label><label>Plugin-Aktion<select id="td-plugin-action">${!action ? option(item.actionId || '', item.actionId ? 'Gespeicherte Aktion · nicht verfügbar' : 'Aktion auswählen', item.actionId) : ''}${actions.map(value => option(value.id,value.name,item.actionId)).join('')}</select></label><button id="td-plugin-settings"${!action?.hasInspector ? ' disabled' : ''}>Plugin-Einstellungen</button><p class="td-help">${action?.hasInspector ? 'Öffnet die Einstellungen dieses Plugins. Die Tastenbelegung wird vorher gespeichert.' : action ? 'Diese Aktion bietet kein eigenes Einstellungsfenster.' : 'Lade ein Plugin über „Plugins & Icons“ und wähle eine Aktion aus.'}</p>${typeof plugin?.compatibility === 'string' ? `<p class="td-help">${esc(plugin.compatibility)}</p>` : ''}<button id="td-plugin-load">Plugin laden</button>`;
+    $('plugin').onchange = () => { item.pluginId = $('plugin').value; const next = plugins.find(value => value.id === item.pluginId); item.actionId = next?.actions?.[0]?.id || ''; changed(); renderPluginEditor(item); };
+    $('plugin-action').onchange = () => { item.actionId = $('plugin-action').value; changed(); renderPluginEditor(item); };
+    on('plugin-settings', async () => { const buttonId = item.id; if (dirty) await save(); const result = await call('plugin-settings', {buttonId}); if (result?.ok === false) throw Error(result.error || 'Die Plugin-Einstellungen konnten nicht geöffnet werden.'); });
+    on('plugin-load', async () => { const next = await call('package-import'); if (next && !next.canceled) { packages = next; packagesLoaded = true; renderPluginEditor(item); message('Plugin geladen. Wähle jetzt die gewünschte Aktion.'); } });
   }
   function renderSteps(item) {
     const steps = item.steps || (item.steps = [defaultStep()]);
@@ -265,7 +406,7 @@
     on('step-add', () => { if (steps.length < 8) { steps.push(defaultStep()); changed(); renderSteps(item); renderGrid(); } });
   }
   function renderMobile() {
-    if (!state || !$('mobile')) return;
+    if (!state || !$('mobile') || detached) return;
     const mobile = state.mobile || {}, urls = Array.isArray(mobile.urls) ? mobile.urls : [];
     const clients = Array.isArray(mobile.clients) ? mobile.clients.length : Number(mobile.clients || 0);
     $('mobile-summary').textContent = mobile.running ? `· Aktiv · ${clients} verbunden` : '· Aus';
@@ -306,14 +447,17 @@
       const [next, actions] = await Promise.all([call('state'), call('catalog')]);
       if (!next?.profiles?.length) throw Error('Touch-Deck-Profile konnten nicht geladen werden.');
       catalog = actions || {actions:[]};
-      state = clone(next); draft = configOf(next); initialized = true; build(); render();
+      state = clone(next); draft = configOf(next); draftRevision = next.revision; presentation = next.presentation || {}; initialized = true; build(); render();
       if (next.error) message(next.error, true);
     } catch (error) { root.innerHTML = `<p class="td-message td-error" role="alert">${esc(cleanError(error))}</p><button id="td-retry">Erneut laden</button>`; $('retry').onclick = () => { void init(); }; }
     finally { loading = false; }
   }
-  document.addEventListener('batto:view', () => { if (active()) { if (initialized) void refreshCatalog(); else void init(); scheduleSensors(); } else { clearTimeout(sensorTimer); sensorTimer = null; } });
-  document.addEventListener('visibilitychange', scheduleSensors);
-  window.batto.onPresentationState?.(() => queueMicrotask(scheduleSensors));
+  document.addEventListener('batto:view', () => { if (active()) { if (initialized) { void refreshCatalog(); updatePluginValues(); } else void init(); scheduleSensors(); } else { clearTimeout(sensorTimer); sensorTimer = null; } sendPresence(); });
+  document.addEventListener('visibilitychange', () => { scheduleSensors(); sendPresence(); updatePluginValues(); fitDetachedKeys(); });
+  window.addEventListener('resize', fitDetachedKeys);
+  window.addEventListener('focus', sendPresence);
+  window.batto.onPresentationState?.(() => queueMicrotask(() => { scheduleSensors(); sendPresence(); updatePluginValues(); }));
   window.batto.onTouchState?.(next => { if (initialized) adopt(next); });
+  window.batto.onTouchPresentation?.(next => { presentation = next || {}; updatePluginValues(); });
   if (active()) void init();
 })();

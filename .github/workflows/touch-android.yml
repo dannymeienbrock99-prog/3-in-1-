@@ -1,0 +1,32 @@
+name: Android Touch Deck check
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['mobile/android/**', 'scripts/build-touch-android.ps1', '.github/workflows/touch-android.yml']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare Android SDK
+        shell: pwsh
+        run: |
+          $manager = Join-Path $env:ANDROID_HOME 'cmdline-tools/latest/bin/sdkmanager.bat'
+          & $manager 'platforms;android-36' 'build-tools;36.0.0'
+          if ($LASTEXITCODE -ne 0) { throw 'Android SDK setup failed' }
+      - name: Build and verify isolated test APK
+        shell: pwsh
+        run: ./scripts/build-touch-android.ps1 -DebugBuild
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Batto-Touch-Deck-CI-Test
+          path: dist/Extras/*-ci-test.apk
+          retention-days: 7

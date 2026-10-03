@@ -36,3 +36,14 @@ jarvis-fan-alert-state.json
 dual-stream-secrets.json
 touch-deck.json
 touch-deck.before-import.json
+touch-plugin-settings.json
+touch-packages.json
+touch-window.json
+**/TouchPackages/
+*.streamDeckIconPack
+*.apk
+*.jks
+*.keystore
+*.p12
+*.dpapi
+/mobile/android/build/

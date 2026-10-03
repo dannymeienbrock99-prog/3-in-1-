@@ -8,8 +8,9 @@ const on = (channel, callback) => {
 
 contextBridge.exposeInMainWorld('batto', {
   suite: (command,value) => {if(!['control','catalog','reset-likes','import-status','import-obs-settings','state','command','settings','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
-  touch:(command,value)=>{if(!['state','catalog','save','press','icon','import','export','mobile-start','mobile-stop','mobile-pin'].includes(command))throw Error('Unbekannte Touch-Deck-Aktion');return ipcRenderer.invoke('touch:action',{command,value});},
+  touch:(command,value)=>{if(!['state','catalog','save','press','icon','import','export','mobile-start','mobile-stop','mobile-pin','detach','attach','edit-main','always-on-top','presence','packages','package-import','pack-icons','pack-icon','plugin-settings'].includes(command))throw Error('Unbekannte Touch-Deck-Aktion');return ipcRenderer.invoke('touch:action',{command,value});},
   onTouchState:cb=>on('touch:state',cb),
+  onTouchPresentation:cb=>on('touch:presentation',cb),
   onSuiteState:cb=>on('suite:state',cb),onJarvisMessage:cb=>on('suite:message',cb),onJarvisVoice:cb=>on('suite:voice',cb),
   dual:(command,value)=>{if(!['register-cameras','program','scene','background','state','save','probe','prepare','release','start','stop','mute','key','snapshot','library','import','export'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('dual:action',{command,value});},
   onDualState:cb=>on('dual:state',cb),onPresentationState:cb=>on('suite:presentation',cb),

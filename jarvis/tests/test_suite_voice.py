@@ -47,5 +47,12 @@ class SuiteVoiceTests(unittest.TestCase):
         for _ in range(50):s.dispatch({'command':'speak','text':'Geschenk'})
         time.sleep(.03);self.assertEqual(s.speaker.items,[]);self.assertLessEqual(s.jobs.qsize(),8)
         s.transcript('GPU Temperatur');self.wait(lambda:len(s.speaker.items)>0)
+    def test_live_volume_settings_keep_shared_dictionary_and_listening_session(self):
+        s,e=self.service();settings=s.settings;s.listening=True
+        s.dispatch({'command':'settings','value':{'speechVolume':35,'speechMuted':True}})
+        self.assertIs(s.settings,settings);self.assertIs(s.speaker.output_settings,settings)
+        self.assertEqual(settings['speech_volume'],35);self.assertTrue(settings['speech_muted']);self.assertTrue(s.listening)
+        s.dispatch({'command':'settings','value':{'speechVolume':140,'speechMuted':False}})
+        self.assertEqual(settings['speech_volume'],100);self.assertFalse(settings['speech_muted']);self.assertTrue(s.listening)
 
 if __name__=='__main__':unittest.main()

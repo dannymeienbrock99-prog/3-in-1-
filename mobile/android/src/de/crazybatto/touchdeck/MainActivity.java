@@ -21,6 +21,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -31,6 +33,7 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WebView web;
     private LinearLayout root, content;
+    private ImageView backdrop, loadingArtwork;
     private TextView notice;
     private String address;
     private boolean loadFailed;
@@ -40,7 +43,10 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         CookieManager.getInstance().setAcceptCookie(false);
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
+        FrameLayout canvas=new FrameLayout(this);canvas.setBackgroundColor(Color.rgb(12,10,10));
+        backdrop=artwork();canvas.addView(backdrop,new FrameLayout.LayoutParams(-1,-1));
+        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        canvas.addView(root,new FrameLayout.LayoutParams(-1,-1));
         root.setOnApplyWindowInsetsListener((view,insets)->{
             if (Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets edges = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
@@ -48,42 +54,52 @@ public final class MainActivity extends Activity {
             } else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
             return insets;
         });
-        setContentView(root); showConnection("");
+        setContentView(canvas); showConnection("");acceptIntent(getIntent());
         if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,()->{if(web!=null)disconnectAndReturn();else finish();});
+    }
+    private ImageView artwork(){ImageView image=new ImageView(this);image.setImageResource(R.drawable.branding);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setContentDescription(null);image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);return image;}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);acceptIntent(intent);}
+    private void acceptIntent(Intent intent){
+        if(intent==null || !Intent.ACTION_VIEW.equals(intent.getAction()))return;
+        String link=DeckAddress.fromAppLink(intent.getDataString());
+        if(link==null){showConnection("Dieser App-Link ist ungültig. Bitte den QR-Code auf deinem PC erneut scannen.");return;}
+        String origin=link.split("#",2)[0];getPreferences(MODE_PRIVATE).edit().putString("address",origin).apply();openDeck(link);
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private TextView text(String value,int size,int color) { TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(color);view.setPadding(0,dp(8),0,dp(8));return view; }
     private Button button(String title) { Button button=new Button(this);button.setText(title);button.setTextColor(TEXT);button.setAllCaps(false);button.setMinHeight(dp(48));return button; }
     private void stopTimeout() { if(timeout!=null)handler.removeCallbacks(timeout);timeout=null; }
     private void disposeWeb() {
-        stopTimeout(); if(web==null)return;
+        stopTimeout(); loadingArtwork=null;if(web==null)return;
         WebView previous=web;web=null;previous.stopLoading();
         if(previous.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)previous.getParent()).removeView(previous);
         previous.loadUrl("about:blank");previous.clearHistory();previous.destroy();
     }
     private void showConnection(String message) {
-        disposeWeb(); root.removeAllViews();
+        disposeWeb(); root.removeAllViews();backdrop.setVisibility(View.VISIBLE);root.setBackgroundColor(Color.TRANSPARENT);
         ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(24),dp(24),dp(24),dp(24));scroll.addView(content);root.addView(scroll);
+        View spacer=new View(this);content.addView(spacer,new LinearLayout.LayoutParams(-1,dp(190)));
+        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(20),dp(12),dp(20),dp(16));card.setBackgroundColor(Color.argb(235,17,17,15));content.addView(card);content=card;
         content.addView(text("BATTO 3-IN-1",12,GOLD)); content.addView(text("Touch Deck",30,TEXT));
         content.addView(text("Deine Tasten auf Handy und Tablet",18,GOLD));
-        content.addView(text("Am PC: Touch Deck → Handy / Tablet einschalten. Gib hier die dort angezeigte PC-Adresse ein. Beide Geräte müssen im selben privaten WLAN sein.",16,TEXT));
+        content.addView(text("Am PC: Touch Deck → Handy & Tablet verbinden einschalten. Scanne den QR-Code mit deiner Kamera-App und tippe auf „In Android-App öffnen“. Oder gib die PC-Adresse hier ein. Beide Geräte müssen im selben privaten WLAN sein.",16,TEXT));
         content.addView(text("PC-Adresse",14,GOLD));
         EditText input=new EditText(this);input.setTextColor(TEXT);input.setHintTextColor(Color.GRAY);input.setSingleLine(true);input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);input.setHint("192.168.1.20:17660");input.setText(getPreferences(MODE_PRIVATE).getString("address",""));content.addView(input);
         Button connect=button("Mit PC verbinden");content.addView(connect);
         TextView error=text(message,15,Color.rgb(255,181,169));content.addView(error);
         connect.setOnClickListener(view->{String parsed=DeckAddress.normalize(input.getText().toString());if(parsed==null){error.setText("Bitte die private IPv4-Adresse aus Batto eingeben, zum Beispiel 192.168.1.20:17660.");return;}getPreferences(MODE_PRIVATE).edit().putString("address",parsed).apply();openDeck(parsed);});
         content.addView(text("Die PIN gibst du anschließend auf der Verbindungsseite ein. Tasten und Icons kommen direkt von deinem PC. Hoch- und Querformat werden unterstützt.",14,TEXT));
-        content.addView(text("Version 1.7.0 · Keine Hintergrundübertragung, wenn die App nicht sichtbar ist.",12,GOLD));
+        content.addView(text("Version 1.8.0 · Keine Hintergrundübertragung, wenn die App nicht sichtbar ist.",12,GOLD));
     }
     private void openDeck(String url) {
         View focused=getCurrentFocus();if(focused!=null)((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(focused.getWindowToken(),0);
-        disposeWeb(); address=url;root.removeAllViews();
+        disposeWeb(); address=url.split("#",2)[0];root.removeAllViews();backdrop.setVisibility(View.GONE);root.setBackgroundColor(BG);
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(10),0,dp(10),0);
         TextView title=text("Batto Touch Deck",16,GOLD);bar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button change=button("PC wechseln");change.setTextSize(12);change.setOnClickListener(view->disconnectAndReturn());bar.addView(change);root.addView(bar);
         notice=text("Verbindung wird aufgebaut …",14,GOLD);notice.setPadding(dp(14),dp(6),dp(14),dp(6));root.addView(notice);
         web=new WebView(this);web.setBackgroundColor(BG);
-        WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setJavaScriptCanOpenWindowsAutomatically(false);settings.setSupportMultipleWindows(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setMediaPlaybackRequiresUserGesture(true);settings.setGeolocationEnabled(false);settings.setCacheMode(WebSettings.LOAD_NO_CACHE);settings.setUserAgentString(settings.getUserAgentString()+" BattoTouchDeck/1.7.0");
+        WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);settings.setJavaScriptCanOpenWindowsAutomatically(false);settings.setSupportMultipleWindows(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setMediaPlaybackRequiresUserGesture(true);settings.setGeolocationEnabled(false);settings.setCacheMode(WebSettings.LOAD_NO_CACHE);settings.setUserAgentString(settings.getUserAgentString()+" BattoTouchDeck/1.8.0");
         CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
@@ -97,12 +113,12 @@ public final class MainActivity extends Activity {
                 if(DeckAddress.sameOrigin(address,request.getUrl().toString()))return null;
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
             }
-            @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon){loadFailed=false;stopTimeout();notice.setText("Verbindung wird aufgebaut …");notice.setVisibility(View.VISIBLE);timeout=()->connectionError();handler.postDelayed(timeout,15000);}
-            @Override public void onPageFinished(WebView view,String url){stopTimeout();if(!loadFailed)notice.setVisibility(View.GONE);}
+            @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap favicon){loadFailed=false;stopTimeout();notice.setText("Verbindung wird aufgebaut …");notice.setVisibility(View.VISIBLE);if(loadingArtwork!=null)loadingArtwork.setVisibility(View.VISIBLE);timeout=()->connectionError();handler.postDelayed(timeout,15000);}
+            @Override public void onPageFinished(WebView view,String url){stopTimeout();if(!loadFailed){notice.setVisibility(View.GONE);if(loadingArtwork!=null)loadingArtwork.setVisibility(View.GONE);}}
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){if(request.isForMainFrame())connectionError();}
             @Override public void onReceivedHttpError(WebView view,WebResourceRequest request,WebResourceResponse response){if(request.isForMainFrame())connectionError();}
         });
-        root.addView(web,new LinearLayout.LayoutParams(-1,0,1));web.loadUrl(url);
+        FrameLayout frame=new FrameLayout(this);frame.addView(web,new FrameLayout.LayoutParams(-1,-1));loadingArtwork=artwork();loadingArtwork.setBackgroundColor(Color.rgb(12,10,10));frame.addView(loadingArtwork,new FrameLayout.LayoutParams(-1,-1));root.addView(frame,new LinearLayout.LayoutParams(-1,0,1));web.loadUrl(url);
     }
     private void connectionError(){if(loadFailed||web==null)return;loadFailed=true;stopTimeout();handler.post(()->showConnection("PC nicht erreichbar. Prüfe Batto, die PC-Adresse, WLAN und die Freigabe im privaten Windows-Netzwerk. Danach erneut verbinden."));}
     private void disconnectAndReturn(){

@@ -1,6 +1,6 @@
 {
   "name": "batto-3-in-1",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Batto 3-in-1 mit der Originaloberfläche von OBS Tool 2.4.7",
   "main": "electron/suite-entry.cjs",
   "author": "Crazy_Batto",
@@ -32,19 +32,21 @@
     "test:installer": "node scripts/installer-regression.cjs",
     "test:community": "node scripts/community-regression.cjs",
     "test:chat-extras": "node scripts/chat-extras-regression.cjs",
-    "test:touch": "node --test test/touch-deck.test.cjs test/touch-packages.test.cjs test/touch-demand.test.cjs",
+    "test:touch": "node --test test/touch-deck.test.cjs test/touch-packages.test.cjs test/touch-demand.test.cjs test/touch-audio*.test.cjs",
     "test:jarvis": "node --test test/jarvis-core.test.cjs test/suite-v247.test.cjs test/suite-120.test.cjs test/suite-140.test.cjs test/suite-150.test.cjs"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",
     "express": "5.1.0",
     "obs-websocket-js": "5.0.6",
+    "qrcode": "1.5.4",
     "ws": "8.18.3",
     "yauzl": "3.4.0"
   },
   "devDependencies": {
     "electron": "38.8.6",
-    "electron-builder": "26.0.12"
+    "electron-builder": "26.0.12",
+    "jsqr": "1.4.0"
   },
   "build": {
     "appId": "de.crazybatto.suite",
@@ -70,8 +72,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "src/assets/icon.png",
-      "signAndEditExecutable": false
+      "icon": "src/assets/app-icon.ico",
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,
@@ -128,6 +130,10 @@
       {
         "from": "../dist/Extras",
         "to": "Extras"
+      },
+      {
+        "from": "src/assets/app-icon.ico",
+        "to": "app-icon.ico"
       }
     ]
   }

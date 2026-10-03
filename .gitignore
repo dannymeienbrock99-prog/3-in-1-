@@ -47,3 +47,5 @@ touch-window.json
 *.p12
 *.dpapi
 /mobile/android/build/
+
+dual-window.json

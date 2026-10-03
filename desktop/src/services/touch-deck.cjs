@@ -34,7 +34,7 @@ function normalizeConfig(value,catalog){
   if(!Array.isArray(items)||items.length>size)throw Error('Dieses Tastenraster enthält zu viele Tasten.');
   return Array.from({length:size},(_,i)=>{
    const button=items[i];if(button==null)return null;
-   if(!record(button)||!['action','folder','sensor','plugin'].includes(button.type))throw Error('Unbekannte Tastenart.');
+   if(!record(button)||!['action','folder','sensor','plugin','volume'].includes(button.type))throw Error('Unbekannte Tastenart.');
    if(++count>LIMITS.buttons)throw Error('Das Touch Deck enthält zu viele Tasten.');
    const result={id:uniqueId(button.id),type:button.type,title:short(button.title,80,'Taste')||'Taste',symbol:short(button.symbol,16)};
    const icon=pngIcon(button.icon);if(icon)result.icon=icon;
@@ -44,6 +44,8 @@ function normalizeConfig(value,catalog){
    }else if(button.type==='plugin'){
     if(typeof button.pluginId!=='string'||!/^[a-zA-Z0-9_.-]{1,150}$/.test(button.pluginId)||typeof button.actionId!=='string'||!/^[a-zA-Z0-9_.-]{1,200}$/.test(button.actionId))throw Error('Bitte eine installierte Plugin-Aktion wählen.');
     result.pluginId=button.pluginId;result.actionId=button.actionId;
+   }else if(button.type==='volume'){
+    if(typeof button.volumeTarget!=='string'||!button.volumeTarget.trim()||button.volumeTarget.length>512||/[\x00-\x1f]/.test(button.volumeTarget))throw Error('Bitte ein Lautstärkeziel wählen.');result.volumeTarget=button.volumeTarget;
    }else if(button.type==='sensor'){
     if(typeof button.sensorId!=='string'||!button.sensorId||button.sensorId.length>512)throw Error('Bitte einen PC-Messwert wählen.');result.sensorId=button.sensorId;
    }else{
@@ -64,12 +66,12 @@ function normalizeConfig(value,catalog){
 }
 function defaultConfig(){
  const definitions=[['Jarvis fragen','◉',{action:'listen'}],['Jarvis still','◼',{action:'speech-stop'}],['Spiel','▶',{action:'scene',target:'Spiel'}],['Pause','Ⅱ',{action:'scene',target:'Pause'}],['Start','▶',{action:'scene',target:'Start'}],['Ende','■',{action:'scene',target:'Ende'}],['Kameras starten','▶',{action:'start',target:'both'}],['Kameras stoppen','■',{action:'stop',target:'both'}],['Kamera an / aus','◉',{action:'source',target:'camera',op:'toggle'}],['Spiel an / aus','▣',{action:'source',target:'game',op:'toggle'}],['Gaming-Modus','◇',{action:'gaming'}],['Batto öffnen','⌂',{action:'show'}],['Sprache an / aus','♫',{action:'jarvis',target:'voiceEnabled',op:'toggle'}],['Quellen vorbereiten','▧',{action:'prepare'}],['Video ausschalten','○',{action:'release'}]];
- return {version:1,activeProfile:'main',profiles:[{id:'main',name:'Mein Deck',columns:5,rows:3,buttons:definitions.map(([title,symbol,step],index)=>({id:'key-'+index,type:'action',title,symbol,steps:[step]}))}]};
+ return {version:1,activeProfile:'main',profiles:[{id:'main',name:'Mein Deck',columns:5,rows:3,buttons:definitions.map(([title,symbol,step],index)=>({id:'key-'+index,type:'action',title,symbol,steps:[step]}))},{id:'sound',name:'Sound',columns:3,rows:2,keySize:'auto',buttons:[{id:'sound-windows',type:'volume',title:'Windows',symbol:'♫',volumeTarget:'master'},{id:'sound-jarvis',type:'volume',title:'Jarvis',symbol:'♫',volumeTarget:'jarvis'},null,null,null,null]}]};
 }
 class TouchDeck extends EventEmitter{
- constructor({directory,controls,getSensors=()=>[],getPresentation=()=>({}),getVisualRevision=()=>0,getWindowStatus=()=>({}),pressPlugin,onRemoteActivity=()=>{},onRemoteDisconnect=()=>{},webRoot,host,port,now}={}){
+ constructor({directory,controls,audio,getSensors=()=>[],getPresentation=()=>({}),getVisualRevision=()=>0,getWindowStatus=()=>({}),pressPlugin,onRemoteActivity=()=>{},onRemoteDisconnect=()=>{},webRoot,host,port,now}={}){
   super();if(!directory||!controls)throw Error('Touch Deck benötigt einen Speicherort und die Tastensteuerung.');
-  Object.assign(this,{directory,controls,getSensors,getPresentation,getVisualRevision,getWindowStatus,pressPlugin,onRemoteActivity,onRemoteDisconnect});this.file=path.join(directory,'touch-deck.json');this.loadError='';this.config=defaultConfig();this.revision=1;
+  Object.assign(this,{directory,controls,audio,getSensors,getPresentation,getVisualRevision,getWindowStatus,pressPlugin,onRemoteActivity,onRemoteDisconnect});this.file=path.join(directory,'touch-deck.json');this.loadError='';this.config=defaultConfig();this.revision=1;
   if(fs.existsSync(this.file))try{if(fs.statSync(this.file).size>LIMITS.file)throw Error('Touch-Deck-Datei zu groß.');this.config=normalizeConfig(JSON.parse(fs.readFileSync(this.file,'utf8')),this.catalog());}catch(error){this.loadError='Gespeichertes Touch Deck konnte nicht geladen werden: '+error.message;}
   this.mobile=new TouchMobile({deck:this,webRoot,host,port,now,onChange:()=>this.emit('change',this.snapshot())});
  }
@@ -96,7 +98,24 @@ class TouchDeck extends EventEmitter{
   if(button.type==='folder')return {ok:true,type:'folder',path:[...(position.path||[]),position.index]};
   if(button.type==='sensor'){const sensor=this.sensors().find(s=>s.id===button.sensorId);return {ok:true,type:'sensor',value:sensor?.value??null,unit:sensor?.unit||'',name:sensor?.name||button.title};}
   if(button.type==='plugin'){if(!this.pressPlugin)throw Error('Plugin-Dienst ist noch nicht bereit.');return this.pressPlugin(button,position);}
+  if(button.type==='volume')return {ok:true,type:'volume'};
   return this.controls.execute({steps:copy(button.steps)});
+ }
+ async audioState({profileId=this.config.activeProfile,path:folderPath=[]}={}){
+  if(typeof profileId!=='string'||!Array.isArray(folderPath)||folderPath.length>LIMITS.depth||!folderPath.every(i=>Number.isInteger(i)&&i>=0&&i<48))throw Error('Ungültige Tastenposition.');
+  const profile=this.config.profiles.find(p=>p.id===profileId);if(!profile)throw Error('Dieses Profil gibt es nicht mehr.');
+  let buttons=profile.buttons;for(const i of folderPath){if(buttons[i]?.type!=='folder')throw Error('Diesen Ordner gibt es nicht mehr.');buttons=buttons[i].buttons;}
+  const selected=buttons.filter(b=>b?.type==='volume'),values=Object.create(null);if(!selected.length)return {values};
+  const states=this.audio?await this.audio.state([...new Set(selected.map(b=>b.volumeTarget))]):{};
+  for(const b of selected)values[b.id]=states[b.volumeTarget]||{volume:0,muted:false,available:false,name:b.title};return {values};
+ }
+ async volume(position){
+  if(!record(position)||Object.keys(position).some(k=>!['profileId','path','index','buttonId','baseRevision','volume','muted'].includes(k)))throw Error('Nur gespeicherte Lautstärketasten können geändert werden.');
+  const button=this.locate(position);if(position.buttonId!==button.id||position.baseRevision!==this.revision)throw Error('Diese Taste wurde geändert. Bitte aktuelle Daten laden.');if(button.type!=='volume')throw Error('Diese Taste ist kein Soundregler.');
+  const hasVolume=Object.hasOwn(position,'volume'),hasMuted=Object.hasOwn(position,'muted');
+  if(hasVolume===hasMuted||hasVolume&&(typeof position.volume!=='number'||!Number.isFinite(position.volume)||position.volume<0||position.volume>100)||hasMuted&&typeof position.muted!=='boolean')throw Error('Lautstärke muss zwischen 0 und 100 liegen.');
+  if(!this.audio)throw Error('Der Audiodienst ist noch nicht bereit.');
+  const value=await this.audio.set(button.volumeTarget,hasVolume?{volume:position.volume}:{muted:position.muted});if(!value?.available)throw Error('Dieses Audioprogramm oder Gerät ist gerade nicht verfügbar.');return {ok:true,value};
  }
  remoteReadings(){
   const sensors=this.sensors(),byId=new Map(sensors.map(s=>[s.id,s])),readings=Object.create(null);
@@ -115,6 +134,6 @@ class TouchDeck extends EventEmitter{
  mobileStart(){return this.mobile.start();}
  mobileStop(){return this.mobile.stop();}
  rotatePin(){return this.mobile.rotatePin();}
- async close(){await this.mobile.stop();this.removeAllListeners();}
+ async close(){await this.mobile.stop();await this.audio?.close();this.removeAllListeners();}
 }
 module.exports={TouchDeck,normalizeConfig,defaultConfig,LIMITS};

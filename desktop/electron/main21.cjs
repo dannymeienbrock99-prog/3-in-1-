@@ -63,7 +63,7 @@ async function showMainWindow(){
  restoringWindow=(async()=>{
   if(!mainWindow||mainWindow.isDestroyed()){
    const win=createWindow(false);mainWindow=win;
-   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow())app.quit();});
+   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow())app.quit();});
    await new Promise((resolve,reject)=>{win.webContents.once('did-finish-load',resolve);win.webContents.once('did-fail-load',()=>reject(Error('Batto-Fenster konnte nicht geladen werden.')));});
   }
   if(restoreDetached){restoreDetached=false;setChatDetached(true);}
@@ -76,7 +76,7 @@ function openFromTray(){void showMainWindow().catch(error=>bridgeLog('error','Ga
 function enterGaming(){
  if(gamingMode||gamingTimer)return {ok:true};
  if(!gamingTray||gamingTray.isDestroyed()){
-  gamingTray=new Tray(nativeImage.createFromPath(path.join(__dirname,'..','src','assets','icon.png')).resize({width:32,height:32}));
+  gamingTray=new Tray(nativeImage.createFromPath(path.join(__dirname,'..','src','assets','app-icon.png')).resize({width:32,height:32}));
   gamingTray.setToolTip('Batto 3-in-1 – Gaming-Modus');gamingTray.setContextMenu(Menu.buildFromTemplate([{label:'Batto öffnen',click:openFromTray},{label:'Beenden',click:()=>app.quit()}]));gamingTray.on('double-click',openFromTray);
  }
  // Finish the IPC reply first. A quick Show action cancels this pending switch.
@@ -172,7 +172,7 @@ function createWindow(detached = false) {
     show: false,
     title: detached ? 'Batto OBS Tool 2.1 – Multi-Chat' : 'Batto OBS Tool 2.1',
     backgroundColor: '#0b0b0c',
-    icon: path.join(__dirname, '..', 'src', 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'src', 'assets', 'app-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -1044,7 +1044,7 @@ else {
     initCore();
     registerIpc();
     mainWindow = createWindow(false);
-    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow())app.quit(); });
+    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow())app.quit(); });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
     app.on('activate', () => { openFromTray(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));
@@ -1066,6 +1066,7 @@ module.exports.getMainWindow=()=>mainWindow;
 module.exports.getGamingMode=()=>gamingMode;
 
 module.exports.getSuiteHost=()=>({
+ overlayStatus:()=>overlayServer?.getStatus(),
  catalog:()=>({...navigation?.controls?.snapshot(),items:[...(navigation?.catalog?.()||[]),...(currentConfig().media||[]).map(x=>({id:x.id,name:x.name||x.id,kind:'media'}))]}),
  control:value=>navigation.controls.control(value),
  run:(kind,id)=>kind==='media'?actionEngine.executeRule({id:'deck-media:'+id,cooldownSeconds:0,onlyWhenLive:false,actions:[{type:'media',mediaId:id}]},{platform:'internal',source:'stream-deck'},'deck-media'):navigation.test(kind,id),

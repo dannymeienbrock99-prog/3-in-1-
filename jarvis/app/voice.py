@@ -199,7 +199,7 @@ class Speaker:
         self.piper = Worker('piper_worker.py', 25)
         self.clone = Worker('tts_worker.py', 40, str(ROOT / 'voice-runtime/Scripts/python.exe'))
         self.lock = threading.Lock(); self.amplitude = 0.
-        self.spoken_text=''; self.echo_until=0.; self.text_by_path={}
+        self.spoken_text=''; self.echo_until=0.; self.text_by_path={}; self.output_settings={}
 
     def warmup(self): return self.piper.call({'warmup': True}, timeout=30)
 
@@ -228,12 +228,21 @@ class Speaker:
             self.spoken_text=self.text_by_path.pop(str(path),'')
             self.echo_until=time.monotonic()+len(samples)/rate+.4
             on_state('speaking', 'Jarvis spricht · Stopp zum Unterbrechen')
-            sd.play(samples, rate); began = time.monotonic()
-            while time.monotonic()-began < len(samples)/rate and not cancel.is_set():
-                i = int((time.monotonic()-began)*rate); piece = samples[i:i+int(rate*.04)]
-                self.amplitude = min(1., float(np.sqrt(np.mean(piece**2)))*7) if len(piece) else 0.
-                cancel.wait(.025)
-            sd.stop()
+            # Apply the current gain per audio block, including changes during speech.
+            frames = samples.reshape(-1, 1) if samples.ndim == 1 else samples
+            cursor = 0; finished = threading.Event()
+            def output(outdata, count, timing, status):
+                nonlocal cursor
+                outdata.fill(0)
+                if cancel.is_set(): raise sd.CallbackStop
+                piece = frames[cursor:cursor+count]
+                gain = 0. if self.output_settings.get('speech_muted') else max(0., min(1., float(self.output_settings.get('speech_volume', 100))/100.))
+                outdata[:len(piece)] = piece * gain
+                cursor += len(piece)
+                self.amplitude = min(1., float(np.sqrt(np.mean(piece**2)))*7*gain) if len(piece) else 0.
+                if len(piece) < count: raise sd.CallbackStop
+            with sd.OutputStream(samplerate=rate, channels=frames.shape[1], dtype='float32', callback=output, finished_callback=finished.set):
+                while not finished.wait(.025) and not cancel.is_set(): pass
         finally:
             path.unlink(missing_ok=True); self.amplitude = 0.; self.echo_until=time.monotonic()+.4
             self.text_by_path.pop(str(path),None)
@@ -241,6 +250,7 @@ class Speaker:
     def speak(self, text, settings, cancel, on_state):
         if settings.get('tts') == 'silent' or cancel.is_set(): return
         clean = speech_text(text)
+        self.output_settings = settings
         if not clean: return
         if settings.get('tts') == 'sapi':
             from legacy_voice import Speaker as Legacy
@@ -256,7 +266,9 @@ class Speaker:
 class SpeechStream:
     """Bounded sentence queue fed before the LLM has finished its answer."""
     def __init__(self, speaker, settings, cancel, on_state):
-        self.speaker, self.settings, self.cancel, self.on_state = speaker, dict(settings), cancel, on_state
+        # Keep the same live dictionary as the service: queued audio must follow gain changes too.
+        self.speaker, self.settings, self.cancel, self.on_state = speaker, settings, cancel, on_state
+        self.speaker.output_settings = settings
         self.buffer = ''; self.queue = queue.Queue(maxsize=24); self.error = ''; self.closed = False
         self.thread = threading.Thread(target=self.run, daemon=True, name='Jarvis Sprachausgabe'); self.thread.start()
 

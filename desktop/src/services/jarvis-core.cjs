@@ -4,15 +4,16 @@ const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
 const {JarvisEvents,eventSettings,DEFAULT_EVENTS}=require('./jarvis-events.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
-const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
+const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,speechVolume:100,speechMuted:false,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
  chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
  fanAlerts:{enabled:true,threshold:80,hysteresis:5,cooldown:90},sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
 function finite(value,min,max,fallback){return typeof value==='number'&&Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
 function cleanSettings(input={}){
  const s={...DEFAULTS};
- for(const key of ['voiceEnabled','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi','gamingMode']) if(typeof input[key]==='boolean')s[key]=input[key];
+ for(const key of ['voiceEnabled','speechMuted','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi','gamingMode']) if(typeof input[key]==='boolean')s[key]=input[key];
  s.greeting=String(input.greeting??s.greeting).replace(/[\x00-\x1f]/g,' ').slice(0,120);s.events=eventSettings(input.events);
  s.address=String(input.address??s.address).slice(0,40);if(s.address==='Sir Crazy')s.address='';s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
+ s.speechVolume=finite(input.speechVolume,0,100,100);
  s.chatMode=['moderators','allowlist','all'].includes(input.chatMode)?input.chatMode:'moderators';
  s.chatPlatforms=Array.isArray(input.chatPlatforms)?input.chatPlatforms.filter(p=>DEFAULTS.chatPlatforms.includes(p)):s.chatPlatforms;
  s.chatAllowlist=Array.isArray(input.chatAllowlist)?input.chatAllowlist.filter(x=>typeof x==='string'&&/^(twitch|youtube|tiktok|cng):[^\s:]{1,160}$/.test(x)).slice(0,100):[];

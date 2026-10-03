@@ -14,8 +14,9 @@ Die bestehenden Lizenzdateien in `desktop/build`, in den Python-`.dist-info`-Ord
 - Elgato SDK-Dokumentation und CLI werden zur Paketprüfung verwendet; das Beispiel Windows Utils wird nicht mitverteilt.
 - HWiNFO-SM2-Struktur wird ausschließlich gelesen; kein HWiNFO-Programm oder Treiber ist enthalten. Herstellerbedingungen der Freigabe gelten unabhängig von dieser Anwendung.
 
-## Touch Deck 1.7.0
+## Touch Deck 1.8.0
 
+- `qrcode` 1.5.4: QR-Codes werden lokal erzeugt; MIT, Copyright Ryan Day. [Quellcode](https://github.com/soldair/node-qrcode). Lizenzkopie `licenses/touch-deck/qrcode-MIT.txt`; Abhängigkeiten und ihre Lizenzen bleiben in den ausgelieferten npm-Paketen enthalten.
 - `yauzl` 3.4.0: ZIP-Leser, MIT, Copyright Josh Wolfe. [Quellcode](https://github.com/thejoshwolfe/yauzl), genaue Paketversion und Integrität in `desktop/package-lock.json`. Lizenzkopie `licenses/touch-deck/yauzl-MIT.txt`.
 - `pend` 1.2.0: Abhängigkeit des ZIP-Lesers, MIT, Copyright Andrew Kelley. [Quellcode](https://github.com/andrewrk/node-pend). Lizenzkopie `licenses/touch-deck/pend-MIT.txt`.
 - `@resvg/resvg-js` und `@resvg/resvg-js-win32-x64-msvc` 2.6.2: SVG-Bildkonvertierung, Mozilla Public License 2.0. Unveränderte Bibliothek und natives Windows-Binärpaket aus npm; [zugehörige Quellen des Tags v2.6.2](https://github.com/thx/resvg-js/tree/v2.6.2) sind öffentlich erhältlich. Die ursprünglichen Rechte und MPL-2.0-Bedingungen gelten für diese Komponente; Lizenzkopie `licenses/touch-deck/resvg-js-MPL-2.0.txt`. Die im Upstream-Quellstand beschriebenen Rust-Abhängigkeiten behalten ihre jeweiligen Lizenzbedingungen.

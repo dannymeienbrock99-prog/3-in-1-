@@ -236,10 +236,14 @@ class Speaker:
                 raise RuntimeError('Keine deutsche Windows-Stimme installiert.')
             speaker.Voice = selected
             speaker.Rate = 0
+            def current_volume():
+                return 0 if settings.get('speech_muted') else round(max(0., min(100., float(settings.get('speech_volume', 100)))))
+            speaker.Volume = current_volume()
             on_state('speaking', 'Windows-Teststimme · nicht die Filmstimme')
             speaker.Speak(text, 1)
             while not speaker.WaitUntilDone(80):
-                self.amplitude = .35
+                speaker.Volume = current_volume()
+                self.amplitude = .35 * speaker.Volume / 100.
                 if cancel.is_set():
                     speaker.Speak('', 3)
                     break

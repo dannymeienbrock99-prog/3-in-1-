@@ -1,6 +1,7 @@
 package de.crazybatto.touchdeck;
 
 import java.net.URI;
+import java.net.URLDecoder;
 
 /** No DNS resolution: only explicit private LAN IPv4 addresses may host the deck. */
 public final class DeckAddress {
@@ -35,5 +36,26 @@ public final class DeckAddress {
             URI a = new URI(base), b = new URI(resource);
             return a.getScheme().equals(b.getScheme()) && a.getHost().equals(b.getHost()) && a.getPort() == b.getPort() && b.getRawUserInfo() == null;
         } catch (Exception invalid) { return false; }
+    }
+
+    /** Explicit app-open link from the paired PC page, never an arbitrary WebView URL. */
+    public static String fromAppLink(String input) {
+        try {
+            if(input == null || input.length() > 512) return null;
+            URI uri = new URI(input);
+            if(!"batto-touch".equals(uri.getScheme()) || !"connect".equals(uri.getHost()) || uri.getPort() != -1 || uri.getRawUserInfo() != null || uri.getRawFragment() != null) return null;
+            if(uri.getRawPath() != null && !uri.getRawPath().isEmpty() && !"/".equals(uri.getRawPath())) return null;
+            String query=uri.getRawQuery(), address=null, pin=null;
+            if(query == null) return null;
+            for(String field:query.split("&",-1)) {
+                int equals=field.indexOf('='); if(equals < 1) return null;
+                String key=field.substring(0,equals), value=URLDecoder.decode(field.substring(equals+1),"UTF-8");
+                if("url".equals(key) && address==null) address=normalize(value);
+                else if("pin".equals(key) && pin==null && value.matches("[0-9]{6}")) pin=value;
+                else return null;
+                if("url".equals(key) && address==null) return null;
+            }
+            return address==null?null:address+(pin==null?"":"#pin="+pin);
+        } catch(Exception invalid) { return null; }
     }
 }

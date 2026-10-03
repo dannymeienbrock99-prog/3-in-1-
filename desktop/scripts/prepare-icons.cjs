@@ -9,6 +9,10 @@ function bmp(image){const {width:w,height:h}=image.getSize(),src=image.toBitmap(
 function ico(image){const images=[16,24,32,48,64,128,256].map(n=>({n,png:contain(image,n,n).toPNG()}));let offset=6+16*images.length;const head=Buffer.alloc(offset);head.writeUInt16LE(1,2);head.writeUInt16LE(images.length,4);images.forEach(({n,png},i)=>{const at=6+i*16;head[at]=n===256?0:n;head[at+1]=head[at];head.writeUInt16LE(1,at+4);head.writeUInt16LE(32,at+6);head.writeUInt32LE(png.length,at+8);head.writeUInt32LE(offset,at+12);offset+=png.length;});return Buffer.concat([head,...images.map(x=>x.png)]);}
 app.whenReady().then(()=>{
   for(const item of require('../src/assets/artwork-manifest.json')){const bytes=fs.readFileSync(path.join(root,'source',item.file));if(crypto.createHash('sha256').update(bytes).digest('hex')!==item.sha256)throw new Error('Originalbild verändert: '+item.file);load('source/'+item.file);}
+  const appLogo=load('app-brand.jpeg');
+  fs.writeFileSync(path.join(root,'app-icon.png'),contain(appLogo,512,512).toPNG());
+  fs.writeFileSync(path.join(root,'app-icon.ico'),ico(appLogo));
+  fs.writeFileSync(path.join(root,'app-installer.png'),contain(appLogo,328,628).toPNG());
   const logo=load('brand-logo.jpg'),rose=load('source/rose-original.jpeg'),installerArt=load('source/michelle-sarah-installer.jpg');
   fs.writeFileSync(path.join(root,'icon.png'),contain(logo,256,256).toPNG());
   fs.writeFileSync(path.join(root,'installer.ico'),ico(rose));

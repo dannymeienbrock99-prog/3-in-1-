@@ -1,4 +1,4 @@
-# Batto 3-in-1 · 1.7.0
+# Batto 3-in-1 · 1.8.0
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
 
@@ -6,23 +6,31 @@ Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Mult
 
 Unter **Touch Deck** sind große Tasten direkt in Batto eingebaut. **Tasten bearbeiten** öffnet Profile, Ordner und Tastenbelegungen. Du kannst Bilder wählen, Tasten verschieben und bis zu acht vorhandene Batto-Aktionen kombinieren: Jarvis, Szenen/Übergänge, Kameras, Bot, Auto-Broadcast, Medien und gespeicherte Hotkeys. Messwert-Tasten zeigen aktuelle PC-Werte oder zugeordnete Lüfter-Prozentwerte; fehlende Werte bleiben leer. Änderungen vor dem Bedienen speichern.
 
+**Rechtsklick**, **langes Drücken** auf einem Touchscreen oder **Umschalt+F10** öffnet die Tastenoptionen: **Bearbeiten, Kopieren, Einfügen und Löschen**. Kopien funktionieren zwischen dem Hauptfenster, dem entkoppelten Deck, Ordnern und Profilen. Eigene Bilder und enthaltene Tasten bleiben erhalten; Plugin-Zugangsdaten werden nicht kopiert. Ein zu kleiner Zielordner wird abgelehnt, wenn sonst belegte Tasten verloren gingen. Löschen und Ersetzen benötigen eine Bestätigung. Im Hauptfenster anschließend speichern; im entkoppelten Fenster werden bestätigte Änderungen sofort gespeichert. Mit den Pfeiltasten lassen sich die Optionen auswählen; Escape schließt das Menü.
+
+**Lautstärkeregler:** Unter **Tasten bearbeiten** eine freie Taste wählen und **Lautstärkeregler** erstellen. Die **Tonquelle** kann die Windows-Gesamtlautstärke, **Jarvis** oder ein laufendes Programm sein. Neue Installationen enthalten zusätzlich ein Profil **Sound** mit Windows- und Jarvis-Regler; vorhandene eigene Belegungen werden nicht verändert. Programme erscheinen, sobald sie Ton ausgeben. Mit eigener Beschriftung und eigenem Bild speichern. Im Bedienmodus den Schieberegler ziehen, mit **+ / −** in Fünferschritten ändern oder stummschalten; die Regler funktionieren auch über Touch. Nicht verfügbare Tonquellen zeigen **—**. Lautstärketasten vergrößern das Raster bei Bedarf für erreichbare Bedienelemente. Sichtbare Regler werden alle 2,5 Sekunden aktualisiert; Änderungen beim Ziehen werden zusammengefasst, ausgeblendete Oberflächen pausieren.
+
 **Entkoppeln** öffnet ein separates Touch-Fenster, etwa für einen zweiten Bildschirm. **Immer oben** hält es sichtbar; **Andocken** bringt dich zurück zum Hauptfenster. Position und Größe bleiben gespeichert. **Tastengröße → Selbst einstellen** erlaubt 80–220 Pixel pro Profil, **Automatisch** passt die Tasten ans Raster an. Gleichzeitige Änderungen in zwei Fenstern überschreiben sich nicht still; bei einem Konflikt den aktuellen Stand neu laden.
 
 **Plugins & Icons → Paket laden** importiert `.streamDeckPlugin` und `.streamDeckIconPack`, beispielsweise das Batto-Plugin oder LS25-Buttons. Danach eine Taste als **Plugin-Aktion** belegen, Plugin und Aktion auswählen und gegebenenfalls **Plugin-Einstellungen** öffnen. Für ein Bild **Eigenes Bild** oder **Icon-Bibliothek** wählen. Ein eigenes Tastenbild hat Vorrang vor dem Bild des Plugins. Icon-Pakete liefern Bilder, keine Steueraktionen. Standardaktionen für Windows-EXE-, Node- und HTML-Plugins werden unterstützt; zusätzliche Dienste, Kontenanmeldungen, gerätespezifische SDK-Funktionen oder Herstellerprüfungen können die Kompatibilität begrenzen. Die verwendeten Drittanbieter-Plugins führen ihren eigenen Code auf dem PC aus; nur Pakete aus vertrauenswürdigen Quellen laden. Fremde Plugins und Icon-Pakete werden nicht mit dem Installer verteilt.
 
 **Exportieren** sichert Belegungen und ausgewählte Tastenbilder. **Projekt importieren** lädt eine Batto-Deck-Sicherung; Plugins, deren private Einstellungen und Zugangsdaten sind nicht Teil dieses Exports. Chat-/Bot-Einstellungen bleiben getrennt. Bei einem Import bleibt die vorherige Belegung als `touch-deck.before-import.json` im Suite-Datenordner erhalten.
 
-Für Handy oder Tablet **Handy-Verbindung einschalten**, die angezeigte Netzwerkadresse im Browser des Geräts öffnen und mit der sechsstelligen PIN koppeln. Beide Geräte müssen im gleichen privaten Netzwerk sein. Falls Windows nachfragt, den Netzwerkzugriff nur für das private Netz zulassen. Die Freigabe beginnt erst auf Wunsch und startet nach Programmneustart nicht automatisch. Eine neue PIN trennt alle bisher gekoppelten Geräte. Im Gaming-Modus funktionieren die Tasten weiter, während die PC-Oberfläche geschlossen ist.
+Für Handy oder Tablet **Handy & Tablet verbinden → Handy-Verbindung einschalten**, dann den **QR-Code** mit der Kamera-App scannen. Die PIN ist im QR-Code enthalten; alternativ die angezeigte Adresse öffnen und die sechsstellige PIN eingeben. Bei mehreren Netzwerkadressen die Adresse des gemeinsamen WLANs auswählen; der QR-Code wechselt passend mit. QR-Codes werden lokal erzeugt, ohne externen Dienst. Die PIN steht im URL-Fragment statt im HTTP-Pfad; zur Anmeldung wird sie an den lokalen PC gesendet. Beide Geräte müssen im gleichen privaten Netzwerk sein. Falls Windows nachfragt, den Netzwerkzugriff nur für das private Netz zulassen. Die Freigabe beginnt erst auf Wunsch und startet nach Programmneustart nicht automatisch. **Neue PIN / Geräte trennen** erneuert den QR-Code und trennt alle bisherigen Geräte; Ausschalten entfernt den QR-Code. Im Gaming-Modus funktionieren die Tasten weiter, während die PC-Oberfläche geschlossen ist.
 
-**Android-Handy und -Tablet:** [Batto-Touch-Deck-1.7.0.apk](https://github.com/dannymeienbrock99-prog/3-in-1-/releases/download/v1.7.0/Batto-Touch-Deck-1.7.0.apk) installieren, die am PC angezeigte Adresse eingeben und anschließend mit der PIN verbinden. Android 8.0 oder neuer und eine aktuelle Android System WebView sind erforderlich. Die App verwendet eine einzelne System-WebView und benötigt weder Mikrofon/Kamera noch einen Hintergrunddienst.
+**Android-Handy und -Tablet:** [Batto-Touch-Deck-1.8.0.apk](https://github.com/dannymeienbrock99-prog/3-in-1-/releases/download/v1.8.0/Batto-Touch-Deck-1.8.0.apk) installieren, die am PC angezeigte Adresse eingeben und anschließend mit der PIN verbinden. Android 8.0 oder neuer und eine aktuelle Android System WebView sind erforderlich. Die App verwendet eine einzelne System-WebView und benötigt weder Mikrofon/Kamera noch einen Hintergrunddienst.
 
 **iPhone und iPad:** Die PC-Adresse in Safari öffnen, **Teilen → Zum Home-Bildschirm** wählen und, wenn angeboten, **Als Web-App öffnen** einschalten. Das Batto-Symbol startet die Web-App. Es handelt sich um eine Startbildschirm-Web-App, kein IPA-/App-Store-Paket. Beide Varianten unterstützen Hoch-/Querformat und brauchen den laufenden PC im selben privaten WLAN. Nach dem vollständigen Schließen gegebenenfalls neu koppeln. Es gibt keinen Offline-Modus. Unter **Anzeige auf diesem Gerät** lässt sich die Tastengröße unabhängig vom PC einstellen. [Mobile Anleitung und Android-Quellcode](mobile/android/README.md).
+
+Das bereitgestellte Drachenmotiv aus **app.jpeg** ist das neue App-Symbol für PC und Handy. Beim Öffnen der mobilen App erscheint es als Startmotiv. Die vorhandene Gold-/Marmor-Oberfläche bleibt erhalten.
 
 Eine zweite vollständige Desktop-App wird nicht geladen; das separate Touch-Fenster entsteht erst durch **Entkoppeln**. Kein zusätzlicher Chat-/OBS-Gästebereich. Plugin-Prozesse laufen für verwendete Profile beziehungsweise geöffnete Plugin-Einstellungen und beenden sich, wenn keine Bedienfläche sie mehr benötigt. Handy-Aktivität verfällt nach 15 Sekunden ohne Abfragen. Messwerte werden alle drei Sekunden gelesen, im Hintergrund pausiert; unveränderte Pluginbilder werden nicht erneut übertragen. Plugins können je nach Funktion dennoch eigenen RAM und CPU beanspruchen.
 
 ## Virtuelle Kameras ohne Streamkey
 
 Unter **Dual Stream** gewünschte Spiel-/Fenster-/Bildschirmquelle und Kamera auswählen. Das TikTok-Layout zeigt die Kamera über die gesamte obere Breite (48 % der Höhe); das Spiel liegt darunter. Alte Werkslayouts werden automatisch korrigiert. Eigene Layouts bleiben erhalten und lassen sich mit **Kamera oben, Spiel darunter** umstellen. Die Twitch-Leinwand bleibt unabhängig.
+
+**Entkoppeln** öffnet Dual Stream als eigenes Fenster wie das Touch Deck. Mit **Immer oben** bleibt das Bedienfeld sichtbar, mit **Andocken** kehrt es ins Hauptfenster zurück. Beide Ansichten verwenden dieselben gespeicherten Einstellungen und denselben Kameradienst. Das zusätzliche Fenster startet keine zweite Kameraaufnahme. Änderungen vor dem Wechsel speichern; Konflikte zwischen geöffneten Ansichten werden angezeigt.
 
 1. **Geräte erkennen**, Quellen zuordnen und aktivieren; Layout speichern.
 2. **Kamera einschalten**: Die Vorschau startet nach der Geräteauswahl automatisch. Für gespeicherte Quellen **Vorschau starten** drücken.
@@ -35,7 +43,7 @@ Für die Bildkomposition werden weiterhin **lokal installierte OBS-32-Bibliothek
 
 ## Weniger Speicher beim Spielen
 
-**Dual Stream → Gaming-Modus** speichert das aktuelle Layout und schließt die Hauptoberfläche. Chat, Bot, Auto-Broadcast, Messdienst, Jarvis und gestartete Kameras laufen weiter. Ein zusätzlich geöffnetes Touch-Fenster zum maximalen Sparen ebenfalls schließen; die Handy-Steuerung bleibt verfügbar. Mit Doppelklick auf das Batto-Symbol im Windows-Infobereich, erneutem App-Start oder der Stream-Deck-Aktion **Batto-Fenster anzeigen** kommt die Oberfläche zurück. Benachrichtigungstöne haben eine eigene kleine Wiedergabe, die nach fünf Sekunden Ruhe wieder entladen wird. Andere noch nicht gespeicherte Formulare vorher speichern. Beenden im Infobereich beendet auch die Dienste.
+**Dual Stream → Gaming-Modus** speichert das aktuelle Layout und schließt die Hauptoberfläche. Chat, Bot, Auto-Broadcast, Messdienst, Jarvis und gestartete Kameras laufen weiter. Zusätzlich geöffnete Touch-Deck- und Dual-Stream-Fenster bleiben bestehen; zum maximalen Sparen ebenfalls schließen; die Handy-Steuerung bleibt verfügbar. Mit Doppelklick auf das Batto-Symbol im Windows-Infobereich, erneutem App-Start oder der Stream-Deck-Aktion **Batto-Fenster anzeigen** kommt die Oberfläche zurück. Benachrichtigungstöne haben eine eigene kleine Wiedergabe, die nach fünf Sekunden Ruhe wieder entladen wird. Andere noch nicht gespeicherte Formulare vorher speichern. Beenden im Infobereich beendet auch die Dienste.
 
 Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der Ansicht entladen. Die Vorschau pausiert in anderen Ansichten, bei minimiertem Fenster und im Gaming-Modus. Sprachmodelle werden nach Nutzung freigegeben. Optionale KI nutzt im Jarvis-Gaming-Sparmodus zwei CPU-Threads ohne GPU-Offload. Die tatsächliche Last hängt von Quellen, aktiven Diensten, KI-Modell und LIVE Studio ab.
 
@@ -83,7 +91,9 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.7.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.7.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+
+Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.
@@ -112,6 +122,8 @@ Loopback-Verbindungen mit getrennten zufälligen Zugriffsschlüsseln: Suite 1765
 ## Prüfung
 
 Automatische Jarvis-Tests für rollenbasiertes Vorlesen, gezielte Messwertfragen, fehlende/veraltete Werte, Pin-Einheiten, OBS-Bestätigung, Grenzen und Meldeabstände. Die Tests des übernommenen OBS-2.4.7-Quellstands prüfen unter anderem Chat, Match-Anzeige, Broadcast und Piper. Der Sensor-Selbsttest prüft CSV-Teilzeilen, gleichzeitige Schreiber, beschädigte HWiNFO-Daten und Kurvenvalidierung. Oberflächentest verwendet getrennte Datenordner. Live-Tests mit fremden Streaming-Konten oder einem physischen Stream Deck sind davon getrennt und benötigen eingerichtete Verbindungen.
+
+Die Touch-Oberfläche wurde in isolierten Electron-Fenstern auf QR-Wechsel, PINrotation, Ausschalten, Maus-/Tastatur-/Touch-Menü, Kopieren über Fenstergrenzen, verschachtelte Ordner, Schutz kleiner Raster, Lautstärkeregler und Pausen im Hintergrund geprüft. Screenshots bei 1600 × 1000, 1180 × 800 und im separaten Touch-Fenster ergänzen die Funktionsprüfung. Synthetische Lautstärkewerte prüfen die Bedienung, keine reale Soundausgabe. Tests auf einem physischen Android-/iOS-Gerät sowie mit den persönlichen Soundgeräten sind davon getrennt; eine iOS-Web-App ersetzt keine native iOS-Signierung.
 
 ## Herkunft und Rechte
 

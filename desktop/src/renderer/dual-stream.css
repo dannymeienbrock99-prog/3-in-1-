@@ -2,3 +2,5 @@
 #dual-root .dual-metrics{white-space:pre-line}
 
 #dual-root .dual-canvas.has-preview .dual-layer{background:transparent}#dual-root .dual-canvas.has-preview .dual-layer.selected{background:transparent}
+
+#dual-root [hidden]{display:none!important}#dual-root .dual-detached-note{padding:28px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--muted);line-height:1.8}#dual-root .dual-detached-note button{margin:10px 8px 0 0}#dual-root .dual-window-controls{padding-bottom:6px;border-bottom:1px solid var(--line)}

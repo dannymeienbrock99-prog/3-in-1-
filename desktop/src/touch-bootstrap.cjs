@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),{fileURLToPath}=require('n
 const {app,ipcMain,BrowserWindow,dialog,shell}=require('electron');
 const windows=require('./touch-windows.cjs');
 let deck,packages,host,demand,presentation={},visualRevision=0,visualTimer,closing=false;
-const observed=new Set();
+const observed=new Set();let copiedButton=null;
 function trusted(url){try{return ['index.html','touch-window.html'].some(name=>path.resolve(fileURLToPath(url))===path.resolve(__dirname,'renderer',name));}catch{return false;}}
 function broadcast(channel,value){for(const win of BrowserWindow.getAllWindows())if(!win.isDestroyed()&&!win.webContents.isDestroyed()&&trusted(win.webContents.getURL()))try{win.webContents.send(channel,value);}catch{}}
 function changed(){if(deck&&!closing)broadcast('touch:state',deck.snapshot());}
@@ -22,8 +22,10 @@ function getDeck(){
  if(deck)return deck;
  const runtime=require('./suite-bootstrap.cjs').getRuntime();if(!runtime)throw Error('Batto startet noch. Bitte kurz warten.');
  const {TouchDeck}=require('./services/touch-deck.cjs');
+ const {TouchAudio}=require('./services/touch-audio.cjs');
+ const audio=new TouchAudio({helperPath:path.join(app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..'),'FanAtlas/BattoAudioControl.exe'),getJarvis:()=>({volume:runtime.jarvis.settings.speechVolume,muted:runtime.jarvis.settings.speechMuted}),setJarvis:patch=>{runtime.jarvis.update({...runtime.jarvis.settings,...(patch.volume===undefined?{}:{speechVolume:patch.volume}),...(patch.muted===undefined?{}:{speechMuted:patch.muted})});return {volume:runtime.jarvis.settings.speechVolume,muted:runtime.jarvis.settings.speechMuted};}});
  windows.initialize({directory:runtime.directory,changed});
- deck=new TouchDeck({directory:runtime.directory,controls:runtime.controls,webRoot:path.join(__dirname,'touch-mobile'),getWindowStatus:windows.status,getPresentation:()=>presentation,getVisualRevision:()=>visualRevision,
+ deck=new TouchDeck({directory:runtime.directory,controls:runtime.controls,audio,webRoot:path.join(__dirname,'touch-mobile'),getWindowStatus:windows.status,getPresentation:()=>presentation,getVisualRevision:()=>visualRevision,
   pressPlugin:async button=>(await activateButton(button)).press(button.id),
   onRemoteActivity:(id,profileId)=>{void demand?.set('remote:'+id,profileId,{temporary:true}).catch(()=>{});},onRemoteDisconnect:id=>{void demand?.remove('remote:'+id).catch(()=>{});},getSensors:()=>{
    const fan=runtime.fan.snapshot,rules=runtime.jarvis.settings.sensorRules||{};
@@ -41,13 +43,21 @@ ipcMain.handle('touch:action',async(event,{command,value}={})=>{
   case 'catalog':return current.catalog();
   case 'save':return current.save(value);
   case 'press':return current.press(value);
+  case 'audio-targets':return current.audio.targets();
+  case 'audio-state':return current.audioState(value);
+  case 'volume':return current.volume(value);
   case 'presence':{
    const sender=event.sender,id='window:'+sender.id;if(!observed.has(sender.id)){observed.add(sender.id);sender.once('destroyed',()=>{observed.delete(sender.id);void demand.remove(id).catch(()=>{});});}
    await demand.set(id,value?.profileId,{visible:value?.visible===true});return {ok:true};
   }
   case 'detach':await windows.open();return current.snapshot();
   case 'attach':await windows.attach();return current.snapshot();
-  case 'edit-main':await windows.showMain();return {ok:true};
+  case 'edit-main':{
+   if(value){const p=current.config.profiles.find(p=>p.id===value.profileId);if(!p||!Number.isInteger(value.index)||value.index<0||value.index>=p.rows*p.columns||!Array.isArray(value.path||[])||(value.path||[]).length>4)throw Error('Ungültige Tastenposition.');let buttons=p.buttons;for(const index of value.path||[]){if(!Number.isInteger(index)||buttons[index]?.type!=='folder')throw Error('Diesen Ordner gibt es nicht mehr.');buttons=buttons[index].buttons;}}
+   await windows.showMain();if(value){const win=require('../electron/main21.cjs').getMainWindow();win?.webContents.send('touch:edit',{profileId:value.profileId,path:value.path||[],index:value.index});}return {ok:true};
+  }
+  case 'clipboard-set':{const data=JSON.stringify(value);if(!value||typeof value!=='object'||Buffer.byteLength(data)>4*1024*1024)throw Error('Diese Taste ist zu groß zum Kopieren.');copiedButton=JSON.parse(data);return {ok:true};}
+  case 'clipboard-get':return copiedButton?JSON.parse(JSON.stringify(copiedButton)):null;
   case 'always-on-top':windows.alwaysOnTop(value);return current.snapshot();
   case 'packages':return getPackages().list();
   case 'package-import':{

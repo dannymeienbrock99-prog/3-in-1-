@@ -13,7 +13,7 @@ def emit(data):
 class Service:
     def __init__(self):
         self.settings={'tts':'piper','voice_style':'synthetic','speech_rate':160,'wake_word':True,'continuous':False,'headphones':False,'end_silence':.65,'microphone':None}
-        self.speaker=Speaker();self.recognizer=Worker('stt_worker.py',35);self.microphone=None;self.busy=threading.Event();self.cancel=threading.Event();self.quit=threading.Event();self.jobs=queue.Queue(maxsize=8);self.speaking=False;self.listening=False;self.generation=0
+        self.speaker=Speaker();self.speaker.output_settings=self.settings;self.recognizer=Worker('stt_worker.py',35);self.microphone=None;self.busy=threading.Event();self.cancel=threading.Event();self.quit=threading.Event();self.jobs=queue.Queue(maxsize=8);self.speaking=False;self.listening=False;self.generation=0
         threading.Thread(target=self.output,daemon=True).start()
     def state(self,state,text):
         emit({'type':'state','state':state,'text':text})
@@ -58,7 +58,7 @@ class Service:
                 try:self.jobs.put_nowait((text,time.monotonic(),False,self.generation))
                 except queue.Full:emit({'type':'notice','text':'Sprachwarteschlange voll; ältere Meldungen werden nicht nachgeholt.'})
         elif command=='settings':
-            v=job.get('value',{});self.settings.update(wake_word=v.get('wakeWord',True),headphones=v.get('headphones',False),speech_rate=max(120,min(210,int(v.get('speechRate',160)))),microphone=v.get('microphone'))
+            v=job.get('value',{});self.settings.update(wake_word=v.get('wakeWord',True),headphones=v.get('headphones',False),speech_rate=max(120,min(210,int(v.get('speechRate',160)))),microphone=v.get('microphone'),speech_volume=max(0,min(100,float(v.get('speechVolume',100)))),speech_muted=v.get('speechMuted') is True)
         elif command=='microphone':self.enable(job.get('enabled') is True)
         elif command=='listen':
             self.stop()

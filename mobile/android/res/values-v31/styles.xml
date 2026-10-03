@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <style name="BattoTheme" parent="BattoBaseTheme">
+    <item name="android:windowSplashScreenBackground">#0c0a0a</item>
+    <item name="android:windowSplashScreenAnimatedIcon">@drawable/icon</item>
+  </style>
+</resources>

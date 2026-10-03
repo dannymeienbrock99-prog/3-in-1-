@@ -6,10 +6,16 @@ const equals=(a,b)=>{const x=Buffer.from(String(a||'')),y=Buffer.from(String(b||
 const fail=(status,message)=>Object.assign(Error(message),{status});
 class TouchMobile{
  constructor({deck,webRoot=path.join(__dirname,'../touch-mobile'),host='0.0.0.0',port=process.env.BATTO_TEST_INSTANCE==='1'?17670:17660,now=Date.now,onChange=()=>{}}){
-  Object.assign(this,{deck,webRoot,host,requestedPort:port,now,onChange});this.server=null;this.pin='';this.port=0;this.sessions=new Map();this.attempts=new Map();this.assets=new Map();this.addresses=[];this.pending=null;this.stopping=null;
+  Object.assign(this,{deck,webRoot,host,requestedPort:port,now,onChange});this.server=null;this.pin='';this.port=0;this.sessions=new Map();this.attempts=new Map();this.assets=new Map();this.addresses=[];this.pending=null;this.stopping=null;this.qrCodes=[];this.qrEpoch=0;
  }
  prune(){const now=this.now();for(const [token,session]of this.sessions)if(session.expires<=now){this.sessions.delete(token);this.deck.onRemoteDisconnect?.(session.id);}for(const [ip,attempt]of this.attempts)if(attempt.until<=now)this.attempts.delete(ip);}
- status(){this.prune();return {running:!!this.server?.listening,port:this.port||this.requestedPort,urls:this.server?.listening?this.addresses.filter(ip=>ip!=='127.0.0.1'||this.addresses.length===1).map(ip=>`http://${ip}:${this.port}`):[],pin:this.server?.listening?this.pin:'',clients:this.sessions.size};}
+ status(){this.prune();return {running:!!this.server?.listening,port:this.port||this.requestedPort,urls:this.server?.listening?this.addresses.filter(ip=>ip!=='127.0.0.1'||this.addresses.length===1).map(ip=>`http://${ip}:${this.port}`):[],pin:this.server?.listening?this.pin:'',clients:this.sessions.size,qrCodes:this.server?.listening?this.qrCodes:[]};}
+ async updateQr(){
+  const epoch=++this.qrEpoch;this.qrCodes=[];if(!this.server?.listening)return;
+  const {urls,pin}=this.status(),qr=require('qrcode');
+  const codes=await Promise.all(urls.map(async url=>({url,image:await qr.toDataURL(url+'/#pin='+pin,{errorCorrectionLevel:'M',margin:4,width:280,color:{dark:'#000000',light:'#ffffff'}})})));
+  if(epoch===this.qrEpoch&&this.server?.listening&&this.pin===pin)this.qrCodes=codes;
+ }
  async start(){
   if(this.stopping)await this.stopping;if(this.server?.listening)return this.status();if(this.pending)return this.pending;
   this.pending=(async()=>{
@@ -19,15 +25,15 @@ class TouchMobile{
    const server=http.createServer((req,res)=>{void this.handle(req,res).catch(()=>{if(!res.headersSent)res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:false,message:'Touch-Deck-Anfrage konnte nicht verarbeitet werden.'}));});});
    server.requestTimeout=10000;server.headersTimeout=10000;server.keepAliveTimeout=3000;server.maxConnections=20;this.server=server;
    try{await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(this.requestedPort,this.host,()=>{server.removeListener('error',reject);resolve();});});}catch(error){this.server=null;server.close();throw Error(error.code==='EADDRINUSE'?'Der Touch-Deck-Port ist bereits belegt.':error.message);}
-   this.port=server.address().port;this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');this.onChange();return this.status();
+   this.port=server.address().port;this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');await this.updateQr();this.onChange();return this.status();
   })();try{return await this.pending;}finally{this.pending=null;}
  }
  async stop(){
   if(this.stopping)return this.stopping;
-  this.stopping=(async()=>{if(this.pending)try{await this.pending;}catch{}const server=this.server;this.server=null;for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.assets.clear();this.pin='';if(server)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});this.onChange();return this.status();})();
+  this.stopping=(async()=>{if(this.pending)try{await this.pending;}catch{}const server=this.server;this.server=null;for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.assets.clear();this.pin='';this.qrCodes=[];this.qrEpoch++;if(server)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections?.();});this.onChange();return this.status();})();
   try{return await this.stopping;}finally{this.stopping=null;}
  }
- rotatePin(){if(!this.server?.listening)throw Error('Bitte zuerst die Handy-Verbindung einschalten.');this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.onChange();return this.status();}
+ async rotatePin(){if(!this.server?.listening)throw Error('Bitte zuerst die Handy-Verbindung einschalten.');this.pin=String(crypto.randomInt(0,1000000)).padStart(6,'0');for(const session of this.sessions.values())this.deck.onRemoteDisconnect?.(session.id);this.sessions.clear();this.attempts.clear();this.qrCodes=[];this.onChange();await this.updateQr();this.onChange();return this.status();}
  guard(req){
   if(!privateIp(req.socket.remoteAddress))throw fail(403,'Diese Verbindung ist nur im lokalen Netzwerk verfügbar.');
   let host;try{host=new URL('http://'+req.headers.host);}catch{throw fail(403,'Ungültige Netzwerkadresse.');}
@@ -50,7 +56,7 @@ class TouchMobile{
   const reply=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(value));};
   try{
    this.guard(req);const url=new URL(req.url,'http://127.0.0.1');if(url.search)throw fail(404,'Nicht gefunden.');
-   const routes={'/':['index.html','text/html; charset=utf-8'],'/client.js':['client.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/manifest.webmanifest':['manifest.webmanifest','application/manifest+json'],'/icon.png':['icon.png','image/png']};
+   const routes={'/':['index.html','text/html; charset=utf-8'],'/client.js':['client.js','text/javascript; charset=utf-8'],'/style.css':['style.css','text/css; charset=utf-8'],'/manifest.webmanifest':['manifest.webmanifest','application/manifest+json'],'/icon.png':['icon.png','image/png'],'/branding.jpg':['branding.jpg','image/jpeg']};
    if(req.method==='GET'&&Object.hasOwn(routes,url.pathname)){
     const [file,type]=routes[url.pathname];if(!this.assets.has(file)){const filename=path.join(this.webRoot,file);if(!fs.existsSync(filename)||fs.statSync(filename).size>1024*1024)throw fail(503,'Die Handy-Oberfläche fehlt. Bitte die Installation reparieren.');this.assets.set(file,fs.readFileSync(filename));}
     res.writeHead(200,{'Content-Type':type});res.end(this.assets.get(file));return;
@@ -65,8 +71,12 @@ class TouchMobile{
     const token=crypto.randomBytes(32).toString('hex');this.sessions.set(token,{id:crypto.randomUUID(),expires:this.now()+SESSION_MS,presses:[]});this.attempts.delete(ip);this.onChange();reply(200,{token,state:this.deck.remoteState()});return;
    }
    if(req.method==='GET'&&url.pathname==='/api/state'){this.activity(req);reply(200,this.deck.remoteState());return;}
-   if(req.method==='GET'&&url.pathname==='/api/readings'){this.activity(req);const visualRevision=this.deck.getVisualRevision();reply(200,{...this.deck.remoteReadings(),visualRevision,...(String(visualRevision)!==req.headers['x-batto-visual-revision']?{visuals:this.deck.getPresentation()}:{})});return;}
+   if(req.method==='GET'&&url.pathname==='/api/readings'){this.activity(req);const visualRevision=this.deck.getVisualRevision();let folderPath=[];try{folderPath=JSON.parse(req.headers['x-batto-path']||'[]');}catch{throw fail(400,'Ungültiger Ordner.');}const audio=await this.deck.audioState({profileId:String(req.headers['x-batto-profile']||this.deck.config.activeProfile),path:folderPath});reply(200,{...this.deck.remoteReadings(),volumes:audio.values,visualRevision,...(String(visualRevision)!==req.headers['x-batto-visual-revision']?{visuals:this.deck.getPresentation()}:{})});return;}
    if(req.method==='POST'&&url.pathname==='/api/disconnect'){this.authorized(req);const session=this.sessions.get(String(req.headers.authorization).slice(7));this.deck.onRemoteDisconnect?.(session?.id);this.sessions.delete(String(req.headers.authorization).slice(7));this.onChange();reply(200,{ok:true});return;}
+   if(req.method==='POST'&&url.pathname==='/api/volume'){
+    const session=this.authorized(req),data=await this.body(req),now=this.now();session.volumeChanges=(session.volumeChanges||[]).filter(time=>time>now-1000);if(session.volumeChanges.length>=20)throw fail(429,'Bitte den Regler kurz loslassen.');session.volumeChanges.push(now);
+    this.deck.onRemoteActivity?.(session.id,data.profileId);reply(200,await this.deck.volume(data));return;
+   }
    if(req.method==='POST'&&url.pathname==='/api/press'){
     const session=this.authorized(req),data=await this.body(req),now=this.now();this.deck.onRemoteActivity?.(session.id,data.profileId);session.presses=session.presses.filter(time=>time>now-1000);if(session.presses.length>=8)throw fail(429,'Bitte die Taste kurz loslassen.');session.presses.push(now);
     if(Object.keys(data).some(key=>!['profileId','path','index'].includes(key)))throw fail(400,'Nur vorhandene Tasten können ausgeführt werden.');

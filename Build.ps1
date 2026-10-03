@@ -4,8 +4,8 @@ Set-Location $PSScriptRoot
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Build-Schritt fehlgeschlagen: $LASTEXITCODE" } }
 if ($PrepareVoice) { python scripts/prepare-voice.py; Check-Exit }
 python scripts/prepare-virtualcam.py; Check-Exit
-python -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 if (-not (Test-Path jarvis/python/python.exe) -or -not (Test-Path jarvis/models/whisper-small/model.bin)) { throw 'Sprachpaket fehlt. Mit Python 3.12 und -PrepareVoice vorbereiten.' }
+& ./jarvis/python/python.exe -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 dotnet publish components/fanatlas-src/FanAtlas/FanAtlas.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet publish components/dual-stream/DualStreamHost.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet publish components/audio-control/BattoAudioControl.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit

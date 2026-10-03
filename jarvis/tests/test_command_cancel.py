@@ -67,6 +67,15 @@ class CommandCancelTests(unittest.TestCase):
         self.assertTrue(microphone.record.is_set())
         self.assertTrue(microphone.cancel_record.is_set(), 'Old audio must be discarded by the audio thread')
 
+    def test_cancel_after_thinking_before_decode_does_not_revive_old_audio(self):
+        microphone,worker,recognized,errors=self.microphone()
+        microphone.on_state=lambda *args:microphone.cancel_turn()
+        microphone.on_state('thinking','Sprache wird erkannt')
+        worker.release.set();microphone.decode(b'\0\0'*1600)
+        time.sleep(.03)
+        self.assertFalse(worker.entered.is_set());self.assertFalse(microphone.decoding.is_set())
+        self.assertTrue(microphone.decode_cancel.is_set());self.assertEqual(recognized,[]);self.assertEqual(errors,[])
+
     def test_suite_keeps_recognized_address_for_own_voice_and_scene_commands(self):
         for text, expected in [('leiser', 'Jarvis leiser'), ('Pause', 'Jarvis Pause')]:
             with self.subTest(text=text):

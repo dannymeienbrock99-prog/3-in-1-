@@ -58,5 +58,30 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(models,[]);self.assertEqual(selected,[]);self.assertEqual(ready,[])
         self.assertIn('nicht verbunden',errors[0]);self.assertFalse(microphone.connected.is_set())
 
+    def test_explicit_button_captures_first_short_word_after_greeting_without_wake_cooldown(self):
+        selected,ready,errors,decoded=[],[],[],[];holder={};callbacks={}
+        @contextlib.contextmanager
+        def opened(saved,callback,api,cancelled):
+            callbacks['feed']=lambda:callback(b'\0\0'*1600,1600,None,False)
+            callbacks['feed']()
+            yield object(),{'index':0,'name':'Synthetic','hostapi':'Test','samplerate':16000,'captureChannels':1}
+        class Vad:
+            count=0
+            def speech(self,samples):
+                self.count+=1
+                if self.count==2:
+                    holder['microphone'].busy.clear();holder['microphone'].request()
+                if self.count<20:callbacks['feed']()
+                else:holder['microphone'].stop()
+                return self.count in (2,3,4)
+        microphone=self.microphone(opened,Vad,selected,ready,errors);holder['microphone']=microphone
+        microphone.cancel_turn();microphone.busy.set()
+        def decode(raw,require_wake=False):
+            self.assertFalse(microphone.decode_cancel.is_set(),'The explicitly requested new capture clears only its previous cancellation')
+            decoded.append(raw);microphone.stop()
+        microphone.decode=decode;microphone.run()
+        self.assertEqual(errors,[]);self.assertEqual(len(decoded),1)
+        self.assertGreaterEqual(len(decoded[0]),3200*3)
+
 
 if __name__=='__main__':unittest.main()

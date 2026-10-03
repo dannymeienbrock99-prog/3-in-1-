@@ -1,7 +1,7 @@
 'use strict';
 const {SETTING_SPECS,validateSetting,applySetting}=require('./jarvis-setting-actions.cjs');
 const SCENES=['Spiel','Pause','Start','Ende'];
-const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschliste',widgets:'Widgets',livecenter:'Live-Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Filter',hologram:'Hologramm',platforms:'Plattformen',commands:'Bot-Befehle',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys',events:'Ereignisse',media:'Medien',pools:'Medien-Pools',tts:'Chat-Stimme',discord:'Discord',streamerbot:'Streamer.bot',backups:'Sicherungen',settings:'Einstellungen',diagnostics:'Diagnose'};
+const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'iCUE LINK Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschgeschenke',widgets:'TikFinity-Widgets',livecenter:'TikTok LIVE Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Chat-Filter',hologram:'Chatfarben',platforms:'Plattformen',commands:'Commands',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys / Multi-Action',events:'Events',media:'Medien',pools:'Medien-Pools',tts:'TTS',discord:'Discord',streamerbot:'Streamer.bot',backups:'Backups',settings:'Einstellungen',diagnostics:'Diagnose 2.1'};
 async function connectAdapter(adapter,name,op){
  if(!adapter)throw Error('Chat-Verbindung fehlt.');
  const on=op==='on'||op==='toggle'&&!adapter.getStatus().connected;

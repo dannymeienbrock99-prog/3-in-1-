@@ -10,7 +10,7 @@ class Speaker:
     def close(self): pass
 class Microphone:
     def __init__(self,*args,**kwargs): self.speaker=kwargs['speaker'];self.requested=False;self.stopped=False;self.cancelled=False;self.on_ready=kwargs['on_ready']
-    def start(self): pass
+    def start(self): self.on_ready('Mikrofon bereit: Testgerät')
     def request(self):
         if not self.speaker.finished:raise AssertionError('Listening before greeting completed')
         self.requested=True
@@ -75,6 +75,7 @@ class SuiteVoiceTests(unittest.TestCase):
             def start(self):
                 OnceFailing.starts+=1
                 if OnceFailing.starts==1:self.error('Mikrofon konnte nicht geöffnet werden.')
+                else:super().start()
         s,e=self.service(OnceFailing);s.dispatch({'command':'listen','greeting':'Hallo'})
         self.wait(lambda:any(row['type']=='error' for row in e));self.assertIsNone(s.microphone)
         s.dispatch({'command':'listen','greeting':'Hallo'})
@@ -89,5 +90,39 @@ class SuiteVoiceTests(unittest.TestCase):
         self.assertIsNone(s.microphone);s.enable(True)
         selected=next(row for row in e if row['type']=='microphone-selected')
         self.assertEqual(selected['microphone'],saved);self.assertEqual(selected['channels'],2);self.assertEqual(selected['samplerate'],48000)
+    def test_cold_microphone_preparation_finishes_before_greeting_and_listening(self):
+        class SlowReady(Microphone):
+            def start(self):pass
+        s,e=self.service(SlowReady);s.dispatch({'command':'listen','greeting':'Wie kann ich helfen?'})
+        self.wait(lambda:s.microphone is not None);microphone=s.microphone
+        time.sleep(.06)
+        self.assertEqual(s.speaker.items,[]);self.assertFalse(microphone.requested)
+        self.assertFalse(any(row.get('state')=='listening' for row in e))
+        microphone.on_ready('Mikrofon bereit')
+        self.wait(lambda:microphone.requested)
+        self.assertEqual(s.speaker.items,['Wie kann ich helfen?']);self.assertTrue(s.listening)
+    def test_stop_during_cold_preparation_cannot_resurrect_a_listening_turn(self):
+        class SlowReady(Microphone):
+            def start(self):pass
+        s,e=self.service(SlowReady);s.dispatch({'command':'listen','greeting':'Hallo'})
+        self.wait(lambda:s.microphone is not None);microphone=s.microphone;s.stop()
+        microphone.on_ready('Mikrofon bereit');time.sleep(.08)
+        self.assertEqual(s.speaker.items,[]);self.assertFalse(microphone.requested);self.assertFalse(s.listening)
+    def test_ambient_wake_capture_and_decoding_block_queued_chat_announcements(self):
+        s,e=self.service();s.state('listening','Wake erkannt');s.dispatch({'command':'speak','text':'Follower-Meldung'})
+        time.sleep(.05);self.assertEqual(s.speaker.items,[])
+        s.state('thinking','Sprache wird erkannt');time.sleep(.05);self.assertEqual(s.speaker.items,[])
+        s.transcript('Chatfarben öffnen');self.wait(lambda:bool(s.speaker.items))
+        self.assertEqual(s.speaker.items,['Follower-Meldung'])
+    def test_recognition_error_stops_capture_and_late_old_callbacks_cannot_cancel_new_turn(self):
+        class Callbacks(Microphone):
+            def __init__(self,*args,**kwargs):
+                super().__init__(*args,**kwargs);self.transcript=args[2];self.state=args[3];self.error=args[4]
+        s,e=self.service(Callbacks);s.enable(True);old=s.microphone
+        old.error('Spracherkennung fehlgeschlagen')
+        self.assertTrue(old.stopped);self.assertIsNone(s.microphone)
+        s.dispatch({'command':'listen','greeting':'Hallo'});self.wait(lambda:s.microphone and s.microphone.requested)
+        e.clear();old.state('idle','alte Sitzung');old.transcript('Alter Befehl');old.error('Alter Fehler')
+        self.assertTrue(s.listening);self.assertEqual(e,[])
 
 if __name__=='__main__':unittest.main()

@@ -25,7 +25,7 @@ const NAVIGATION = {
   jarvis: ['jarvis', 'javis', 'jarvis einstellungen', 'javis einstellungen'], sensors: ['pc werte', 'pc messwerte', 'messwerte', 'sensoren'],
   fans: ['lufter', 'luftersteuerung', 'fan atlas'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
   wishlist: ['wunschliste'], widgets: ['widgets'], livecenter: ['live center'], moderation: ['moderation'],
-  chatarchive: ['chatarchiv', 'chat archiv'], filters: ['filter', 'chat filter'], hologram: ['hologramm'],
+  chatarchive: ['chatarchiv', 'chat archiv'], filters: ['filter', 'chat filter', 'chatfilter'], hologram: ['hologramm', 'chatfarben', 'chat farben', 'schottfarben', 'zettfarben'],
   platforms: ['plattformen'], commands: ['bot', 'bot befehle'], broadcast: ['auto broadcast', 'autobroadcast', 'broadcast'],
   hotkeys: ['hotkeys'], events: ['ereignisse'], media: ['medien'], pools: ['medien pools'], tts: ['chat stimme'],
   discord: ['discord'], streamerbot: ['streamer bot'], backups: ['sicherungen', 'backups'], settings: ['einstellungen'], diagnostics: ['diagnose']
@@ -242,7 +242,11 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
     return select(catalog, id, query);
   }
   if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
-  if(/^(?:(?:offne|zeige|zeig) (?:mir )?(?:die )?(?:deine|jarvis) einstellungen|(?:deine|jarvis) einstellungen (?:offnen|anzeigen))$/.test(text))return definition(catalog,'jarvis-settings')?simple(catalog,'jarvis-settings','Jarvis-Einstellungen geöffnet.'):select(catalog,'navigate','jarvis',NAVIGATION);
+  // These exact, observed speech-recognition variants only open a harmless page.
+  // Never apply fuzzy correction to switches, saved actions or moderation.
+  const heardNavigation={'chatfarben':'hologram','chat farben':'hologram','schottfarben':'hologram','zettfarben':'hologram','ne chatfilter':'filters','ne chat filter':'filters'};
+  if(Object.hasOwn(heardNavigation,text))return select(catalog,'navigate',heardNavigation[text]);
+  if(/^(?:(?:offne|zeige|zeig) (?:mir )?(?:die )?(?:deine|jarvis) einstellungen|(?:die )?(?:deine|jarvis) einstellungen (?:offnen|anzeigen))$/.test(text))return definition(catalog,'jarvis-settings')?simple(catalog,'jarvis-settings','Jarvis-Einstellungen geöffnet.'):select(catalog,'navigate','jarvis',NAVIGATION);
   if(/^(?:mikrofone (?:neu laden|suchen|aktualisieren)|lade (?:die )?mikrofone neu|suche (?:nach )?mikrofonen)$/.test(text))return simple(catalog,'microphones','Die Mikrofonliste wird aktualisiert.');
   if(/^(?:teste (?:das |mein |dein )?mikrofon|mikrofon testen|starte (?:den )?mikrofontest)$/.test(text))return simple(catalog,'listen','Ich höre für den Mikrofontest.');
   const transition=/^(?:(?:stelle|stell|setze|setz) (?:den )?)?(?:ubergang|szenenubergang) auf (uberblendung|fade|schnitt|cut)$/.exec(text);
@@ -257,15 +261,17 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (/^(?:stopp|stop|ruhe|sei still|schweigen|sei ruhig|hor auf zu sprechen|sprich nicht weiter)$/.test(text)) return simple(catalog, 'speech-stop', 'Sprachausgabe gestoppt.');
   if (/^(?:hore zu|hor zu|zuhoren|ich habe eine frage)$/.test(text)) return simple(catalog, 'listen', 'Ich höre.');
   // Explicit scene phrases win over view navigation ("Start Szene öffnen").
-  const explicitScene = /^(?:(?:offne|offnen|zeige|zeig|aktiviere|starte|wechsle (?:zu|zur)|wechsel (?:zu|zur)) (?:die )?)?(?:szene (.+?)|(.+?) szene|((?:pausen?|spiel|start|ende?)szene))(?: (?:offnen|anzeigen|aktivieren))?$/.exec(text);
+  const explicitScene = /^(?:(?:offne|offnen|zeige|zeig|aktiviere|starte|wechsle (?:zu|zur)|wechsel (?:zu|zur)) )?(?:die )?(?:szene (.+?)|(.+?) szene|((?:pausen?|spiel|start|ende?)szene))(?: (?:offnen|anzeigen|aktivieren))?$/.exec(text);
   if (explicitScene) {
     const requested = explicitScene[1] || explicitScene[2] || explicitScene[3];
     const key = Object.keys(SCENE_ALIASES).find(id => SCENE_ALIASES[id].includes(requested));
     return select(catalog, 'scene', normalize(sceneAliases[key] || (key ? {pause: 'Pause', spiel: 'Spiel', start: 'Start', ende: 'Ende'}[key] : requested)));
   }
-  const navigation = /^(?:offne|offnen|zeige|zeig|gehe zu|geh zu|wechsle zu|wechsel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)(?: fenster)?$/.exec(text) || /^(.+?)(?: fenster)? (?:offnen|anzeigen)$/.exec(text);
+  const navigation = /^(?:offne|offnen|offnet|eroffne|zeige|zeig|gehe zu|geh zu|wechsle zu|wechsel zu|dexel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)(?: fenster)?$/.exec(text) || /^(.+?)(?: fenster)? (?:offnen|anzeigen)$/.exec(text);
   if (navigation) {
-    const query = navigation[1];
+    // Polite questions become "das Touch Deck öffnen" after normalization.
+    // Handle the article in this verb-last form just as in "öffne das Touch Deck".
+    const query = targetText(navigation[1]);
     if (query === 'start') return ambiguous('Meinst du die Startszene oder die Startseite? Sag: Startszene öffnen oder Startseite öffnen.');
     const known = choices(catalog, 'navigate').some(item => choiceMatches(item, query, NAVIGATION));
     if (known) return select(catalog, 'navigate', query, NAVIGATION);

@@ -29,9 +29,29 @@ app.whenReady().then(async()=>{
    await js(`document.getElementById('j-command').value=${JSON.stringify(text)};document.getElementById('j-command-form').requestSubmit()`);
    for(let i=0;i<100;i++){if(runtime.jarvis.history.length>before&&!runtime.jarvis.commandBusy)return runtime.jarvis.history.at(-1);await pause(40);}throw Error('Command timeout: '+text);
   }
+  async function assertPage(view,control,phrase){
+   await until(async()=>await js('S.view')===view,'navigation: '+phrase);
+   const state=await js(`(()=>{const panel=document.querySelector('[data-view-panel="${view}"]'),control=document.getElementById(${JSON.stringify(control)});return {view:S.view,active:panel?.classList.contains('active'),nav:document.querySelector('.nav-item.active')?.dataset.view,visible:!!panel?.getClientRects().length,controlVisible:!!control?.getClientRects().length,content:panel?.textContent.trim().length||0};})()`);
+   assert.equal(state.view,view,phrase);assert.equal(state.nav,view,phrase);assert.equal(state.active,true,phrase);assert.equal(state.visible,true,phrase);assert.equal(state.controlVisible,true,phrase);assert(state.content>20,phrase+' rendered an empty panel');
+  }
   await command('Start Szene öffnen');assert.equal(dual.config.program.scene,'Start');checks.push('typed Start Szene öffnen changes the real program scene');
   await command('Multi Chat öffnen');assert.equal(await js('S.view'),'dashboard');checks.push('typed Multi Chat öffnen opens the real Multi-Chat page');
   await command('Chat Filter öffnen');assert.equal(await js('S.view'),'filters');checks.push('typed Chat Filter öffnen opens the real filters page');
+  for(const phrase of ['Eröffne Chatfarben','Dexel zu Chatfarben','Zettfarben','Schottfarben']){
+   assert.equal((await command(phrase)).kind,'answer',phrase);await assertPage('hologram','mcNameColor',phrase);
+   checks.push('reported phrase '+JSON.stringify(phrase)+' opens visible Chatfarben controls and selects its real sidebar entry');
+  }
+  fs.writeFileSync(path.join(output,'Jarvis-Chatfarben-1600.png'),(await win.webContents.capturePage()).toPNG());
+  assert.equal((await command('Ne Chatfilter')).kind,'answer');await assertPage('filters','fTerm','Ne Chatfilter');checks.push('reported Ne Chatfilter opens the real visible filter editor');
+  for(const [phrase,view,control] of [['Kannst du mir bitte den Multi-Chat öffnen?','dashboard','chatList'],['Kannst du mir bitte das Touch Deck öffnen?','touchdeck','touch-deck-root']]){
+   assert.equal((await command(phrase)).kind,'answer',phrase);await assertPage(view,control,phrase);checks.push('polite request '+JSON.stringify(phrase)+' navigates to '+view);
+  }
+  await js('setView("jarvis")');const beforeAsr=runtime.jarvis.history.length;
+  runtime.voice.emit('event',{type:'transcript',text:'Jarvis öffnet den Chatfilter.'});
+  await until(()=>runtime.jarvis.history.length>=beforeAsr+2&&!runtime.jarvis.commandBusy,'reported ASR phrase finishes');
+  const reportedAsr=runtime.jarvis.history.slice(beforeAsr);assert.equal(reportedAsr[0].source,'voice');assert.equal(reportedAsr[0].text,'Jarvis öffnet den Chatfilter.');assert.equal(reportedAsr.at(-1).kind,'answer');
+  await assertPage('filters','fTerm','Jarvis öffnet den Chatfilter.');checks.push('ASR transcript Jarvis öffnet den Chatfilter. records the actual recognized wording and opens visible filters through the runtime voice pipeline');
+  fs.writeFileSync(path.join(output,'Jarvis-Chatfilter-ASR-1600.png'),(await win.webContents.capturePage()).toPNG());
   await command('Chat Filter aus');assert.equal(host.getSuiteHost().filters().enabled,false);
   await command('Chat Filter an');assert.equal(host.getSuiteHost().filters().enabled,true);checks.push('filter switch updates and saves actual test configuration');
   await command('Filterwort JarvisTest181 hinzufügen');assert(host.getSuiteHost().filters().rules.some(x=>x.term==='JarvisTest181'));

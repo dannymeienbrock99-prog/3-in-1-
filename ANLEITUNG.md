@@ -1,8 +1,10 @@
-# Batto 3-in-1 · Schnellstart 1.8.2
+# Batto 3-in-1 · Schnellstart 1.8.3
 
 Den Windows-Installer öffnen und den separat erhaltenen Installationsschlüssel eingeben. Der private Schlüssel wird nicht im Repository veröffentlicht. Die bisherigen Suite-Einstellungen bleiben bei einem Update erhalten.
 
 ## Jarvis steuert das Programm
+
+**Neu in 1.8.3:** Die sichtbaren Bereiche **Chatfarben** und **Chat-Filter** lassen sich jetzt öffnen: etwa „Öffne Chatfarben“, „Eröffne Chatfarben“ oder „Jarvis öffnet den Chatfilter“. Auch „Kannst du mir bitte den Multi-Chat öffnen?“ und „Kannst du mir bitte das Touch Deck öffnen?“ sind möglich. Nach Tastendruck zunächst **Mikrofon wird vorbereitet …** abwarten und erst bei **Ich höre zu …** sprechen. Der Aufnahmestart schneidet keine ersten Wörter wegen einer vorherigen Aktivierung mehr ab; Chat- und Ereignisansagen warten während der Sprachanfrage. Mikrofon und Umgebungsgeräusche beeinflussen weiterhin die Erkennung.
 
 Unter **Jarvis** auf **Jetzt zuhören** drücken oder die Jarvis-Taste im Stream Deck verwenden. Auf die Anzeige zum Sprechen warten und einen Befehl sagen. Für den sparsamen Betrieb ist das Mikrofon zwischen Tastendrücken aus. Wer jederzeit mit „Jarvis“ starten möchte, aktiviert unter **Jarvis-Einstellungen → Stimme & Mikrofon** das dauerhafte Mikrofon und **Auf „Jarvis“ warten**.
 

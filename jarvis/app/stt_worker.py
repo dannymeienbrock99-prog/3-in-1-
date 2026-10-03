@@ -9,6 +9,10 @@ from config import MODELS, ROOT
 import network_guard
 network_guard.install()
 
+# A small fixed vocabulary helps short control names without forcing a command
+# or introducing a grammar that would turn unrelated speech into an action.
+COMMAND_VOCABULARY='Jarvis, Batto, Chatfarben, Chatfilter, Chat-Filter, Multi-Chat, Multichat, Touch Deck, Touchdeck, Dual Stream, Pause, Start, Ende, Spiel, Kamera, Mikrofon, Moderation, Auto-Broadcast, Twitch, TikTok, TikFinity, Lautstärke, Lüfter, Arbeitsspeicher, CPU, GPU'
+
 def parse_transcript(text):
     pattern=r'^(?:(?:hey|hi|hallo)[,\s]*|h[.]\s*j[.]\s*)?(?:jarvis|javis|jarwis|yavis|havis|dschavis|hiyavis|hayabis|ja,?\s*bis|ja,?\s*wiss)\b[, .!?–—-]*'
     match=re.match(pattern,text.strip(),re.I)
@@ -46,7 +50,7 @@ def run():
             samples = np.frombuffer(base64.b64decode(job['audio']), dtype='<i2').astype(np.float32)/32768
             def transcribe():
                 segments,_=model.transcribe(samples,language='de',beam_size=3,vad_filter=True,
-                    condition_on_previous_text=False,initial_prompt='Jarvis. Batto Touch Deck, Dual Stream, Pause, Start, Ende, Spiel, Kamera, Mikrofon, Chatfilter, Moderation, Auto-Broadcast, Twitch, TikTok, TikFinity, Lautstärke, Lüfter, Arbeitsspeicher, CPU und GPU.')
+                    condition_on_previous_text=False,initial_prompt=COMMAND_VOCABULARY+'.',hotwords=COMMAND_VOCABULARY)
                 return ' '.join(s.text.strip() for s in segments).strip()
             try:text=transcribe()
             except RuntimeError as exc:

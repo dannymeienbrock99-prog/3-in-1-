@@ -73,7 +73,10 @@ class Microphone(threading.Thread):
         self.quit.set(); self.decode_cancel.set()
 
     def decode(self, raw, require_wake=False):
-        self.decoding.set(); self.decode_cancel.clear()
+        # Cancellation may arrive after "thinking" was emitted but before this
+        # method starts. Only a new capture is allowed to clear cancellation.
+        if self.quit.is_set() or self.cancel_record.is_set() or self.decode_cancel.is_set():return
+        self.decoding.set()
         def task():
             try:
                 result = self.recognizer.call({'audio': base64.b64encode(raw).decode()}, self.decode_cancel)
@@ -151,7 +154,7 @@ class Microphone(threading.Thread):
                         frames.clear(); pre.clear(); capture = False
                         cooldown = time.monotonic() + (.25 if not busy else 0); was_busy = busy
                     if self.cancel_record.is_set():
-                        self.cancel_record.clear(); capture = False; frames.clear(); self.decode_cancel.set()
+                        self.cancel_record.clear(); capture = False; frames.clear(); pre.clear(); self.decode_cancel.set()
                     if busy:
                         if stop_rec:
                             final = stop_rec.AcceptWaveform(raw)
@@ -166,7 +169,9 @@ class Microphone(threading.Thread):
                             if commands:
                                 stop_rec.Reset(); self.on_interrupt()
                         continue
-                    if self.decoding.is_set() or time.monotonic() < cooldown: continue
+                    # An explicit button turn begins after the greeting has
+                    # ended. Do not discard its first word during wake cooldown.
+                    if self.decoding.is_set() or (not capture and time.monotonic() < cooldown and not self.record.is_set()): continue
                     if not capture:
                         pre.append(raw); wake = False
                         if wake_rec:
@@ -176,6 +181,7 @@ class Microphone(threading.Thread):
                         if self.record.is_set() or wake or (self.settings.get('continuous') and speech):
                             self.record.clear()
                             if wake_rec:wake_rec.Reset()
+                            self.decode_cancel.clear()
                             capture = True; frames = list(pre); heard = False; silence = elapsed = 0.
                             wake_capture=wake
                             if wake:

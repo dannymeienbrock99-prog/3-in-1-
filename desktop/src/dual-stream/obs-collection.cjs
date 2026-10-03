@@ -73,7 +73,19 @@ function validateObsCollection(input){
  const warnings=Array.isArray(input.warnings)?input.warnings.slice(0,200).map(w=>string(w,1000).replace(/https?:\/\/\S+/gi,'[Adresse]')):[];
  return {version:1,name:string(input.name),sources,scenes,aliases,warnings};
 }
-function sceneChoices(config){return [...DEFAULT_SCENES.map(value=>({value,label:value})),...(config?.obsCollection?.scenes||[]).filter(s=>!s.internal).map(s=>({value:s.key,label:s.label}))];}
+// Presentation order never changes the saved OBS graph or stable scene keys.
+// Use the landscape partner as the common sort name so differently named
+// portrait scenes (for example Chat / chat_tt) remain together in both lists.
+const sceneCollator=new Intl.Collator('de',{numeric:true,sensitivity:'base'});
+function sceneSortName(value){return String(value||'').toLocaleLowerCase('de').replace(/[_.-]+/g,' ').replace(/\b(?:tiktok|tik tok|twitch|hochformat|querformat|portrait|landscape|tt)\b/g,' ').trim().replace(/\s+/g,' ');}
+function sceneRank(value){const name=sceneSortName(value),groups=[['start','startszene','stream startet'],['spiel','gaming','game','spielszene'],['pause','pausenszene','bin gleich zurück'],['chat','chatten','just chatting'],['ende','end','endszene','abspann'],['offline'],['pc','setup']];const index=groups.findIndex(group=>group.includes(name));return index<0?groups.length:index;}
+function sceneChoices(config){
+ const scenes=(config?.obsCollection?.scenes||[]).filter(s=>!s.internal),byId=new Map(scenes.map(s=>[s.id,s]));
+ const partner=s=>{const p=byId.get(s.partnerId);return p&&p.platform!==s.platform?p:undefined;};
+ const sortBase=s=>{const p=partner(s);return s.platform==='tiktok'&&p?p:s;},sortName=s=>sceneSortName(sortBase(s).name);
+ const sorted=[...scenes].sort((a,b)=>PLATFORMS.indexOf(a.platform)-PLATFORMS.indexOf(b.platform)||sceneRank(sortName(a))-sceneRank(sortName(b))||sceneCollator.compare(sortName(a),sortName(b))||sortBase(a).key.localeCompare(sortBase(b).key)||sceneCollator.compare(a.name,b.name)||a.key.localeCompare(b.key));
+ return [...DEFAULT_SCENES.map(value=>({value,label:value})),...sorted.map((s,order)=>{const p=partner(s);return {value:s.key,label:s.label||s.name,name:s.name,platform:s.platform,spokenName:(s.platform==='tiktok'?'TikTok':'Twitch')+' '+s.name,order,...(p?{partnerKey:p.key,partnerName:p.name,partnerLabel:p.label||p.name}:{})};})];
+}
 function resolveScene(config,value){
  if(typeof value!=='string'||!value.trim())throw Error('Bitte eine Szene auswählen.');
  const wanted=value.trim(),lower=wanted.toLocaleLowerCase('de'),standard=DEFAULT_SCENES.find(s=>s.toLocaleLowerCase('de')===lower);if(standard)return standard;

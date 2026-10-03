@@ -57,6 +57,51 @@ const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleic
   start: ['start', 'startszene', 'start szene', 'stream startet'], ende: ['ende', 'endszene', 'ende szene', 'stream ende']};
 const definition = (catalog, id) => [...(catalog?.actions||[]),...(catalog?.voiceActions||[])].find(a => a?.id === id);
 const choices = (catalog, id) => (definition(catalog, id)?.choices || []).filter(c => c && typeof c.id === 'string' && typeof c.name === 'string');
+function sceneDetails(item) {
+  // Older saved catalogs only have a decorated label. New catalogs also retain
+  // the original OBS name, so punctuation and identical names stay identifiable.
+  const label = /^(.*?)\s*·\s*(TikTok|Twitch)$/i.exec(item.name);
+  const platform = ['tiktok','twitch'].includes(item.platform) ? item.platform : label?.[2].toLowerCase();
+  if (!platform) return null;
+  const platformName = platform === 'tiktok' ? 'TikTok' : 'Twitch';
+  const name = typeof item.sceneName === 'string' ? item.sceneName : label?.[1] || item.name;
+  return {platform, platformName, name, spokenName: item.spokenName || `${platformName} ${name}`};
+}
+function sceneReply(item) {
+  const details = sceneDetails(item);
+  if (!details) return `Die Szene ${item.name} ist ausgewählt.`;
+  if (item.partnerName) return `Szenenpaar ausgewählt: ${details.spokenName} und ${details.platform === 'tiktok' ? 'Twitch' : 'TikTok'} ${item.partnerName}.`;
+  return `Die Szene ${details.spokenName} ist für beide Ausgaben ausgewählt.`;
+}
+function qualifiedSceneCommand(text, catalog) {
+  const explicitScene = /\bszene\b/.test(text);
+  let query = text.replace(/^(?:(?:offne|offnen|zeige|zeig|aktiviere|starte|mach|mache) (?:mir )?|(?:wechsle|wechsel|schalte|schalt) (?:zu|zur|auf|in) )/, '');
+  query = targetText(query).replace(/^szene /, '').replace(/ (?:offnen|anzeigen|aktivieren|wechseln|umschalten|machen)$/, '');
+  if (!explicitScene && (/^(?:verbinde|trenne) /.test(text) || choices(catalog, 'navigate').some(item => choiceMatches(item, query, NAVIGATION)))) return null;
+  const before = /^(tiktok|tik tok|twitch) (.+)$/.exec(query);
+  const after = /^(.+?) (?:(?:auf|fur|bei) )?(tiktok|tik tok|twitch)$/.exec(query);
+  if (!before && !after) return null;
+  const platform = (before?.[1] || after[2]).replace(' ', '');
+  const literalQuery = targetText(before?.[2] || after[1]);
+  query = literalQuery.replace(/^szene /, '').replace(/ szene$/, '');
+  // Platform-only output and connection commands retain their own routes. An
+  // explicit "Szene" still permits a scene whose literal name is "Kamera".
+  if (!explicitScene && (/^(?:starte|stoppe|stopp|beende|verbinde|trenne|starten|stoppen|beenden|verbinden|trennen|an|ein|aus|umschalten)$/.test(query) || /^live studio(?: sitzung)?$/.test(query) || /^(?:(?:virtuelle|virtuellen) )?(?:kamera|ausgabe)(?: |$)/.test(query) || / (?:an|ein|aus|verbinden|trennen|starten|stoppen|beenden|umschalten)$/.test(query))) return null;
+  if (!definition(catalog, 'scene')) return unavailable();
+  const available = choices(catalog, 'scene').map(item => ({item, details: sceneDetails(item)})).filter(entry => entry.details?.platform === platform);
+  let matches = available.filter(({details}) => normalize(details.name) === literalQuery);
+  if (!matches.length) matches = available.filter(({details}) => normalize(details.name) === query);
+  if (!matches.length) {
+    const key = Object.keys(SCENE_ALIASES).find(id => SCENE_ALIASES[id].includes(query));
+    const alias = key ? {pause:'pause', spiel:'spiel', start:'start', ende:'ende'}[key] : query;
+    matches = available.filter(({item, details}) => [details.name, item.partnerName,
+      details.platform === 'tiktok' ? details.name.replace(/(?:[\s_.-]+(?:tt|tiktok|tik tok|hochformat|portrait))$/i, '') : details.name.replace(/(?:[\s_.-]+(?:twitch|querformat|landscape))$/i, '')
+    ].filter(Boolean).some(name => normalize(name) === alias));
+  }
+  if (matches.length > 1) return ambiguous(`Mehrere ${platform === 'tiktok' ? 'TikTok' : 'Twitch'}-Szenen passen zu diesem Namen. Wähle die eindeutige Variante in der Befehlsliste oder benenne die Szenen um.`);
+  if (!matches.length) return ambiguous(`Diese ${platform === 'tiktok' ? 'TikTok' : 'Twitch'}-Szene finde ich nicht. Nenne den vollständigen Namen aus der Szenenliste.`);
+  return {kind:'action', action:{action:'scene', target:matches[0].item.id}, reply:sceneReply(matches[0].item)};
+}
 function spokenChoiceName(item, action) {
   // The shared deck catalog decorates these names for drop-downs. Remove only
   // that explicit cosmetic prefix, preserving the exact saved name beneath it.
@@ -75,7 +120,7 @@ function select(catalog, id, query, aliases = {}, extra = {}) {
   if (matches.length > 1) return ambiguous('Mehrere Ziele heißen so. Vergib bitte eindeutige Namen, damit ich das richtige auswähle.');
   if (!matches.length) return ambiguous('Diesen Namen finde ich nicht. Nenne bitte den vollständigen Namen aus den Einstellungen.');
   const target = matches[0];
-  return {kind: 'action', action: {action: id, target: target.id, ...extra}, reply: `${target.name}: ${extra.op === 'on' ? 'eingeschaltet' : extra.op === 'off' ? 'ausgeschaltet' : id === 'navigate' ? 'geöffnet' : 'ausgeführt'}.`};
+  return {kind: 'action', action: {action: id, target: target.id, ...extra}, reply: id === 'scene' ? sceneReply(target) : `${target.name}: ${extra.op === 'on' ? 'eingeschaltet' : extra.op === 'off' ? 'ausgeschaltet' : id === 'navigate' ? 'geöffnet' : 'ausgeführt'}.`};
 }
 function simple(catalog, id, reply) {
   return definition(catalog, id) ? {kind: 'action', action: {action: id}, reply} : unavailable();
@@ -213,7 +258,7 @@ function quotedCatalogCommand(input,catalog){
     if(!definition(catalog,id))return unavailable();
     const matches=choices(catalog,id).filter(item=>identifier?item.id===value:spokenChoiceName(item,id)===value||item.name===value);
     if(matches.length!==1)return ambiguous(matches.length?'Mehrere Ziele heißen so. Verwende die eindeutige Variante aus der Befehlsliste oder benenne sie um.':'Diesen Namen finde ich nicht. Wähle einen vorhandenen Eintrag aus der Befehlsliste.');
-    return {kind:'action',action:{action:id,target:matches[0].id,...extra},reply:`${matches[0].name}: ${extra.op==='on'?'eingeschaltet':extra.op==='off'?'ausgeschaltet':extra.op==='toggle'?'umgeschaltet':'ausgeführt'}.`};
+    return {kind:'action',action:{action:id,target:matches[0].id,...extra},reply:id==='scene'?sceneReply(matches[0]):`${matches[0].name}: ${extra.op==='on'?'eingeschaltet':extra.op==='off'?'ausgeschaltet':extra.op==='toggle'?'umgeschaltet':'ausgeführt'}.`};
   };
   for(const [id,noun,verb,last]of kinds){
     const match=new RegExp('^(?:'+verb+' '+article+noun+' '+marker+'(?: aus| ab)?|'+article+noun+' '+marker+' '+last+')$').exec(text);
@@ -294,6 +339,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (audio) return audio;
   if (/^(?:stopp|stop|ruhe|sei still|schweigen|sei ruhig|hor auf zu sprechen|sprich nicht weiter)$/.test(text)) return simple(catalog, 'speech-stop', 'Sprachausgabe gestoppt.');
   if (/^(?:hore zu|hor zu|zuhoren|ich habe eine frage)$/.test(text)) return simple(catalog, 'listen', 'Ich höre.');
+  const qualifiedScene = qualifiedSceneCommand(text, catalog);
+  if (qualifiedScene) return qualifiedScene;
   // Explicit scene phrases win over view navigation ("Start Szene öffnen").
   const explicitScene = /^(?:(?:offne|offnen|zeige|zeig|aktiviere|starte|wechsle (?:zu|zur)|wechsel (?:zu|zur)) )?(?:die )?(?:szene (.+?)|(.+?) szene|((?:pausen?|spiel|start|ende?)szene))(?: (?:offnen|anzeigen|aktivieren))?$/.exec(text);
   if (explicitScene) {
@@ -323,9 +370,7 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
     const key = Object.keys(SCENE_ALIASES).find(id => SCENE_ALIASES[id].includes(sceneQuery));
     const query = normalize(sceneAliases[key] || (key ? {pause: 'Pause', spiel: 'Spiel', start: 'Start', ende: 'Ende'}[key] : sceneQuery));
     if (key || choices(catalog, 'scene').some(item => choiceMatches(item, query))) {
-      const result = select(catalog, 'scene', query);
-      if (result.kind === 'action') result.reply = `Die Szene ${choices(catalog, 'scene').find(c => c.id === result.action.target).name} ist ausgewählt.`;
-      return result;
+      return select(catalog, 'scene', query);
     }
   }
   const stream = /^(?:(?:starte|stoppe|stopp|beende) (?:die )?)?((?:beide )?(?:streams|virtuelle[n]? kameras?)|(?:tiktok|twitch)(?: ausgabe| kamera| virtuelle kamera)?)(?: (starten|stoppen|beenden))?$/.exec(text);
@@ -418,7 +463,11 @@ function commandExamples(catalog = {}, {limit} = {}) {
     if(id==='command')continue; // Saved-command recursion is intentionally not a voice capability.
     for(const item of choices(catalog,id)){
       if(id==='navigate')action(`Öffne ${item.name}`,`${item.name} anzeigen`,id,item.id);
-      else if(id==='scene')action(choose([`Szene ${item.name} öffnen`,`Öffne Szene ${literal(id,item)}`],{action:id,target:item.id}),`${item.name} als Programmszene auswählen`,id,item.id);
+      else if(id==='scene'){
+        const details=sceneDetails(item),phrase=choose([...(details?[details.spokenName]:[]),`Szene ${item.name} öffnen`,`Öffne Szene ${literal(id,item)}`],{action:id,target:item.id}),typedOnly=phrase.includes('"');
+        const paired=details?(item.partnerName?` Gekoppelt mit ${details.platform==='tiktok'?'Twitch':'TikTok'} ${item.partnerName}; beide Ausgaben wechseln gemeinsam.`:' Dieselbe Szene wird für beide Ausgaben verwendet.'):'';
+        action(phrase,`${item.name} als Programmszene auswählen.`+paired+(typedOnly?' Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{}, {...(details?{category:details.platformName+'-Szenen'}:{}),...(typedOnly?{typedOnly:true}:{})});
+      }
       else if(id==='transition')action(`Übergang auf ${item.name}`,`${item.name} für folgende Szenenwechsel`,id,item.id);
       else if(id==='start'||id==='stop')action(`${item.id==='both'?'Beide virtuelle Kameras':item.id==='twitch'?'Twitch virtuelle Kamera':'TikTok virtuelle Kamera'} ${id==='start'?'starten':'stoppen'}`,`${item.name}: virtuelle Kamera ${id==='start'?'starten':'stoppen'}`,id,item.id);
       else if(['source','overlay','jarvis','control','broadcast-profile'].includes(id)){

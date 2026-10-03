@@ -1,4 +1,11 @@
-# Batto 3-in-1 · Schnellstart 1.8.7
+# Batto 3-in-1 · Schnellstart 1.8.8
+
+## TikTok- und Twitch-Szenen · 1.8.8
+
+Die OBS-Szenensammlung zeigt TikTok im Hochformat und Twitch im Querformat in getrennten Gruppen. Start, Spiel, Pause, Chat, Ende, Offline und PC stehen zuerst; weitere Szenen folgen nach Namen. Zusammengehörige Szenen haben dieselbe Sortierung. Jede Taste zeigt ihren Partner und einen passenden Jarvis-Befehl.
+
+Sage zum Beispiel „TikTok Pause“, „Twitch Start“ oder „Schalte auf TikTok Chat“. Jarvis wählt die importierte Szene aus dem aktuellen Bestand und nennt beide Ausgaben. Das bisherige gekoppelte Umschalten bleibt erhalten. Ohne Partner wird dieselbe Szene auf beide Formate eingepasst; Jarvis weist darauf hin. Originalnamen, Ebenen, eigene Deck-Tasten und gespeicherte Einstellungen bleiben erhalten.
+
 
 ## Vollständige Szenenliste aus OBS · 1.8.7
 

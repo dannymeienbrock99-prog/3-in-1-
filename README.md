@@ -1,4 +1,11 @@
-# Batto 3-in-1 · 1.8.7
+# Batto 3-in-1 · 1.8.8
+
+## TikTok- und Twitch-Szenen · 1.8.8
+
+Die OBS-Szenensammlung zeigt TikTok im Hochformat und Twitch im Querformat in getrennten Gruppen. Start, Spiel, Pause, Chat, Ende, Offline und PC stehen zuerst; weitere Szenen folgen nach Namen. Zusammengehörige Szenen haben dieselbe Sortierung. Jede Taste zeigt ihren Partner und einen passenden Jarvis-Befehl.
+
+Sage zum Beispiel „TikTok Pause“, „Twitch Start“ oder „Schalte auf TikTok Chat“. Jarvis wählt die importierte Szene aus dem aktuellen Bestand und nennt beide Ausgaben. Das bisherige gekoppelte Umschalten bleibt erhalten. Ohne Partner wird dieselbe Szene auf beide Formate eingepasst; Jarvis weist darauf hin. Originalnamen, Ebenen, eigene Deck-Tasten und gespeicherte Einstellungen bleiben erhalten.
+
 
 ## Vollständige Szenenliste aus OBS · 1.8.7
 
@@ -142,7 +149,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.7.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.8.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

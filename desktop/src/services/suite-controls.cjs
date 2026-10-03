@@ -15,7 +15,7 @@ async function connectAdapter(adapter,name,op){
 }
 class SuiteControls{
  constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;this.jarvisDepth=0;}
- catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{},dual=this.getDual(),scenes=sceneChoices(dual?.config).map(({value,label})=>({id:value,name:label}));return {actions:[
+ catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{},dual=this.getDual(),scenes=sceneChoices(dual?.config).map(({value,label,name,...metadata})=>({id:value,name:label,...(name?{sceneName:name}:{}),...metadata}));return {actions:[
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
   {id:'scene',name:'Szene und Übergang',choices:scenes,transition:true},

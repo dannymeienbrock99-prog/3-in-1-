@@ -7,7 +7,7 @@
 [Setup]
 AppId={{2B151B53-163C-489D-80A2-B046578C2906}
 AppName=Batto 3-in-1
-AppVersion=1.9.0
+AppVersion=1.9.1
 AppPublisher=Crazy_Batto
 AppPublisherURL=https://github.com/dannymeienbrock99-prog/3-in-1-
 DefaultDirName={localappdata}\Programs\CrazyBatto\BattoSuite
@@ -17,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#OutputPath}
-OutputBaseFilename=Batto-3-in-1-Setup-1.9.0
+OutputBaseFilename=Batto-3-in-1-Setup-1.9.1
 SetupIconFile=..\desktop\src\assets\app-icon.ico
 UninstallDisplayIcon={app}\Batto 3-in-1.exe
 WizardStyle=modern

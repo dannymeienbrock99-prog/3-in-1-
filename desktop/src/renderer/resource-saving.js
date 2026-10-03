@@ -3,7 +3,7 @@
   // Only presentation resources rest. Chat ingestion, OBS, alerts and broadcasts
   // continue in the main process, including while the window is minimized.
   const frames = new Map();
-  let senderState;
+  let senderState,rendererReady=false;
   function senderChip(){const chip=document.getElementById('obsChip');if(!chip)return;const live=Object.values(senderState?.state?.outputs||{}).some(s=>s.state==='camera');chip.className='chip '+(live||senderState?.companionLive?'ok':'');chip.innerHTML='<i></i>'+(live?'Virtuelle Kamera läuft':senderState?.companionLive?'LIVE-Studio-Sitzung':'Sender bereit');chip.title='Eigener Sender und Szenen unter Dual Stream';}
   window.batto.onDualState(value=>{senderState=value;if(!document.hidden)senderChip();});
   let requested = false, override = false, savedAutoStart, savedSnow;
@@ -26,6 +26,9 @@
     }
   }
   function refresh() {
+    // This policy loads before app.js. A restored window can receive its
+    // presentation state before the shared renderer state exists.
+    if(!rendererReady)return;
     for (const [frame, url] of frames) {
       if (!frame.isConnected) frames.delete(frame);
       else applyFrame(frame, url);
@@ -58,6 +61,7 @@
   // Register source policy before any widget script, but wrap renderer functions
   // only after every presentation module has installed its own extensions.
   document.addEventListener('DOMContentLoaded', () => {
+  rendererReady=true;
   // Defer chat DOM work while preserving every incoming message in S.messages.
   for (const name of ['renderChat', 'renderModeration', 'renderHistory', 'renderConnections']) {
     const original = window[name];

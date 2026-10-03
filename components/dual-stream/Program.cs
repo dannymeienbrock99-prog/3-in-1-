@@ -280,7 +280,11 @@ internal sealed class Engine : IDisposable {
   if(transition!="cut"&&targets.Any(x=>Obs.obs_transition_is_active(x.Value.transition)&&Obs.obs_transition_get_time(x.Value.transition)<1))throw new InvalidOperationException("Übergang läuft noch. Bitte kurz warten.");
   var replacements=new Dictionary<Destination,nint>();
   try{
-   foreach(var pair in targets){var d=pair.Value;if(d.transitionId==resourceId)continue;
+   foreach(var pair in targets){var d=pair.Value;
+    // A repeated scene/paired alias needs no video transition. Creating an idle
+    // Stinger here leaves its decoder at time zero, so it can never finish.
+    if(transition!="cut"&&d.scenes[name]==d.scenes[d.selected])continue;
+    if(d.transitionId==resourceId)continue;
     if(spec.NativeType=="obs_stinger_transition"){LoadModule("obs-ffmpeg");if(!loadedModules.Contains("obs-ffmpeg"))throw new InvalidOperationException("Die Videobibliothek für Stinger-Übergänge fehlt.");}
     var next=Source(spec.NativeType,"Übergang "+pair.Key,spec.Settings);replacements[d]=next;
     Obs.obs_source_set_audio_mixers(next,0);Obs.obs_source_set_muted(next,true);
@@ -294,6 +298,7 @@ internal sealed class Engine : IDisposable {
     Obs.obs_transition_set_size(next,(uint)d.width,(uint)d.height);Obs.obs_transition_set(next,Obs.obs_scene_get_source(d.scenes[d.selected]));
    }
    foreach(var pair in targets){var d=pair.Value;
+    if(transition!="cut"&&d.scenes[name]==d.scenes[d.selected]){d.selected=name;ReleaseFinishedTransition(d);continue;}
     if(replacements.TryGetValue(d,out var next)){ReplaceTransition(d,next,resourceId);replacements.Remove(d);}
     var target=Obs.obs_scene_get_source(d.scenes[name]);
     // OBS rejects transitioning to the same source; identical scene/alias

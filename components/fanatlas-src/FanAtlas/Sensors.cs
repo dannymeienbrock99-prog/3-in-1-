@@ -63,7 +63,9 @@ public sealed class CsvReader
     public List<Measurement> Read(IEnumerable<string> paths)
     {
         Messages.Clear(); var values = new List<Measurement>();
-        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(20))
+        var selected = paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+        foreach (var removed in seen.Keys.Except(selected, StringComparer.OrdinalIgnoreCase).ToArray()) seen.Remove(removed);
+        foreach (var path in selected)
         {
             try
             {
@@ -110,7 +112,11 @@ public sealed class CsvReader
             foreach (var line in headLines)
             {
                 var cols = Split(line, d); int units = cols.Count(s => Unit(s) != null && !TryNumber(s, out _));
-                int score = units == 0 ? 0 : units * 1000 + Math.Min(999, cols.Length);
+                // iCUE allows completely custom labels (for example "Front links").
+                // Its timestamp header still identifies the row; the units then
+                // come from each numeric value instead of a guessed label.
+                bool timestampHeader = cols.Length > 1 && Regex.IsMatch(cols[0].Trim(), @"^(timestamp|time|zeit|zeitstempel|date|datum|date[ /]time)$", RegexOptions.IgnoreCase);
+                int score = timestampHeader ? 1_000_000 + Math.Min(999, cols.Length) : units == 0 ? 0 : units * 1000 + Math.Min(999, cols.Length);
                 if (score > best) { best = score; headers = cols; delimiter = d; }
             }
         if (headers == null) return new(new(), "", written);
@@ -126,8 +132,9 @@ public sealed class CsvReader
         for (int i = 0; i < row.Length; i++)
         {
             string? cellUnit = ValueUnit(row[i]);
-            string? unit = Unit(headers[i]) ?? cellUnit;
-            if (unit == null || cellUnit != null && unit != cellUnit || !TryNumber(row[i], out double value)) continue;
+            string? explicitUnit = ExplicitUnit(headers[i]);
+            string? unit = explicitUnit ?? cellUnit ?? Unit(headers[i]);
+            if (unit == null || explicitUnit != null && cellUnit != null && explicitUnit != cellUnit || !TryNumber(row[i], out double value)) continue;
             if (unit == "°F") { value = (value - 32) * 5 / 9; unit = "°C"; }
             if (unit == "°C" && (value < -100 || value > 250) || unit == "RPM" && (value < 0 || value > 100000) || unit == "%" && (value < 0 || value > 200)) continue;
             string key = "csv/" + Path.GetFullPath(path).ToUpperInvariant() + "/" + i;
@@ -171,15 +178,22 @@ public sealed class CsvReader
         if (suffix == "℃") return "°C";
         return new[] { "RPM", "°C", "°F", "%", "MHz", "GHz", "GB/s", "MB/s", "KB/s", "GB", "MB", "W", "V", "A", "ms", "FPS" }.First(u => u.Equals(suffix, StringComparison.OrdinalIgnoreCase));
     }
-    public static string? Unit(string text)
+    private static string? ExplicitUnit(string text)
     {
         string s = text.ToLowerInvariant();
         if (s.Contains("rpm") || s.Contains("u/min")) return "RPM";
         if (s.Contains("°f") || s.Contains("[f]")) return "°F";
-        if (s.Contains("°c") || s.Contains("℃") || s.Contains("[c]") || s.Contains("temperature") || s.Contains("temperatur") || Regex.IsMatch(s, @"\btemp\b")) return "°C";
+        if (s.Contains("°c") || s.Contains("℃") || s.Contains("[c]")) return "°C";
         if (s.Contains('%')) return "%";
         foreach (string unit in new[] { "MHz", "GHz", "GB/s", "MB/s", "KB/s", "GB", "MB", "W", "V", "A", "ms", "FPS" })
             if (Regex.IsMatch(text, @"[\[(]\s*" + Regex.Escape(unit) + @"\s*[\])]", RegexOptions.IgnoreCase)) return unit;
+        return null;
+    }
+    public static string? Unit(string text)
+    {
+        var explicitUnit = ExplicitUnit(text); if (explicitUnit != null) return explicitUnit;
+        string s = text.ToLowerInvariant();
+        if (s.Contains("temperature") || s.Contains("temperatur") || Regex.IsMatch(s, @"\btemp\b")) return "°C";
         if ((s.Contains("fan") || s.Contains("lüfter") || s.Contains("pump")) && !s.Contains('%')) return "RPM";
         return null;
     }

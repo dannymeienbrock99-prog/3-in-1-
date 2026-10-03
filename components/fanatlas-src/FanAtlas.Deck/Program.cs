@@ -29,6 +29,8 @@ public sealed class DeckPlugin : IDisposable
     private readonly SemaphoreSlim sendLock = new(1, 1);
     private readonly HttpClient http = new(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
     private readonly ConcurrentDictionary<string, ActionState> actions = new();
+    private readonly ConcurrentDictionary<int, Task> keyOperations = new();
+    private int keySequence;
     private readonly CancellationTokenSource lifetime = new();
     private JsonObject? snapshot,suiteSnapshot,suiteCatalog;
     private readonly string descriptorPath = Environment.GetEnvironmentVariable("FANATLAS_TEST_BRIDGE") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrazyBatto", "BattoSuite", "FanAtlas", "bridge.json");
@@ -53,10 +55,44 @@ public sealed class DeckPlugin : IDisposable
                 using var message = new MemoryStream();
                 WebSocketReceiveResult read;
                 do { read = await socket.ReceiveAsync(buffer, lifetime.Token); if (read.MessageType == WebSocketMessageType.Close) return; message.Write(buffer, 0, read.Count); if (message.Length > 1_000_000) throw new InvalidDataException("Stream-Deck-Nachricht zu groß."); } while (!read.EndOfMessage);
-                if (JsonNode.Parse(message.ToArray()) is JsonObject data) await Handle(data);
+                if (JsonNode.Parse(message.ToArray()) is JsonObject data)
+                {
+                    if (data["event"]?.GetValue<string>() == "keyDown") await DispatchKey(data);
+                    else await Handle(data);
+                }
             }
         }
-        finally { lifetime.Cancel(); try { await poller; } catch (OperationCanceledException) { } }
+        finally { lifetime.Cancel(); try { await Task.WhenAll(keyOperations.Values.Append(poller)); } catch (OperationCanceledException) { } }
+    }
+    private static string Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : "";
+    private bool Emergency(string context)
+    {
+        if (!actions.TryGetValue(context, out var state)) return false;
+        var control = state.Settings["control"] as JsonObject;
+        // Only explicit stop actions bypass the ordinary pending-action limit.
+        // Combinations may contain other side effects and keep the usual limit.
+        return state.Action.EndsWith(".control") && Text(control?["action"]) is "stop" or "speech-stop" or "cancel";
+    }
+    private async Task DispatchKey(JsonObject data)
+    {
+        string context = Text(data["context"]);
+        if (keyOperations.Count >= (Emergency(context) ? 12 : 8))
+        {
+            await Send(new { @event = "showAlert", context }); return;
+        }
+        // Keep receiving settings, removals and stop keys while a Suite request
+        // waits. The Suite still owns action ordering and validates each action.
+        int id = Interlocked.Increment(ref keySequence);
+        Task operation = HandleKey(data); keyOperations[id] = operation;
+        _ = operation.ContinueWith(completed => keyOperations.TryRemove(id, out _), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+    private async Task HandleKey(JsonObject data)
+    {
+        try { await Handle(data); }
+        catch (Exception) when (!lifetime.IsCancellationRequested)
+        {
+            await Send(new { @event = "showAlert", context = Text(data["context"]) });
+        }
     }
     private async Task Send(object data)
     {

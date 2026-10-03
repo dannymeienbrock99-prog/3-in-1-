@@ -1,4 +1,4 @@
-import sys, time, unittest
+import sys, time, unittest, threading
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from worker_rpc import Worker
@@ -29,6 +29,17 @@ class IdleWorkerTests(unittest.TestCase):
         self.assertEqual(first['pid'], second['pid'])
         self.assertEqual(second['text'], 'fertig')
         self.assertIsNotNone(worker.process)
+
+    def test_already_cancelled_request_keeps_memory_release_timer(self):
+        worker = self.worker()
+        worker.call({'text': 'fertig'})
+        child = worker.process
+        cancel = threading.Event(); cancel.set()
+        with self.assertRaises(InterruptedError):
+            worker.call({'text': 'darf nicht laufen'}, cancel)
+        time.sleep(.65)
+        self.assertIsNone(worker.process, 'Cancelled work must not keep a model resident indefinitely')
+        self.assertIsNotNone(child.poll())
 
 if __name__ == '__main__':
     unittest.main()

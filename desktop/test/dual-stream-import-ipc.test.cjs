@@ -35,5 +35,12 @@ for(const preload of ['preload.cjs','dual-preload.cjs'])test(preload+': actual e
   await assert.rejects(invoke('obs-import-apply',{token:onlyPreview.token,baseRevision:only.revision,transitionsOnly:true}),/erneut auswählen/);
   service.state.outputs={tiktok:{state:'camera'}};await assert.rejects(invoke('obs-import-preview'),/stoppen/);service.state.outputs={};
   await invoke('background-clear',{platform:'twitch',scene:'Pause',baseRevision:service.revision});assert.equal(service.config.program.platformBackgrounds.twitch.Pause,null);assert.equal(fs.existsSync(media),true);assert.equal(service.config.obsCollection.aliases.twitch.Pause,undefined);assert.equal(service.config.obsCollection.scenes.length,1);
+  // Normalized OBS projects exceed the original tiny, layout-only file limit.
+  const large=structuredClone(service.config);for(let i=0;i<20;i++)large.obsCollection.sources.push({id:'text-'+i,name:'Text '+i,type:'text_gdiplus',settings:{text:'A'.repeat(9000)}});
+  await service.save(large);const exportFile=path.join(directory,'export.json');electron.dialog.showSaveDialog=async()=>({filePath:exportFile,canceled:false});
+  await invoke('export');assert(fs.statSync(exportFile).size>128000);const exported=JSON.parse(fs.readFileSync(exportFile,'utf8'));
+  electron.dialog.showOpenDialog=async()=>({filePaths:[exportFile],canceled:false});fs.writeFileSync(exportFile,'\ufeff'+fs.readFileSync(exportFile,'utf8'));
+  await service.scene('Start');const restored=await invoke('import');assert.deepEqual(restored.config,exported);assert.equal(restored.engineRunning,false);
+  fs.writeFileSync(exportFile,' '.repeat(16*1024*1024+1));await assert.rejects(invoke('import'),/groß/);
  }finally{await bootstrap?.close();delete require.cache[bootstrapPath];Module._load=load;if(previous===undefined)delete process.env.BATTO_SUITE_DATA;else process.env.BATTO_SUITE_DATA=previous;fs.rmSync(directory,{recursive:true,force:true});}
 });

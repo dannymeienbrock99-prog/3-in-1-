@@ -27,6 +27,16 @@ public static class FanDiscoveryTests
             var m=CsvReader.Parse(csv,csv,"strict.csv",DateTime.UtcNow).Measurements;
             Assert(m.Count==2 && m[0].Unit=="V" && m[0].Value==12.1 && m[1].Unit=="%" && m[1].Value==80);
         });
+        Check("Custom iCUE labels retain value units without fan or temperature words",()=>{
+            string csv="Timestamp,Front links,Front rechts,Wasser\n1,1650RPM,80%,30.20°C\n";
+            var m=CsvReader.Parse(csv,csv,"corsair_cue_custom.csv",DateTime.UtcNow).Measurements;
+            Assert(m.Count==3&&m[0].Unit=="RPM"&&m[0].Value==1650&&m[1].Unit=="%"&&m[1].Value==80&&m[2].Unit=="°C");
+        });
+        Check("Explicit numeric cell units override guessed units from a generic sensor name",()=>{
+            string csv="Time;Front Lüfter;Temperature\n1;80%;104°F\n";
+            var m=CsvReader.Parse(csv,csv,"cell-units.csv",DateTime.UtcNow).Measurements;
+            Assert(m.Count==2&&m[0].Unit=="%"&&m[0].Value==80&&m[1].Unit=="°C"&&Math.Abs(m[1].Value-40)<0.001);
+        });
         Check("Real iCUE unit-suffixed log: shared writer, first read stale, partial row ignored",()=>{
             string p=Path.Combine(Path.GetTempPath(),"corsair_cue_test_"+Guid.NewGuid().ToString("N")+".csv");
             try {

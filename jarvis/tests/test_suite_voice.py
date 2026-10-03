@@ -68,6 +68,13 @@ class SuiteVoiceTests(unittest.TestCase):
         self.assertTrue(s.settings['continuous']);self.assertIsNone(s.microphone)
         s.dispatch({'command':'settings','value':{'microphoneEnabled':True,'wakeWord':True}})
         self.assertFalse(s.settings['continuous'])
+    def test_suite_gaming_mode_reaches_the_live_microphone_settings_without_opening_it(self):
+        s,e=self.service()
+        self.assertTrue(s.settings['gaming_mode'])
+        s.dispatch({'command':'settings','value':{'gamingMode':False}})
+        self.assertFalse(s.settings['gaming_mode']);self.assertIsNone(s.microphone)
+        s.dispatch({'command':'settings','value':{'gamingMode':True}})
+        self.assertTrue(s.settings['gaming_mode']);self.assertIsNone(s.microphone)
     def test_failed_microphone_start_does_not_break_next_push_to_talk_attempt(self):
         class OnceFailing(Microphone):
             starts=0

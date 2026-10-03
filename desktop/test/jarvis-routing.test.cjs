@@ -125,3 +125,23 @@ test('an action finishing during shutdown cannot restart a speech process',async
  resolveScene({});await settled();
  assert.deepEqual(jobs,[],'A closed runtime must not send speak/complete and resurrect VoiceClient');
 });
+
+test('stopping or closing Jarvis aborts the local model fetch and releases the command lock',async t=>{
+ for(const close of [false,true]){
+  const {runtime,jobs}=fixture(t);runtime.jarvis.settings.localAi=true;let signal;
+  const mocked=t.mock.method(globalThis,'fetch',(_url,options)=>{
+   signal=options.signal;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  });
+  const pending=runtime.jarvis.execute('Was ist ein Planet?');
+  assert.equal(signal.aborted,false);
+  if(close)await runtime.close();else runtime.stopSpeech();
+  assert.equal(signal.aborted,true);assert.equal((await pending).ok,false);
+  assert.equal(runtime.jarvis.commandBusy,false);assert(!jobs.some(job=>job.command==='speak'));
+  mocked.mock.restore();
+ }
+});
+
+test('an immediate speech startup failure is not reported as a listening session',t=>{
+ const {runtime}=fixture(t);runtime.voice.send=()=>false;runtime.voice.status='Sprachpaket fehlt.';
+ assert.deepEqual(runtime.listen(),{ok:false,text:'Sprachpaket fehlt.'});assert.equal(runtime.listeningUntil,0);
+});

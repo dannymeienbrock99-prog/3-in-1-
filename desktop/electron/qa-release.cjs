@@ -1,5 +1,5 @@
-const testPort = Number(process.env.BATTO_QA_PORT || 28777);
 'use strict';
+const testPort = Number(process.env.BATTO_QA_PORT || 28777);
 const {app,BrowserWindow,dialog,nativeImage}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {WebSocketServer}=require('ws');
@@ -17,7 +17,7 @@ module.exports=async function({win,run,waitFor,checks,dir,profile}){
   await capture('01-Start');checks.push('Start above Multi-Chat; original art SHA-256 and aspect ratio verified');
   await run(`setView('broadcast');document.querySelector('#bcNew').click();`);
   await waitFor(()=>run(`return !!document.querySelector('#bcForm');`),'Broadcast form');
-  await run(`document.querySelector('#bcName').value='QA Broadcast A';document.querySelector('#bcInterval').value=30;document.querySelector('#bcDelay').value=0;document.querySelector('#bcEnabled').checked=true;document.querySelector('[data-bc-target=local]').checked=true;document.querySelector('[data-bc-target=cng]').checked=false;document.querySelector('[data-bc-message]').value='QA AUTO A';await document.querySelector('#bcForm').onsubmit({preventDefault(){}});`);
+  await run(`document.querySelector('#bcName').value='QA Broadcast A';document.querySelector('#bcInterval').value=30;document.querySelector('#bcDelay').value=0;document.querySelector('#bcEnabled').checked=true;document.querySelector('#bcLive').checked=false;document.querySelector('[data-bc-target=local]').checked=true;document.querySelector('[data-bc-target=cng]').checked=false;document.querySelector('[data-bc-message]').value='QA AUTO A';await document.querySelector('#bcForm').onsubmit({preventDefault(){}});`);
   await waitFor(()=>run(`return (await window.batto.getState()).config.autoBroadcast.items.length===1;`),'Save first broadcast');
   const first=(await run('return await window.batto.getState();')).config.autoBroadcast.items[0].id;
   await run(`await document.querySelector('#bcNew').onclick();document.querySelector('#bcName').value='QA Broadcast B';document.querySelector('#bcInterval').value=60;document.querySelector('#bcDelay').value=60;document.querySelector('[data-bc-message]').value='QA AUTO B';await document.querySelector('#bcForm').onsubmit({preventDefault(){}});`);
@@ -28,7 +28,7 @@ module.exports=async function({win,run,waitFor,checks,dir,profile}){
   await waitFor(()=>run(`return !!document.querySelector('dialog[open]');`),'Delete confirmation');
   await run(`document.querySelector('dialog[open] button[value=yes]').click();`);
   await waitFor(()=>run(`return (await window.batto.getState()).config.autoBroadcast.items.length===2;`),'Delete duplicate persisted');
-  await run(`document.querySelector('#bcMaster').checked=true;document.querySelector('#bcGlobalGap').value=0;document.querySelector('#bcPlatformGap').value=0;await document.querySelector('#bcMasterSave').onclick();`);
+  await run(`document.querySelector('#bcMaster').checked=true;document.querySelector('#bcShowInChat').checked=false;document.querySelector('#bcGlobalGap').value=0;document.querySelector('#bcPlatformGap').value=0;await document.querySelector('#bcMasterSave').onclick();`);
   await waitFor(async()=>{const r=await fetch(`http://127.0.0.1:${(await run('return await window.batto.getState();')).overlay.port}/state`);return (await r.json()).messages.some(m=>m.message==='QA AUTO A');},'Real scheduler overlay output');
   assert.equal(await run(`return (await window.batto.getState()).messages.some(m=>m.message==='QA AUTO A');`),false,'Broadcast hidden in private Multi-Chat');
   await run(`document.querySelector('[data-bc-select="${first}"]').click();`);
@@ -171,7 +171,7 @@ module.exports=async function({win,run,waitFor,checks,dir,profile}){
     assert.equal(qaRedirect.status,302);assert.equal(qaRedirect.headers.get('location'),qaWidget.url);
     checks.push('TikFinity HTTPS URL survives wrong-field paste, persists separately and has a stable OBS route');
   } finally {
-    try { await run(`await window.batto.disconnectAdapter('tikfinity');S.config=await window.batto.saveConfig({platforms:{tikfinity:{...S.config.platforms.tikfinity,url:'ws://127.0.0.1:21213/',autoConnect:true}}});`); } catch {}
+    try { await run(`await window.batto.disconnectAdapter('tikfinity');S.config=await window.batto.saveConfig({platforms:{tikfinity:{...S.config.platforms.tikfinity,url:${JSON.stringify(tikfinityQaUrl)},autoConnect:true}}});`); } catch {}
     for(const client of tikfinityQaServer.clients)client.terminate();
     await new Promise((resolve)=>tikfinityQaServer.close(()=>resolve()));
   }

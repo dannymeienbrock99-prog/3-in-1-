@@ -28,21 +28,28 @@ def run():
             dll_handles.append(os.add_dll_directory(str(folder)))
     from faster_whisper import WhisperModel
     import ctranslate2
-    model=None;backend='Whisper Small · CPU';fallback=''
+    model=None;model_mode=None;backend='Whisper Small · CPU';fallback=''
     def cpu_model():
         return WhisperModel(str(MODELS/'whisper-small'),device='cpu',compute_type='int8',cpu_threads=2,local_files_only=True)
-    try:
-        if (MODELS/'whisper-turbo/model.bin').is_file() and ctranslate2.get_cuda_device_count():
-            model=WhisperModel(str(MODELS/'whisper-turbo'),device='cuda',compute_type='int8_float16',local_files_only=True)
-            # Force the first GPU kernels now, before the first spoken request.
-            list(model.transcribe(np.zeros(16000,np.float32),language='de',beam_size=1,vad_filter=False)[0])
-            backend='Whisper Turbo · NVIDIA GPU'
-    except Exception as exc:
-        fallback=str(exc);model=None;gc.collect()
-    if model is None:model=cpu_model()
+    def select_model(gaming_mode):
+        nonlocal model,model_mode,backend,fallback
+        if model is not None and model_mode==gaming_mode:return
+        # Load only for an actual request, and free the previous model before
+        # switching. Gaming mode must never initialize CUDA or the Turbo model.
+        model=None;gc.collect();model_mode=gaming_mode
+        backend='Whisper Small · CPU';fallback=''
+        try:
+            if not gaming_mode and (MODELS/'whisper-turbo/model.bin').is_file() and ctranslate2.get_cuda_device_count():
+                model=WhisperModel(str(MODELS/'whisper-turbo'),device='cuda',compute_type='int8_float16',local_files_only=True)
+                list(model.transcribe(np.zeros(16000,np.float32),language='de',beam_size=1,vad_filter=False)[0])
+                backend='Whisper Turbo · NVIDIA GPU'
+        except Exception as exc:
+            fallback=str(exc);model=None;gc.collect()
+        if model is None:model=cpu_model()
     for line in sys.stdin:
         try:
             job = json.loads(line)
+            select_model(job.get('gaming_mode') is True)
             if job.get('warmup'):
                 print(json.dumps({'ready': True,'backend':backend,'fallback':fallback}), flush=True)
                 continue

@@ -1,6 +1,6 @@
 const { EventEmitter } = require('events');
 
-const CONNECTOR_STATES = new Set(['DISABLED', 'CONNECTING', 'AUTH_REQUIRED', 'CONNECTED', 'DEGRADED', 'RETRYING', 'ERROR']);
+const CONNECTOR_STATES = new Set(['IDLE', 'DISABLED', 'CONNECTING', 'AUTH_REQUIRED', 'CONNECTED', 'DEGRADED', 'RETRYING', 'ERROR']);
 
 class BaseConnector extends EventEmitter {
   constructor({ name, enabled = true } = {}) {
@@ -8,7 +8,7 @@ class BaseConnector extends EventEmitter {
     if (!name) throw new Error('Connector-Name fehlt.');
     this.name = name;
     this.enabled = enabled !== false;
-    this.state = this.enabled ? 'ERROR' : 'DISABLED';
+    this.state = this.enabled ? 'IDLE' : 'DISABLED';
     this.lastError = null;
     this.lastEventAt = null;
     this.startedAt = null;

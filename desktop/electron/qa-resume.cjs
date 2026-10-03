@@ -1,5 +1,5 @@
 'use strict';
-const {app,BrowserWindow,nativeImage}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {app,BrowserWindow,nativeImage,session}=require('electron'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const dir=process.env.BATTO_QA_DIR;if(!dir)throw new Error('BATTO_QA_DIR required');
 app.setPath('userData',path.join(dir,'isolated-profile'));app.disableHardwareAcceleration();
 let done=false;
@@ -7,6 +7,7 @@ function finish(ok,error){if(done)return;done=true;fs.writeFileSync(path.join(di
 const timeout=setTimeout(()=>finish(false,new Error('Restart test timed out')),30000);timeout.unref();
 app.whenReady().then(async()=>{
   try {
+    session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*','ws://*/*','wss://*/*']},(request,done)=>done({cancel:!['127.0.0.1','localhost','[::1]'].includes(new URL(request.url).hostname)}));
     const expected=JSON.parse(fs.readFileSync(path.join(dir,'resume-expectations.json')));
     let win,state;
     const deadline=Date.now()+20000;
@@ -19,18 +20,22 @@ app.whenReady().then(async()=>{
       await new Promise(r=>setTimeout(r,100));
     }
     assert(state);
-    assert.equal(app.getVersion(),'2.2.0');
+    assert.equal(app.getVersion(),require('../package.json').version);
     assert.equal(state.config.schemaVersion,expected.schemaVersion);
     assert.equal(state.config.autoBroadcast.items.length,expected.broadcasts);
     assert.equal(state.config.autoBroadcast.items[0].name,expected.broadcastName);
     assert.equal(state.config.tts.volume,expected.volume);
     assert.equal(state.config.platforms.tikfinity.webWidgets.some(widget=>widget.url===expected.tikfinityChatUrl),true);
     assert.equal(state.config.platforms.tikfinity.autoConnect,expected.tikfinityAutoConnect);
-    const resumedNativeChat=await win.webContents.executeJavaScript(`(()=>{S.chatTab='tiktok';setView('dashboard');renderChat();return{view:S.tiktokChatView,native:!!document.querySelector('#tikfinityNativeState'),originalButton:!!document.querySelector('#tikfinityWidgetView'),frame:!!document.querySelector('#tikfinityChatFrame')}})()`);
+    const waitRendered=async(code,label)=>{const until=Date.now()+10000;while(Date.now()<until){const value=await win.webContents.executeJavaScript(`(()=>{${code}})()`);if(value)return value;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Restart rendering timed out: '+label);};
+    await win.webContents.executeJavaScript(`S.chatTab='tiktok';setView('dashboard');renderChat();`);
+    const resumedNativeChat=await waitRendered(`const native=!!document.querySelector('#tikfinityNativeState'),originalButton=!!document.querySelector('#tikfinityWidgetView');return native&&originalButton?{view:S.tiktokChatView,native,originalButton,frame:!!document.querySelector('#tikfinityChatFrame')}:null;`,'native TikTok controls');
     assert.deepEqual(resumedNativeChat,{view:'native',native:true,originalButton:true,frame:false});
-    const resumedOriginalView=await win.webContents.executeJavaScript(`(()=>{document.querySelector('#tikfinityWidgetView').click();const frame=document.querySelector('#tikfinityChatFrame');return frame?{view:S.tiktokChatView,src:frame.src,visible:frame.getBoundingClientRect().height>100,nativeButton:!!document.querySelector('#tikfinityNativeView')}:null})()`);
+    await win.webContents.executeJavaScript(`document.querySelector('#tikfinityWidgetView').click();`);
+    const resumedOriginalView=await waitRendered(`const frame=document.querySelector('#tikfinityChatFrame');return frame&&frame.getBoundingClientRect().height>100?{view:S.tiktokChatView,src:frame.src,visible:true,nativeButton:!!document.querySelector('#tikfinityNativeView')}:null;`,'original TikTok view');
     assert.deepEqual(resumedOriginalView,{view:'widget',src:expected.tikfinityChatUrl,visible:true,nativeButton:true});
-    const returnedNativeChat=await win.webContents.executeJavaScript(`(()=>{document.querySelector('#tikfinityNativeView').click();return{view:S.tiktokChatView,native:!!document.querySelector('#tikfinityNativeState'),frame:!!document.querySelector('#tikfinityChatFrame')}})()`);
+    await win.webContents.executeJavaScript(`document.querySelector('#tikfinityNativeView').click();`);
+    const returnedNativeChat=await waitRendered(`const native=!!document.querySelector('#tikfinityNativeState'),frame=!!document.querySelector('#tikfinityChatFrame');return native&&!frame?{view:S.tiktokChatView,native,frame}:null;`,'return to native TikTok view');
     assert.deepEqual(returnedNativeChat,{view:'native',native:true,frame:false});
     assert.equal(state.config.appearance.chatBackground.mode,'custom');
     assert.equal(state.config.appearance.chatBackground.customName,expected.chatBackgroundName);

@@ -1,4 +1,14 @@
-# Batto 3-in-1 · 1.9.0
+# Batto 3-in-1 · 1.9.1
+
+## Reparaturen und Stabilität · 1.9.1
+
+Jarvis behält beim Start die neuesten Einstellungen, verwirft abgebrochene Befehle und kann einen ausgefallenen Sprachdienst erneut starten. Im Gaming-Sparmodus verwendet die Spracherkennung das kleinere CPU-Modell mit zwei Threads; das erste Laden kann länger dauern. Abgebrochene Anfragen verhindern nicht mehr die automatische Speicherfreigabe.
+
+Dual Stream lässt sich nach einem fehlgeschlagenen Start erneut vorbereiten. Ein erneuter Klick auf die aktive Szene lädt keinen unnötigen Stinger. Größere exportierte OBS-Projekte lassen sich wieder öffnen. Individuell benannte iCUE-Messwerte mit Einheiten werden erkannt; Prozentwerte werden nicht als U/min ausgegeben.
+
+Das Handy-Deck aktualisiert entfernte Ordner und geänderte Profile zuverlässig. Wurde eine Taste zwischenzeitlich verschoben oder geändert, wird die Ansicht zuerst aktualisiert, ohne eine andere Aktion auszuführen. Nach dem Update bereits geöffnete Handy-Seiten einmal neu laden.
+
+Vorhandene Suite-Einstellungen bleiben beim Programmstart erhalten. Automatische Übernahme aus dem alten OBS-Tool erfolgt nur bei einem noch nicht eingerichteten Profil. Chat-Verbindungen melden im Ruhezustand keinen Fehler; Trennen beendet laufende Verbindungsversuche und verhindert verspätete Statuswechsel.
 
 ## OBS-Stinger und Szenenwechsel · 1.9.0
 
@@ -167,7 +177,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.9.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.9.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

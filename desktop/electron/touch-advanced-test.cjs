@@ -12,7 +12,10 @@ app.whenReady().then(async()=>{
  async function capture(name,target=win){target.webContents.invalidate();await pause(250);fs.writeFileSync(path.join(output,name+'.png'),(await target.webContents.capturePage()).toPNG());}
  try{
   if(win.webContents.isLoading())await new Promise(r=>win.webContents.once('did-finish-load',r));await pause(2200);win.setSize(1600,1000);win.showInactive();
-  app.on('web-contents-created',(_e,contents)=>contents.on('console-message',(_event,level,message)=>{if(level>=3&&!/ERR_CONNECTION_REFUSED|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED/.test(message))errors.push(message);}));
+  app.on('web-contents-created',(_e,contents)=>{
+   contents.on('console-message',(_event,level,message,line,source)=>{if(level>=3&&!/ERR_CONNECTION_REFUSED|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED/.test(message))errors.push(`${message} · ${source}:${line} · after ${checks.at(-1)||'start'}`);});
+   contents.debugger.attach();contents.debugger.on('message',(_event,method,params)=>{if(method==='Runtime.exceptionThrown')fs.appendFileSync(path.join(output,'renderer-exceptions.jsonl'),JSON.stringify(params.exceptionDetails)+'\n');});void contents.debugger.sendCommand('Runtime.enable').catch(()=>{});
+  });
   await js('setView("touchdeck")');await until(()=>js('!!document.getElementById("td-mode")'),'touch ready');
   const deck=touch.getDeck();assert.equal(touch.getHost(false),undefined);
   const originalDialog=dialog.showOpenDialog;

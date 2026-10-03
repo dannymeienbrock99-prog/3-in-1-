@@ -13,8 +13,13 @@ class NativeClient extends EventEmitter {
     const pending=this.pending.get(message.id);if(!pending)return;this.pending.delete(message.id);clearTimeout(pending.timer);message.ok?pending.resolve(message.result):pending.reject(Error(message.error||'Video-Aktion fehlgeschlagen.'));
    });
    child.stderr.on('data',()=>{}); // Do not expose native logs, device identifiers or keys.
-   child.on('error',()=>{clearTimeout(timeout);reject(Error('Video-Dienst konnte nicht gestartet werden.'));});
-   child.on('exit',()=>{clearTimeout(timeout);input.close();if(this.process===child)this.process=null;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Video-Dienst wurde beendet.'));}this.pending.clear();if(!ready)reject(Error('Video-Dienst wurde beim Start beendet.'));this.emit('exit');});
+   child.stdin.on('error',()=>{}); // A write callback rejects its request; EPIPE must not crash Electron.
+   let finished=false;
+   const finish=error=>{if(finished)return;finished=true;clearTimeout(timeout);input.close();if(this.process===child)this.process=null;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error('Video-Dienst wurde beendet.'));}this.pending.clear();if(!ready)reject(error||Error('Video-Dienst wurde beim Start beendet.'));this.emit('exit');};
+   // Spawn failures emit error/close without exit. Clear the dead handle there
+   // as well, otherwise every retry incorrectly reuses a non-running process.
+   child.on('error',()=>finish(Error('Video-Dienst konnte nicht gestartet werden.')));
+   child.on('exit',()=>finish());
   });
  }
  request(command,fields={}){if(!this.process?.stdin.writable)return Promise.reject(Error('Video-Dienst ist ausgeschaltet.'));const id=++this.sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('Video-Aktion hat zu lange gedauert.'));this.process?.kill();},15000);this.pending.set(id,{resolve,reject,timer});this.process.stdin.write(JSON.stringify({...fields,id,command})+'\n',error=>{if(error){clearTimeout(timer);this.pending.delete(id);reject(Error('Video-Dienst nicht erreichbar.'));}});});}

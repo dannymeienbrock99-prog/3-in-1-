@@ -34,6 +34,9 @@ npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
 node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs test/obs-collection.test.cjs test/scene-groups.test.cjs; Check-Exit
 npm run test:core; Check-Exit
+node --test test/connector-lifecycle.test.cjs test/settings-import-startup.test.cjs test/youtube-lifecycle.test.cjs test/twitch-popout-lifecycle.test.cjs test/presentation-startup.test.cjs; Check-Exit
+$env:BATTO_DECK_TEST_OUTPUT = Join-Path $PSScriptRoot 'work/deck-native-check'
+try { node test/deck-native-responsive.cjs; Check-Exit } finally { Remove-Item Env:BATTO_DECK_TEST_OUTPUT -ErrorAction SilentlyContinue }
 node scripts/audio-playback-regression.cjs; Check-Exit
 node scripts/ui-contract.cjs; Check-Exit
 node scripts/smoke.cjs; Check-Exit
@@ -48,5 +51,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.1.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

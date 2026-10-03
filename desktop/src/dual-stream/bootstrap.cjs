@@ -29,7 +29,7 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{const detached=sender
   case 'key':return service.saveKey(value?.platform,value?.key);
   case 'snapshot':return service.image(value);
   case 'library':{const r=await dialog.showOpenDialog({title:'OBS-Ordner mit bin, data und obs-plugins wählen',properties:['openDirectory']});if(r.canceled)return null;const root=r.filePaths[0];if(!fs.existsSync(path.join(root,'bin/64bit/obs.dll')))throw Error('Dieser Ordner enthält keine OBS-Bibliotheken.');return service.save({...service.config,obsRoot:root});}
-  case 'import':{const r=await dialog.showOpenDialog({title:'Dual-Stream-Projekt importieren',properties:['openFile'],filters:[{name:'Dual-Stream-Konfiguration',extensions:['json']}]});if(r.canceled)return null;if(fs.statSync(r.filePaths[0]).size>128000)throw Error('Projektdatei ist zu groß.');return service.import(JSON.parse(fs.readFileSync(r.filePaths[0],'utf8')));}
+  case 'import':{const r=await dialog.showOpenDialog({title:'Dual-Stream-Projekt importieren',properties:['openFile'],filters:[{name:'Dual-Stream-Konfiguration',extensions:['json']}]});if(r.canceled)return null;if(fs.statSync(r.filePaths[0]).size>16*1024*1024)throw Error('Projektdatei ist zu groß (maximal 16 MB).');return service.import(JSON.parse(fs.readFileSync(r.filePaths[0],'utf8').replace(/^\uFEFF/,'')));}
   case 'obs-import-preview':{
    if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');
    const r=await dialog.showOpenDialog({title:'OBS-Szenensammlung importieren',properties:['openFile'],filters:[{name:'OBS-Szenensammlung',extensions:['json']}]});if(r.canceled)return null;

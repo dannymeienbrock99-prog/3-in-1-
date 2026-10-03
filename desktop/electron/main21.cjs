@@ -1079,7 +1079,7 @@ module.exports.getSuiteHost=()=>({
  control:value=>navigation.controls.control(value),
  run:(kind,id)=>kind==='media'?actionEngine.executeRule({id:'deck-media:'+id,cooldownSeconds:0,onlyWhenLive:false,actions:[{type:'media',mediaId:id}]},{platform:'internal',source:'stream-deck'},'deck-media'):navigation.test(kind,id),
  cancel:()=>{actionEngine.cancelAll();return {ok:true};},
- connect:(name,op)=>require('../src/services/suite-controls.cjs').connectAdapter(adapters[name],name,op),
+ connect:(name,op)=>require('../src/services/suite-controls.cjs').connectAdapter(connectorManager.get(name)?{getStatus:()=>connectorManager.status(name),connect:()=>connectorManager.connect(name),disconnect:()=>connectorManager.disconnect(name)}:null,name,op),
  navigate:view=>{if(!require('../src/services/suite-controls.cjs').VIEWS[view])throw Error('Unbekannter Bereich.');return navigation.navigate(view,true);},
  jarvisSettings:async()=>{await navigation.navigate('jarvis',true);await mainWindow.webContents.executeJavaScript("if(!document.getElementById('view-jarvis').classList.contains('settings-open'))document.getElementById('j-settings-toggle').click();true");return {ok:true,text:'Die Jarvis-Einstellungen sind geöffnet.'};},
  show:async()=>{await showMainWindow();return {ok:true};},

@@ -85,3 +85,15 @@ test('typed listen command opens one listening turn and leaves the greeting to t
   assert.equal(listening, 1);
   assert.deepEqual(spoken, []);
 });
+
+test('stop aborts an outstanding local AI request and prevents a late spoken answer',async t=>{
+ let requestSignal,resolveAnswer;
+ const {core,spoken}=setup(t,{askAi:(_text,_settings,_memory,signal)=>{requestSignal=signal;return new Promise(resolve=>{resolveAnswer=resolve;});}});
+ core.settings.localAi=true;
+ const request=core.execute('Was ist ein Planet?');
+ await core.execute('Stopp');
+ assert.equal(requestSignal?.aborted,true,'Cancellation must reach the local model request');
+ resolveAnswer('Eine verspätete Antwort');
+ assert.equal((await request).ok,false);assert.deepEqual(spoken,[]);
+ assert.equal(core.commandBusy,false);assert.equal(core.memory.length,0);
+});

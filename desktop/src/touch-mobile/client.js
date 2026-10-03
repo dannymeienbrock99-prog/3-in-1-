@@ -11,7 +11,7 @@
  async function request(route,body){
   const generation=epoch;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
-  try{const response=await fetch(route,{method:body===undefined?'GET':'POST',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(token&&profileId?{'X-Batto-Profile':profileId,'X-Batto-Path':JSON.stringify(path)}:{}),...(token&&Number.isFinite(state?.visualRevision)?{'X-Batto-Visual-Revision':String(state.visualRevision)}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
+  try{const response=await fetch(route,{method:body===undefined?'GET':'POST',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(token&&profileId?{'X-Batto-Profile':profileId,'X-Batto-Path':JSON.stringify(path)}:{}),...(token&&Number.isFinite(state?.revision)?{'X-Batto-Revision':String(state.revision)}:{}),...(token&&Number.isFinite(state?.visualRevision)?{'X-Batto-Visual-Revision':String(state.visualRevision)}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
    let result={};try{result=await response.json();}catch{}
    if(!response.ok){if(generation===epoch&&response.status===401&&route!=='/api/pair')disconnect('Verbindung abgelaufen. Bitte erneut koppeln.');throw Error(result.error||result.message||'Verbindung nicht möglich. Prüfe den PC und das Netzwerk.');}
    return result;
@@ -53,7 +53,7 @@
  function pluginVisual(button,value){const visual=(state?.presentation||{})[value.id]||{},src=png(value.icon)||png(visual.image);let image=button.querySelector('img'),symbol=button.querySelector('.symbol');if(src){if(!image){image=document.createElement('img');image.alt='';button.prepend(image);}if(image.getAttribute('src')!==src)image.src=src;symbol?.remove();}else{image?.remove();if(!symbol){symbol=document.createElement('span');symbol.className='symbol';symbol.textContent=value.symbol||'◆';button.prepend(symbol);}}let text=button.querySelector('.plugin-status');const message=String(visual.error||visual.title||'').slice(0,160);if(message){if(!text){text=document.createElement('span');text.className='plugin-status';button.append(text);}if(text.textContent!==message)text.textContent=message;}else text?.remove();button.classList.toggle('plugin-error',!!visual.error);}
  function visuals(next){if(!state||!Number.isFinite(next.visualRevision))return;state.visualRevision=next.visualRevision;if(next.visuals!==undefined||next.presentation!==undefined)state.presentation=next.visuals||next.presentation||{};const byId=new Map(page().buttons.filter(Boolean).map(value=>[value.id,value]));document.querySelectorAll('[data-plugin]').forEach(button=>{const value=byId.get(button.dataset.plugin);if(value)pluginVisual(button,value);});}
  function render(){
-  const profile=active();if(!profile)return;profileId=profile.id;
+  const profile=active();if(!profile)return;if(profileId!==profile.id)path=[];profileId=profile.id;
   document.body.classList.remove('pairing-screen');$('pairing').hidden=true;$('deck').hidden=false;$('disconnect').hidden=false;
   const select=$('profiles');select.replaceChildren(...state.profiles.map(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=p.name;return option;}));select.value=profileId;
   const {buttons,titles}=page();$('breadcrumb').textContent=[profile.name,...titles].join(' / ');$('back').hidden=!path.length;
@@ -71,7 +71,7 @@
     if(value.type==='folder'){path.push(index);render();return;}
     if(value.type==='sensor'||pressing)return;
     pressing=true;button.classList.add('busy');status(value.title+' …');
-    try{await request('/api/press',{profileId,path:[...path],index});status(value.title+(value.type==='plugin'?' · an Plugin gesendet':' · ausgeführt'));}catch(error){status(error.message,true);}finally{pressing=false;button.classList.remove('busy');}
+    try{await request('/api/press',{profileId,path:[...path],index,buttonId:value.id,baseRevision:state.revision});status(value.title+(value.type==='plugin'?' · an Plugin gesendet':' · ausgeführt'));}catch(error){status(error.message,true);}finally{pressing=false;button.classList.remove('busy');}
    };
    grid.append(button);
   }

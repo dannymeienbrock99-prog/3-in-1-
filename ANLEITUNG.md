@@ -1,4 +1,14 @@
-# Batto 3-in-1 · Schnellstart 1.9.0
+# Batto 3-in-1 · Schnellstart 1.9.1
+
+## Reparaturen und Stabilität · 1.9.1
+
+Jarvis behält beim Start die neuesten Einstellungen, verwirft abgebrochene Befehle und kann einen ausgefallenen Sprachdienst erneut starten. Im Gaming-Sparmodus verwendet die Spracherkennung das kleinere CPU-Modell mit zwei Threads; das erste Laden kann länger dauern. Abgebrochene Anfragen verhindern nicht mehr die automatische Speicherfreigabe.
+
+Dual Stream lässt sich nach einem fehlgeschlagenen Start erneut vorbereiten. Ein erneuter Klick auf die aktive Szene lädt keinen unnötigen Stinger. Größere exportierte OBS-Projekte lassen sich wieder öffnen. Individuell benannte iCUE-Messwerte mit Einheiten werden erkannt; Prozentwerte werden nicht als U/min ausgegeben.
+
+Das Handy-Deck aktualisiert entfernte Ordner und geänderte Profile zuverlässig. Wurde eine Taste zwischenzeitlich verschoben oder geändert, wird die Ansicht zuerst aktualisiert, ohne eine andere Aktion auszuführen. Nach dem Update bereits geöffnete Handy-Seiten einmal neu laden.
+
+Vorhandene Suite-Einstellungen bleiben beim Programmstart erhalten. Automatische Übernahme aus dem alten OBS-Tool erfolgt nur bei einem noch nicht eingerichteten Profil. Chat-Verbindungen melden im Ruhezustand keinen Fehler; Trennen beendet laufende Verbindungsversuche und verhindert verspätete Statuswechsel.
 
 ## OBS-Stinger und Szenenwechsel · 1.9.0
 

@@ -82,10 +82,12 @@ function status(targetUserData){
  return {ok:false,pending:false};
 }
 function initialize(app){
- if(process.env.BATTO_OBS_DATA||process.argv.includes('--batto-qa-suite'))return;
+ if(process.env.BATTO_OBS_DATA||process.env.BATTO_TEST_INSTANCE==='1'||process.argv.some(arg=>arg.startsWith('--batto-qa')))return;
  const target=app.getPath('userData');
  try{
-  if(!fs.existsSync(path.join(target,PENDING))&&!fs.existsSync(path.join(target,REPORT))){const source=path.join(app.getPath('appData'),'batto-obs-tool');if(fs.existsSync(path.join(source,CORE,'settings.json')))prepareImport(source,target);}
+  // Automatic first-start import must never replace an already configured suite.
+  // A deliberately prepared import is still applied below, with its own backup.
+  if(!fs.existsSync(path.join(target,CORE,'settings.json'))&&!fs.existsSync(path.join(target,PENDING))&&!fs.existsSync(path.join(target,REPORT))){const source=path.join(app.getPath('appData'),'batto-obs-tool');if(fs.existsSync(path.join(source,CORE,'settings.json')))prepareImport(source,target);}
   applyPending(target);
  }catch(e){atomic(path.join(target,'obs-import-error.json'),{message:e.message,time:new Date().toISOString()});}
 }

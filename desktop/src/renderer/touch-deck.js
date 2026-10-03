@@ -147,9 +147,9 @@
       if (item.type === 'sensor') { message('Diese Taste zeigt einen PC-Messwert an.'); return; }
       if (item.type === 'volume') return;
       if (dirty) throw Error('Bitte zuerst Änderungen speichern oder verwerfen.');
-      const result = await call('press', {profileId:profile().id,path:[...path],index});
+      const result = await call('press', {profileId:profile().id,path:[...path],index,buttonId:item.id,baseRevision:draftRevision});
       if (result?.ok === false) throw Error(result.error || 'Die Tastenaktion konnte nicht ausgeführt werden.');
-      message(`„${item.title || 'Taste ' + (index + 1)}“ ausgeführt.`);
+      message(`„${item.title || 'Taste ' + (index + 1)}“ ${result?.type==='plugin'?'an Plugin gesendet':'ausgeführt'}.`);
     });
     grid.addEventListener('click', event => { if (!event.target.closest('[data-td-volume-controls]')) void pressKey(event); });
     grid.addEventListener('input', event => {

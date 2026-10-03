@@ -97,6 +97,7 @@ class TouchDeck extends EventEmitter{
  }
  async press(position){
   const button=this.locate(position);
+  if((position.buttonId!==undefined||position.baseRevision!==undefined)&&(position.buttonId!==button.id||position.baseRevision!==this.revision))throw Error('Diese Taste wurde geändert. Bitte aktuelle Daten laden.');
   if(button.type==='folder')return {ok:true,type:'folder',path:[...(position.path||[]),position.index]};
   if(button.type==='sensor'){const sensor=this.sensors().find(s=>s.id===button.sensorId);return {ok:true,type:'sensor',value:sensor?.value??null,unit:sensor?.unit||'',name:sensor?.name||button.title};}
   if(button.type==='plugin'){if(!this.pressPlugin)throw Error('Plugin-Dienst ist noch nicht bereit.');return this.pressPlugin(button,position);}

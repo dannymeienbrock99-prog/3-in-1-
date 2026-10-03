@@ -42,3 +42,15 @@ test('chat template fills each field once, reads no commands and rejects unknown
  assert.throws(()=>core.update({chatTemplate:'{command}'}),/Chat-Text/);
  assert.equal(core.settings.chatTemplate,'Chat von {username}: {message}');
 });
+
+test('failed settings persistence leaves active settings and alert history intact',t=>{
+ const directory=temp(t),core=new JarvisCore({directory}),updates=[];
+ core.update({speechVolume:25,sensorRules:{cpu:{alert:true,threshold:80}}});
+ const before=core.settings,alerts=core.alerts,saved=fs.readFileSync(path.join(directory,'jarvis-settings.json'),'utf8');
+ core.on('settings',value=>updates.push(value));
+ // A directory blocks creation of the atomic replacement file on every OS.
+ fs.mkdirSync(path.join(directory,'jarvis-settings.json.tmp'));
+ assert.throws(()=>core.update({speechVolume:70,microphoneEnabled:true,sensorRules:{cpu:{alert:true,threshold:95}}}));
+ assert.equal(core.settings,before);assert.equal(core.alerts,alerts);assert.deepEqual(updates,[]);
+ assert.equal(fs.readFileSync(path.join(directory,'jarvis-settings.json'),'utf8'),saved);
+});

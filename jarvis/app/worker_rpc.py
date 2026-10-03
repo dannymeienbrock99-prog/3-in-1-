@@ -60,10 +60,10 @@ class Worker:
 
     def call(self, job, cancel=None, timeout=None):
         with self.lock:
-            if self.idle_timer:
-                self.idle_timer.cancel()
             if cancel and cancel.is_set():
                 raise InterruptedError('Abgebrochen')
+            if self.idle_timer:
+                self.idle_timer.cancel()
             self.start()
             process, responses = self.process, self.responses
             try:

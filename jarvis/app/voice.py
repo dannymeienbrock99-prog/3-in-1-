@@ -79,7 +79,7 @@ class Microphone(threading.Thread):
         self.decoding.set()
         def task():
             try:
-                result = self.recognizer.call({'audio': base64.b64encode(raw).decode()}, self.decode_cancel)
+                result = self.recognizer.call({'audio': base64.b64encode(raw).decode(), 'gaming_mode': self.settings.get('gaming_mode') is True}, self.decode_cancel)
                 if result.get('backend'):self.on_backend(result['backend'])
                 text = result.get('text', '').strip()
                 prefix = re.match(r'^(?:hey\s+)?(?:jarvis|javis|dschavis)\b[,.:!\s]*', text, flags=re.I)

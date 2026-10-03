@@ -15,6 +15,7 @@ class Recognizer:
         self.result = result or {'text': 'Jarvis Pause', 'wake_detected': True}
 
     def call(self, job, cancel):
+        self.job = job
         self.entered.set()
         if not self.release.wait(2):
             raise AssertionError('Test recognizer was not released')
@@ -98,6 +99,13 @@ class CommandCancelTests(unittest.TestCase):
     def test_bare_recognized_wake_word_starts_a_followup_turn_without_empty_command(self):
         microphone,recognized=self.decoded({'preserve_wake_word':True},{'text':'','wake_detected':True},require_wake=True)
         self.assertEqual(recognized,[]);self.assertTrue(microphone.record.is_set())
+
+    def test_current_gaming_mode_is_sent_with_each_recognition_request(self):
+        for enabled in [True, False]:
+            microphone,worker,recognized,errors=self.microphone({'gaming_mode':enabled})
+            worker.release.set();microphone.decode(b'\x00\x00'*100)
+            self.assertTrue(worker.entered.wait(1))
+            self.assertIs(worker.job['gaming_mode'],enabled)
 
 
 if __name__ == '__main__':

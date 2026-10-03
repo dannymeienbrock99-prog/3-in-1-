@@ -41,6 +41,7 @@ const close=(actual,expected)=>actual.every((value,index)=>Math.abs(value-expect
   for(const platform of ['tiktok','twitch'])check(close(pixel(await shot(platform,'stinger-finished-'+platform),.5,.5),blue),platform+' ends on new scene without overlay residue');
   let transitions=await client.request('test-transition-state');check(Object.values(transitions).every(value=>value.children.length===0),'finished Stinger releases all decoder references');
   state=await change('obs:BL');check(Object.values(state.outputs).every(x=>x.scene==='obs:BL'),'selecting the same scene is a successful no-op');
+  transitions=await client.request('test-transition-state');check(Object.values(transitions).every(value=>value.children.length===0),'selecting the same scene keeps Stinger decoders released');
   await change('obs:AL');await delay(280);for(const platform of ['tiktok','twitch']){const replay=await shot(platform);check(close(pixel(replay,.5,.5),green)&&close(pixel(replay,.1,.1),blue),platform+' reloads the selected Stinger and restarts at the old scene');}await delay(2600);
   state=await change('obs:AL','fade');check(Object.values(state.outputs).every(x=>x.transition==='fade'),'switching back to fade releases imported transition resources');await delay(450);
   transitions=await client.request('test-transition-state');check(Object.values(transitions).every(value=>value.children.length===0),'fade releases all Stinger decoder references');

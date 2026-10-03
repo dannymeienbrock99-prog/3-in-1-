@@ -1,0 +1,27 @@
+'use strict';
+// Isolated native plugin fixture: no Suite instance, microphone, devices or
+// external commands. A deliberately delayed HTTP reply exercises key handling.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),{spawn}=require('node:child_process'),{WebSocketServer}=require('ws');
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const until=async(check,label,ms=3500)=>{for(let time=0;time<ms;time+=25){if(check())return;await delay(25);}throw Error('Timed out: '+label);};
+(async()=>{
+ const output=process.env.BATTO_DECK_TEST_OUTPUT;if(!output)throw Error('Isolated output required');fs.mkdirSync(output,{recursive:true});const token='ac'.repeat(32),messages=[],requests=[],held=[],checks=[];let socket,child,offline=false;
+ const server=http.createServer((req,res)=>{assert.equal(req.headers.authorization,'Bearer '+token);res.setHeader('Content-Type','application/json');if(req.method==='POST'){let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{const value=JSON.parse(body);requests.push(value);if(value.action==='prepare')held.push(res);else res.end(JSON.stringify({ok:true}));});}else if(offline){res.writeHead(503);res.end('{}');}else res.end(JSON.stringify(req.url==='/api/catalog'?{actions:[{id:'stop',choices:[{id:'both'}]}]}:{generatedUtc:new Date().toISOString(),program:{scene:'Spiel'}}));});
+ const host=new WebSocketServer({host:'127.0.0.1',port:0});
+ try{
+  await Promise.all([new Promise((resolve,reject)=>{server.once('error',reject);server.listen(17666,'127.0.0.1',resolve);}),new Promise(resolve=>host.once('listening',resolve))]);
+  const descriptor=path.join(output,'bridge.json');fs.writeFileSync(descriptor,JSON.stringify({port:17666,token}));host.on('connection',connection=>{socket=connection;socket.on('message',raw=>messages.push(JSON.parse(raw)));});
+  child=spawn(path.resolve(__dirname,'../../streamdeck/de.crazybatto.suite.sdPlugin/bin/FanAtlas.Deck.exe'),['-port',String(host.address().port),'-pluginUUID','RESPONSIVE_FIXTURE','-registerEvent','registerPlugin'],{windowsHide:true,stdio:'ignore',env:{...process.env,BATTO_TEST_INSTANCE:'1',BATTO_TEST_BRIDGE:descriptor,FANATLAS_TEST_BRIDGE:path.join(output,'absent-fan.json')}});
+  await until(()=>messages.some(m=>m.event==='registerPlugin'),'registration');const send=(event,context,payload={})=>socket.send(JSON.stringify({event,context,action:'de.crazybatto.suite.control',payload}));
+  send('willAppear','slow',{settings:{control:{action:'prepare'},label:'Langsam'}});send('willAppear','stop',{settings:{control:{action:'stop',target:'both'},label:'Stoppen'}});await until(()=>messages.some(m=>m.context==='stop'&&m.event==='setImage'),'initial images');
+  send('keyDown','slow');await until(()=>held.length===1,'slow request');send('keyDown','stop');await until(()=>requests.some(value=>value.action==='stop'),'emergency stop reaches Suite while first action is waiting',1500);await until(()=>messages.some(m=>m.context==='stop'&&m.event==='showOk'),'stop acknowledgment');assert.equal(held.length,1);checks.push('stop key is acknowledged while another action waits for its HTTP response');
+  for(let i=0;i<24;i++)send('keyDown','slow');await until(()=>held.length>=2,'parallel fixture requests');await delay(350);assert(held.length<=8,`unbounded concurrent actions: ${held.length}`);assert(messages.some(m=>m.context==='slow'&&m.event==='showAlert'));send('keyDown','stop');await until(()=>requests.filter(value=>value.action==='stop').length===2,'reserved stop capacity');checks.push('ordinary pending actions are bounded and emergency stop keeps reserved capacity');
+  for(const response of held.splice(0))response.end(JSON.stringify({ok:true}));await delay(350);
+  const before=messages.filter(m=>m.event==='setImage').length;await delay(2400);const after=messages.filter(m=>m.event==='setImage').length;assert(after-before<=2);checks.push('unchanged key images are cached instead of sent repeatedly');
+  offline=true;const imageCount=messages.filter(m=>m.context==='stop'&&m.event==='setImage').length;await until(()=>messages.filter(m=>m.context==='stop'&&m.event==='setImage').length>imageCount,'offline status image',7000);checks.push('lost Suite connection updates displayed key status');
+  const stoppedImages=messages.filter(m=>m.context==='stop'&&m.event==='setImage').length;send('willDisappear','stop');offline=false;await delay(2600);assert.equal(messages.filter(m=>m.context==='stop'&&m.event==='setImage').length,stoppedImages);checks.push('removed key context receives no further polling images');
+  send('keyDown','slow');await until(()=>held.length===1,'pending action before close');socket.close();await until(()=>child.exitCode!==null,'graceful native exit cancels pending requests',2500);assert.equal(child.exitCode,0);checks.push('closing the plugin connection cancels in-flight HTTP work and exits promptly');
+  fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({ok:true,checks,maximumPendingObserved:requests.filter(value=>value.action==='prepare').length},null,2));console.log(JSON.stringify({ok:true,checks}));
+ }catch(error){fs.writeFileSync(path.join(output,'error.txt'),error.stack);throw error;}
+ finally{child?.kill();for(const response of held)response.destroy();for(const client of host.clients)client.terminate();await new Promise(resolve=>host.close(resolve));server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

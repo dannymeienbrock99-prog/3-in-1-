@@ -71,7 +71,13 @@ class TouchMobile{
     const token=crypto.randomBytes(32).toString('hex');this.sessions.set(token,{id:crypto.randomUUID(),expires:this.now()+SESSION_MS,presses:[]});this.attempts.delete(ip);this.onChange();reply(200,{token,state:this.deck.remoteState()});return;
    }
    if(req.method==='GET'&&url.pathname==='/api/state'){this.activity(req);reply(200,this.deck.remoteState());return;}
-   if(req.method==='GET'&&url.pathname==='/api/readings'){this.activity(req);const visualRevision=this.deck.getVisualRevision();let folderPath=[];try{folderPath=JSON.parse(req.headers['x-batto-path']||'[]');}catch{throw fail(400,'Ungültiger Ordner.');}const audio=await this.deck.audioState({profileId:String(req.headers['x-batto-profile']||this.deck.config.activeProfile),path:folderPath});reply(200,{...this.deck.remoteReadings(),volumes:audio.values,visualRevision,...(String(visualRevision)!==req.headers['x-batto-visual-revision']?{visuals:this.deck.getPresentation()}:{})});return;}
+   if(req.method==='GET'&&url.pathname==='/api/readings'){
+    this.activity(req);
+    // A deleted profile or folder must refresh the layout before audio is read.
+    // Otherwise every poll fails on the old path and the phone never recovers.
+    if(req.headers['x-batto-revision']!==undefined&&String(this.deck.revision)!==req.headers['x-batto-revision']){reply(200,this.deck.remoteReadings());return;}
+    const visualRevision=this.deck.getVisualRevision();let folderPath=[];try{folderPath=JSON.parse(req.headers['x-batto-path']||'[]');}catch{throw fail(400,'Ungültiger Ordner.');}const audio=await this.deck.audioState({profileId:String(req.headers['x-batto-profile']||this.deck.config.activeProfile),path:folderPath});reply(200,{...this.deck.remoteReadings(),volumes:audio.values,visualRevision,...(String(visualRevision)!==req.headers['x-batto-visual-revision']?{visuals:this.deck.getPresentation()}:{})});return;
+   }
    if(req.method==='POST'&&url.pathname==='/api/disconnect'){this.authorized(req);const session=this.sessions.get(String(req.headers.authorization).slice(7));this.deck.onRemoteDisconnect?.(session?.id);this.sessions.delete(String(req.headers.authorization).slice(7));this.onChange();reply(200,{ok:true});return;}
    if(req.method==='POST'&&url.pathname==='/api/volume'){
     const session=this.authorized(req),data=await this.body(req),now=this.now();session.volumeChanges=(session.volumeChanges||[]).filter(time=>time>now-1000);if(session.volumeChanges.length>=20)throw fail(429,'Bitte den Regler kurz loslassen.');session.volumeChanges.push(now);
@@ -79,7 +85,8 @@ class TouchMobile{
    }
    if(req.method==='POST'&&url.pathname==='/api/press'){
     const session=this.authorized(req),data=await this.body(req),now=this.now();this.deck.onRemoteActivity?.(session.id,data.profileId);session.presses=session.presses.filter(time=>time>now-1000);if(session.presses.length>=8)throw fail(429,'Bitte die Taste kurz loslassen.');session.presses.push(now);
-    if(Object.keys(data).some(key=>!['profileId','path','index'].includes(key)))throw fail(400,'Nur vorhandene Tasten können ausgeführt werden.');
+    if(Object.keys(data).some(key=>!['profileId','path','index','buttonId','baseRevision'].includes(key)))throw fail(400,'Nur vorhandene Tasten können ausgeführt werden.');
+    if(typeof data.buttonId!=='string'||!Number.isInteger(data.baseRevision))throw fail(409,'Bitte das Touch Deck neu laden, bevor du eine Taste drückst.');
     reply(200,await this.deck.press(data));return;
    }
    throw fail(404,'Nicht gefunden.');

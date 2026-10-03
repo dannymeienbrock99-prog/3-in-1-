@@ -7,7 +7,7 @@ function normalize(value) {
   return String(value ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/ß/g, 'ss').replace(/[^a-z0-9%]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
-function normalizeCommand(value) {
+function normalizeCommand(value, {preservePoliteness=false}={}) {
   let text = normalize(value);
   text = text.replace(/^(?:hey|hi|hallo|okay|ok) (?=(?:jarvis|javis|dschavis|jarwis)\b)/, '')
     .replace(/^(?:javis|dschavis|jarwis)\b/, 'jarvis');
@@ -15,8 +15,8 @@ function normalizeCommand(value) {
   if (!/^(?:jarvis|javis|dschavis|jarwis) (?:lauter|leiser|lautstarke|stumm|ton|mikrofon|einstellungen)/.test(text)) {
     text = text.replace(/^(?:(?:hey|hallo|okay|ok) )?(?:jarvis|javis|dschavis|jarwis)\b\s*/, '');
   }
-  return text.replace(/^(?:kannst|konntest|wurdest) du (?:mir )?/, '')
-    .replace(/\bbitte\b/g, ' ').trim().replace(/\s+/g, ' ');
+  text=text.replace(/^(?:(?:kannst|konntest|wurdest) du (?:mir )?|ich (?:mochte|will|wurde gern|hatte gerne) )/, '');
+  return (preservePoliteness?text:text.replace(/\bbitte\b/g, ' ')).trim().replace(/\s+/g, ' ');
 }
 const ambiguous = text => ({kind: 'ambiguous', text});
 const unavailable = () => ambiguous('Diese Funktion ist gerade nicht verfügbar. Öffne die Befehlsübersicht für die verfügbaren Befehle.');
@@ -26,7 +26,7 @@ const NAVIGATION = {
   fans: ['lufter', 'luftersteuerung', 'fan atlas'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
   wishlist: ['wunschliste'], widgets: ['widgets'], livecenter: ['live center'], moderation: ['moderation'],
   chatarchive: ['chatarchiv', 'chat archiv'], filters: ['filter', 'chat filter', 'chatfilter'], hologram: ['hologramm', 'chatfarben', 'chat farben', 'schottfarben', 'zettfarben'],
-  platforms: ['plattformen'], commands: ['bot', 'bot befehle'], broadcast: ['auto broadcast', 'autobroadcast', 'broadcast'],
+  platforms: ['plattformen'], commands: ['bot', 'bot befehle', 'kommands', 'comands'], broadcast: ['auto broadcast', 'autobroadcast', 'broadcast'],
   hotkeys: ['hotkeys'], events: ['ereignisse'], media: ['medien'], pools: ['medien pools'], tts: ['chat stimme'],
   discord: ['discord'], streamerbot: ['streamer bot'], backups: ['sicherungen', 'backups'], settings: ['einstellungen'], diagnostics: ['diagnose']
 };
@@ -50,7 +50,7 @@ const CONTROLS = {
   'tts.enabled': ['tts', 'chat stimme'], 'chatArchive.enabled': ['chatarchiv', 'chat archiv'],
   'viewerCount.enabled': ['zuschauerzahl'], 'chatFilter.enabled': ['chat filter', 'chatfilter'],
   'overlay.snow': ['schnee'], 'overlay.likeBar': ['like balken'], 'battleBar.enabled': ['battle bar', 'match anzeige'],
-  'chatWindow.detached': ['chatfenster entkoppeln']
+  'chatWindow.detached': ['chatfenster entkoppeln','chatfenster entkopplung']
 };
 const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleich zuruck'],
   spiel: ['spiel', 'spielszene', 'spiel szene', 'gaming', 'weiter', 'zuruck zum spiel'],
@@ -62,6 +62,7 @@ function spokenChoiceName(item, action) {
   // that explicit cosmetic prefix, preserving the exact saved name beneath it.
   if (action === 'hotkey') return item.name.replace(/^Hotkey:\s*/i, '');
   if (action === 'broadcast') return item.name.replace(/^Auto-Broadcast:\s*/i, '');
+  if (action === 'control') return item.name.replace(/\s+an\s*\/\s*aus$/i, '');
   return item.name;
 }
 function choiceMatches(item, query, aliases = {}, action) {
@@ -86,9 +87,9 @@ function switchPhrase(text) {
     query=targetText(match[1]);op=match[2]==='ein'?'on':'off';
   } else if ((match=/^(verstecke|versteck) (.+)$/.exec(text))) {
     query=targetText(match[2]);op='off';
-  } else if ((match = /^(?:schalte|schalt|mache|mach|stelle|stell|setze|setz) (.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten)$/.exec(text)) ||
-      (match = /^(.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten)$/.exec(text))) {
-    query = targetText(match[1]); op = /^(?:an|ein|einblenden|einschalten)$/.test(match[2]) ? 'on' : 'off';
+  } else if ((match = /^(?:schalte|schalt|mache|mach|stelle|stell|setze|setz) (.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten|aktivieren|deaktivieren|anmachen|ausmachen|umschalten)$/.exec(text)) ||
+      (match = /^(.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten|aktivieren|deaktivieren|anmachen|ausmachen|umschalten)$/.exec(text))) {
+    query = targetText(match[1]); op = match[2]==='umschalten'?'toggle':/^(?:an|ein|einblenden|einschalten|aktivieren|anmachen)$/.test(match[2]) ? 'on' : 'off';
   } else if ((match = /^(aktiviere|aktivier|deaktiviere|deaktivier|starte|stoppe|beende) (.+)$/.exec(text))) {
     query = targetText(match[2]); op = /^(?:aktiviere|aktivier|starte)$/.test(match[1]) ? 'on' : 'off';
   } else if ((match = /^(?:schalte|schalt) (.+) um$/.exec(text))) {
@@ -201,6 +202,29 @@ function moderationCommand(input) {
   }
   return null;
 }
+function quotedCatalogCommand(input,catalog){
+  const quoted=String(input).match(/"(?:\\.|[^"\\])*"/g);
+  if(!quoted||quoted.length!==1)return null;
+  let value;try{value=JSON.parse(quoted[0]);}catch{return null;}
+  const text=normalizeCommand(input.replace(quoted[0],' katalogziel '));
+  const marker='(?:(mit kennung) )?katalogziel',article='(?:(?:den|die|das) )?';
+  const kinds=[['scene','szene','(?:offne|starte|aktiviere)','(?:offnen|anzeigen|aktivieren)'],['chain','(?:aktionskette|kette)','(?:starte|starte die|fuhre|fuhre die)','(?:starten|ausfuhren)'],['event','(?:ereignis|event)','(?:starte|lose|fuhre)','(?:starten|auslosen|ausfuhren)'],['hotkey','hotkey','(?:fuhre|starte|drucke)','(?:ausfuhren|drucken)'],['broadcast','(?:broadcast|rundruf)','(?:sende|send|schicke)','(?:senden|verschicken)'],['media','(?:medium|video|audio|lied|sound)','(?:spiele|spiel|starte)','(?:abspielen|starten)']];
+  const finish=(id,identifier,extra={})=>{
+    if(!definition(catalog,id))return unavailable();
+    const matches=choices(catalog,id).filter(item=>identifier?item.id===value:spokenChoiceName(item,id)===value||item.name===value);
+    if(matches.length!==1)return ambiguous(matches.length?'Mehrere Ziele heißen so. Verwende die eindeutige Variante aus der Befehlsliste oder benenne sie um.':'Diesen Namen finde ich nicht. Wähle einen vorhandenen Eintrag aus der Befehlsliste.');
+    return {kind:'action',action:{action:id,target:matches[0].id,...extra},reply:`${matches[0].name}: ${extra.op==='on'?'eingeschaltet':extra.op==='off'?'ausgeschaltet':extra.op==='toggle'?'umgeschaltet':'ausgeführt'}.`};
+  };
+  for(const [id,noun,verb,last]of kinds){
+    const match=new RegExp('^(?:'+verb+' '+article+noun+' '+marker+'(?: aus| ab)?|'+article+noun+' '+marker+' '+last+')$').exec(text);
+    if(match)return finish(id,!!(match[1]||match[2]));
+  }
+  for(const [id,noun]of [['broadcast-profile','(?:auto broadcast|autobroadcast|broadcast) profil'],['control','funktion'],['jarvis','jarvis schalter'],['source','bildquelle'],['overlay','einblendung']]){
+    const sw=switchPhrase(text);if(!sw)continue;
+    const match=new RegExp('^'+noun+' '+marker+'$').exec(sw.query);if(match)return finish(id,!!match[1],{op:sw.op});
+  }
+  return null;
+}
 function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (typeof input !== 'string' || input.length > 1500) return null;
   const text = normalizeCommand(input);
@@ -208,7 +232,7 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (/^(?:bestatigen|bestatige|ja bestatigen|ja bestatige)$/.test(text)) return {kind: 'confirmation'};
   if (/^(?:abbrechen|nicht bestatigen|nein abbrechen)$/.test(text)) return {kind: 'cancel-confirmation'};
   if (/^(?:hilfe|befehle|befehlsliste|was kannst du|welche befehle (?:kennst|kannst) du|zeige (?:mir )?(?:die )?befehle)$/.test(text))
-    return {kind: 'help', text: commandExamples(catalog).map(example => example.phrase).join('. ') + '. Frage außerdem gezielt nach PC-Messwerten, zum Beispiel GPU-Temperatur oder Lüfterdrehzahl.'};
+    return {kind: 'help', text: 'Du kannst Szenen, Programmbereiche, Chat, Jarvis und Lautstärke steuern. Zum Beispiel: '+commandExamples(catalog,{limit:6}).map(example => example.phrase).join('. ')+'. Alle Befehle und Vorlagen findest du in der durchsuchbaren Befehlsliste bei Jarvis. Frage außerdem gezielt nach PC-Messwerten, zum Beispiel GPU-Temperatur oder Lüfterdrehzahl.'};
   // Negation and multiple commands must not accidentally execute the first match.
   // These two phrases are explicit requests to stop reading, not negated actions.
   const stopReading = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse|abos) nicht mehr vor$/.exec(text);
@@ -220,32 +244,42 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   // The filter term is literal data; e.g. Filterwort "kein" hinzufügen is an
   // affirmative add request even though the term itself contains a negation.
   if (moderation?.kind === 'filter') return moderation;
+  const quoted=quotedCatalogCommand(input,catalog);
+  if(quoted)return quoted;
   if (/\b(?:nicht|nichts|kein|keine|keinen|keinem|keiner|ohne|niemals|niemand|niemanden|vielleicht|eventuell|falls|wenn|warum|wieso)\b/.test(text)) return null;
   if (moderation) return moderation;
   const setting=settingCommand(text,catalog);
   if(setting)return setting;
   const compound = /\b(?:und|danach|anschliessend|dann|aber|oder)\b/.test(text);
+  const literalText=normalizeCommand(input,{preservePoliteness:true}).replace(/^bitte /,'').replace(/^(starte|fuhre|sende|send|schicke|spiele|spiel|lose|drucke|schalte|schalt) bitte /,'$1 ');
   // The full name of a saved action may legitimately contain "und". It is only
   // accepted with an explicit action verb and an exact catalog match below.
   const named = [
-    ['broadcast', /^(?:sende|send|schicke) (?:den |das )?(?:broadcast|rundruf) (.+)$/],
-    ['chain', /^(?:(?:starte|starte die|fuhre|fuhre die) (?:aktionskette|kette) (.+?)(?: aus)?|(?:aktionskette|kette) (.+?) (?:starten|ausfuhren))$/],
-    ['event', /^(?:(?:starte|lose|fuhre) (?:das )?(?:ereignis|event) (.+?)(?: aus)?|(?:ereignis|event) (.+?) (?:starten|auslosen|ausfuhren))$/],
-    ['hotkey', /^(?:(?:fuhre|starte|drucke) (?:den )?hotkey (.+?)(?: aus)?|hotkey (.+?) (?:ausfuhren|drucken))$/],
-    ['media', /^(?:(?:spiele|spiel|starte) (?:das )?(?:medium|video|audio|lied|sound) (.+?)(?: ab)?|(?:medium|video|audio|lied|sound) (.+?) abspielen)$/]
+    ['broadcast', /^(?:(?:sende|send|schicke) (?:den |das )?(?:broadcast|rundruf) (.+)|(?:den |das )?(?:broadcast|rundruf) (.+?) (?:senden|verschicken))$/],
+    ['chain', /^(?:(?:starte|starte die|fuhre|fuhre die) (?:aktionskette|kette) (.+?)(?: aus)?|(?:die )?(?:aktionskette|kette) (.+?) (?:starten|ausfuhren))$/],
+    ['event', /^(?:(?:starte|lose|fuhre) (?:das )?(?:ereignis|event) (.+?)(?: aus)?|(?:das )?(?:ereignis|event) (.+?) (?:starten|auslosen|ausfuhren))$/],
+    ['hotkey', /^(?:(?:fuhre|starte|drucke) (?:den )?hotkey (.+?)(?: aus)?|(?:den )?hotkey (.+?) (?:ausfuhren|drucken))$/],
+    ['media', /^(?:(?:spiele|spiel|starte) (?:das )?(?:medium|video|audio|lied|sound) (.+?)(?: ab)?|(?:das )?(?:medium|video|audio|lied|sound) (.+?) abspielen)$/]
   ];
   for (const [id, pattern] of named) {
-    const match = pattern.exec(text);
+    const match = pattern.exec(literalText);
     if (!match) continue;
     const query = match[1] || match[2];
     if (compound && !choices(catalog, id).some(item => choiceMatches(item, query, {}, id))) break;
     return select(catalog, id, query);
   }
+  const profileSwitch=switchPhrase(literalText),profileMatch=profileSwitch&&/^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.exec(profileSwitch.query);
+  if(profileMatch)return select(catalog,'broadcast-profile',profileMatch[1],{},{op:profileSwitch.op});
   if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
   // These exact, observed speech-recognition variants only open a harmless page.
   // Never apply fuzzy correction to switches, saved actions or moderation.
   const heardNavigation={'chatfarben':'hologram','chat farben':'hologram','schottfarben':'hologram','zettfarben':'hologram','ne chatfilter':'filters','ne chat filter':'filters'};
   if(Object.hasOwn(heardNavigation,text))return select(catalog,'navigate',heardNavigation[text]);
+  const heardScene={'macht pause':'pause','nach pause':'pause','ach pause':'pause','so pause wechseln':'pause','marspiel':'spiel'};
+  if(Object.hasOwn(heardScene,text))return resolveCommand(heardScene[text],{catalog,sceneAliases});
+  if(text==='ich falte auto broadcast ein')return ambiguous('Meinst du „Schalte Auto-Broadcast ein“? Sage den Befehl erneut. Es wurde noch nichts eingeschaltet.');
+  const detached=/^(?:chatfenster (entkoppeln|koppeln|andocken)|(?:entkopple|entkoppel) (?:das )?chatfenster|(?:kopple|koppel|docke) (?:das )?chatfenster(?: an)?)$/.exec(text);
+  if(detached)return select(catalog,'control','chatwindow detached',{},{op:/entkopp/.test(text)?'on':'off'});
   if(/^(?:(?:offne|zeige|zeig) (?:mir )?(?:die )?(?:deine|jarvis) einstellungen|(?:die )?(?:deine|jarvis) einstellungen (?:offnen|anzeigen))$/.test(text))return definition(catalog,'jarvis-settings')?simple(catalog,'jarvis-settings','Jarvis-Einstellungen geöffnet.'):select(catalog,'navigate','jarvis',NAVIGATION);
   if(/^(?:mikrofone (?:neu laden|suchen|aktualisieren)|lade (?:die )?mikrofone neu|suche (?:nach )?mikrofonen)$/.test(text))return simple(catalog,'microphones','Die Mikrofonliste wird aktualisiert.');
   if(/^(?:teste (?:das |mein |dein )?mikrofon|mikrofon testen|starte (?:den )?mikrofontest)$/.test(text))return simple(catalog,'listen','Ich höre für den Mikrofontest.');
@@ -267,7 +301,9 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
     const key = Object.keys(SCENE_ALIASES).find(id => SCENE_ALIASES[id].includes(requested));
     return select(catalog, 'scene', normalize(sceneAliases[key] || (key ? {pause: 'Pause', spiel: 'Spiel', start: 'Start', ende: 'Ende'}[key] : requested)));
   }
-  const navigation = /^(?:offne|offnen|offnet|eroffne|zeige|zeig|gehe zu|geh zu|wechsle zu|wechsel zu|dexel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)(?: fenster)?$/.exec(text) || /^(.+?)(?: fenster)? (?:offnen|anzeigen)$/.exec(text);
+  const sceneMove=/^(?:(?:wechsle|wechsel|schalte) (?:zu|zur|auf|in) (?:die )?(?:szene )?(.+)|(?:(?:zu|zur|auf|in) (?:die )?)?(.+?) (?:wechseln|umschalten|machen|aktivieren))$/.exec(text);
+  if(sceneMove){const query=targetText(sceneMove[1]||sceneMove[2]).replace(/^szene /,'');const key=Object.keys(SCENE_ALIASES).find(id=>SCENE_ALIASES[id].includes(query));if(key)return select(catalog,'scene',normalize(sceneAliases[key]||{pause:'Pause',spiel:'Spiel',start:'Start',ende:'Ende'}[key]));}
+  const navigation = /^(?:offne|offene|offnen|offnet|eroffne|zeige|zeig|(?:gehe|geh|wechsle|wechsel) (?:zu|zum|zur)|dexel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)(?: fenster)?$/.exec(text) || /^(?:(?:zu|zur|zum) )?(.+?)(?: fenster)? (?:offnen|anzeigen|wechseln)$/.exec(text);
   if (navigation) {
     // Polite questions become "das Touch Deck öffnen" after normalization.
     // Handle the article in this verb-last form just as in "öffne das Touch Deck".
@@ -292,8 +328,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
       return result;
     }
   }
-  const stream = /^(?:(?:starte|stoppe|beende) (?:die )?)?((?:beide )?(?:streams|virtuelle[n]? kameras?)|(?:tiktok|twitch)(?: ausgabe| kamera| virtuelle kamera)?)(?: (starten|stoppen|beenden))?$/.exec(text);
-  if (stream && (/^(?:starte|stoppe|beende) /.test(text) || stream[2])) {
+  const stream = /^(?:(?:starte|stoppe|stopp|beende) (?:die )?)?((?:beide )?(?:streams|virtuelle[n]? kameras?)|(?:tiktok|twitch)(?: ausgabe| kamera| virtuelle kamera)?)(?: (starten|stoppen|beenden))?$/.exec(text);
+  if (stream && (/^(?:starte|stoppe|stopp|beende) /.test(text) || stream[2])) {
     const op = /^starte /.test(text) || stream[2] === 'starten' ? 'start' : 'stop';
     const query = /^(?:tiktok|twitch)/.exec(stream[1])?.[0] || 'both';
     const result = select(catalog, op, query);
@@ -319,6 +355,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   const sw = switchPhrase(text);
   if (sw) {
     const {query, op} = sw;
+    const qualified=/^(bildquelle|einblendung|funktion|jarvis schalter|schalter) (.+)$/.exec(query);
+    if(qualified){const id={bildquelle:'source',einblendung:'overlay',funktion:'control','jarvis schalter':'jarvis',schalter:'jarvis'}[qualified[1]];return select(catalog,id,qualified[2],{},{op});}
     if (/^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.test(query)) {
       const name = /^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.exec(query)[1];
       return select(catalog, 'broadcast-profile', name, {}, {op});
@@ -338,45 +376,114 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   }
   return null;
 }
-function commandExamples(catalog = {}, {limit = 36} = {}) {
-  const examples = [], has = id => !!definition(catalog, id), present = (id, target) => choices(catalog, id).some(c => c.id === target);
-  const add = (phrase, description) => examples.push({phrase, description});
-  if (present('scene', 'Start')) add('Start Szene öffnen', 'Startszene auswählen');
-  if (present('navigate', 'dashboard')) add('Multi Chat öffnen', 'Chat anzeigen');
-  if (present('scene', 'Pause')) add('Mach bitte Pause', 'Pausenszene auswählen');
-  for (const [id, name] of [['touchdeck', 'Touch Deck'], ['dualstream', 'Dual Stream'], ['settings', 'Einstellungen']]) if (present('navigate', id)) add(`Öffne ${name}`, `${name} anzeigen`);
-  if (present('scene', 'Spiel')) add('Wechsel zur Spielszene', 'Spielszene auswählen');
-  if (present('source', 'camera')) add('Kamera an', 'Kamerabild einschalten');
-  if (present('control', 'broadcast.master')) add('Auto-Broadcast aus', 'Automatische Broadcasts abschalten');
-  if (present('jarvis', 'chatEnabled')) add('Chat vorlesen aus', 'Jarvis liest keine Chatnachrichten mehr');
-  if (present('connect', 'twitch')) add('Verbinde Twitch', 'Twitch-Chat verbinden');
-  if (present('start', 'both')) add('Starte beide virtuelle Kameras', 'Virtuelle Kamera für beide Ausgaben starten');
-  if (has('gaming')) add('Gaming-Modus an', 'Oberfläche schließen, Dienste weiterlaufen lassen');
-  if (has('show')) add('Zeige das Hauptfenster', 'Batto anzeigen');
-  add('Windows Lautstärke auf 35 Prozent', 'Windows-Lautstärke einstellen');
-  add('Mach Jarvis leiser', 'Jarvis-Stimme um 5 Prozentpunkte leiser stellen');
-  for (const [id, prefix] of [['broadcast-profile', 'Auto-Broadcast'], ['chain', 'Starte Aktionskette'], ['media', 'Spiele Medium'], ['broadcast', 'Sende Broadcast']]) {
-    const item = choices(catalog, id).find(c => c.name.length <= 100 && !choices(catalog, id).some(other => other !== c && normalize(spokenChoiceName(other, id)) === normalize(spokenChoiceName(c, id))));
-    if (item) add(`${prefix} ${spokenChoiceName(item, id)}${id === 'broadcast-profile' ? ' an' : id === 'media' ? ' ab' : ''}`, `${definition(catalog, id).name}: ${item.name}`);
+function commandExamples(catalog = {}, {limit} = {}) {
+  const examples=[],phrases=new Set(),has=id=>!!definition(catalog,id),present=(id,target)=>choices(catalog,id).some(c=>c.id===target);
+  const groups={scene:'Szenen & Übergänge',transition:'Szenen & Übergänge',start:'Bild & Ausgaben',stop:'Bild & Ausgaben',source:'Bild & Ausgaben',overlay:'Einblendungen',jarvis:'Jarvis & Ansagen',control:'Chat & Automationen','broadcast-profile':'Auto-Broadcast',chain:'Aktionsketten',event:'Ereignisse',hotkey:'Hotkeys',broadcast:'Nachrichten senden',media:'Medien',connect:'Verbindungen',navigate:'Programmbereiche'};
+  const add=(phrase,description,category,expectedAction,metadata={})=>{if(phrases.has(phrase))return;phrases.add(phrase);examples.push({phrase,description,category,...(expectedAction?{expectedAction,expectedKind:'action'}:{}),...metadata});};
+  const action=(phrase,description,id,target,extra={},metadata={})=>add(phrase,description,groups[id]||'Jarvis & Ansagen',{action:id,...(target===undefined?{}:{target}),...extra},metadata);
+  const sameAction=(phrase,expected)=>JSON.stringify(resolveCommand(phrase,{catalog})?.action)===JSON.stringify(expected);
+  const choose=(variants,expected)=>variants.find(phrase=>sameAction(phrase,expected))||variants.at(-1);
+  // Keep the six familiar quick-start cards in their established order.
+  if(present('scene','Start'))action('Start Szene öffnen','Startszene auswählen','scene','Start');
+  if(present('navigate','dashboard'))action('Multi Chat öffnen','Chat anzeigen','navigate','dashboard');
+  if(present('scene','Pause'))action('Mach bitte Pause','Pausenszene auswählen','scene','Pause');
+  for(const [id,name]of [['touchdeck','Touch Deck'],['dualstream','Dual Stream'],['settings','Einstellungen']])if(present('navigate',id))action(`Öffne ${name}`,`${name} anzeigen`,'navigate',id);
+  if(present('scene','Spiel'))action('Wechsel zur Spielszene','Spielszene auswählen','scene','Spiel');
+  if(present('source','camera'))action('Kamera an','Kamerabild einschalten','source','camera',{op:'on'});
+  if(present('control','broadcast.master'))action('Auto-Broadcast aus','Automatische Broadcasts abschalten','control','broadcast.master',{op:'off'});
+  if(present('jarvis','chatEnabled'))action('Chat vorlesen aus','Keine weiteren Chatnachrichten vorlesen','jarvis','chatEnabled',{op:'off'});
+  if(present('connect','twitch'))action('Verbinde Twitch','Twitch-Chat verbinden','connect','twitch',{op:'on'});
+  if(present('start','both'))action('Starte beide virtuelle Kameras','Virtuelle Kameras für beide Ausgaben starten','start','both');
+  if(has('gaming'))action('Gaming-Modus an','Oberfläche schließen, Dienste weiterlaufen lassen','gaming');
+  if(has('show'))action('Zeige das Hauptfenster','Batto anzeigen','show');
+  add('Windows Lautstärke auf 35 Prozent','Windows-Lautstärke einstellen','Lautstärke',null,{expectedKind:'audio',expectedIntent:{kind:'audio',targetQuery:'Windows',patch:{volume:35}}});
+  add('Mach Jarvis leiser','Jarvis-Stimme um 5 Prozentpunkte leiser stellen','Lautstärke',null,{expectedKind:'audio',expectedIntent:{kind:'audio',targetQuery:'Jarvis',delta:-5}});
+  for(const [id,prefix,last]of [['broadcast-profile','Auto-Broadcast',' an'],['chain','Starte Aktionskette',''],['media','Spiele Medium',' ab'],['broadcast','Sende Broadcast','']]){
+    for(const item of choices(catalog,id)){const phrase=`${prefix} ${spokenChoiceName(item,id)}${last}`,extra=id==='broadcast-profile'?{op:'on'}:{};
+      if(sameAction(phrase,{action:id,target:item.id,...extra})){action(phrase,`${definition(catalog,id).name}: ${item.name}`,id,item.id,extra);break;}
+    }
   }
-  if(has('jarvis-settings'))add('Öffne deine Einstellungen','Jarvis-Einstellungen anzeigen');
-  for(const [target,phrase,description] of [
-    ['chatMode','Lies alle Chatnachrichten vor','Alle Personen auf den gewählten Plattformen vorlesen'],
-    ['chatMode','Lies nur Moderatoren vor','Nur Moderatoren vorlesen'],
-    ['chatMode','Lies nur die Freigabeliste vor','Nur freigegebene Personen vorlesen'],
-    ['chatSource','Lies aus dem Chatfenster vor','Nachrichten aus der Chatfenster-Auswahl'],
-    ['chatSource','Lies aus verbundenen Chats vor','Nachrichten aus verbundenen Chats'],
-    ['events.likeThreshold','Likes ab 1000 ansagen','Like-Schwelle einstellen'],
-    ['events.giftAnnouncement','Geschenk-Ansage auf Geschenkname und Coins','Geschenkname und Coins vorlesen'],
-    ['speechRate','Sprechtempo auf 160','Sprechtempo einstellen'],
-    ['speechRate','Sprich langsamer','Sprechtempo um 10 Wörter pro Minute senken'],
-    ['fanAlerts.threshold','Lüfterwarnung ab 80 Prozent','Lüfter-Warnschwelle einstellen']
-  ])if(present('jarvis-setting',target))add(phrase,description);
-  if(present('jarvis','events.subscriptions'))add('Bedanke dich für Abos','Abo-Danksagungen einschalten');
-  if(has('microphones'))add('Mikrofone neu laden','Verfügbare Mikrofone erneut suchen');
-  if(has('listen'))add('Mikrofon testen','Jarvis hört einmal auf einen gesprochenen Befehl');
-  if(has('transition'))add('Übergang auf Überblendung','Übergang für folgende Szenenwechsel einstellen');
-  if(has('transition-duration'))add('Übergangsdauer auf 500 Millisekunden','Dauer für folgende Szenenwechsel einstellen');
-  return examples.slice(0, Math.max(1, Math.min(60, Number.isFinite(limit) ? Math.floor(limit) : 36)));
+  const literal=(id,item)=>{
+    const name=spokenChoiceName(item,id),duplicate=choices(catalog,id).filter(other=>spokenChoiceName(other,id)===name||other.name===name).length>1;
+    return duplicate?`mit Kennung ${JSON.stringify(item.id)}`:JSON.stringify(name);
+  };
+  const switchExample=(id,item,noun)=>{for(const [op,last]of [['on','einschalten'],['off','ausschalten'],['toggle','umschalten']]){
+    const ending=op==='toggle'?'um':op==='on'?'ein':'aus',name=spokenChoiceName(item,id);
+    const natural=id==='source'?{camera:'Kamera',game:'Spielbild'}[item.id]||name:id==='overlay'?{chat:'Chat-Einblendung',events:'Ereignis-Einblendung'}[item.id]||name:id==='broadcast-profile'?`Auto-Broadcast Profil ${name}`:item.id==='chatWindow.detached'?'Chatfenster Entkopplung':name;
+    const expected={action:id,target:item.id,op},phrase=choose([`Schalte ${natural} ${ending}`,`Schalte ${noun} ${name} ${ending}`,`Schalte ${noun} ${literal(id,item)} ${ending}`],expected),typedOnly=phrase.includes('"');
+    action(phrase,`${item.name}: ${last}`+(typedOnly?'. Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{op},{...(typedOnly?{typedOnly:true}:{})});
+  }};
+  for(const definition of catalog.actions||[]){
+    const id=definition.id;
+    if(id==='command')continue; // Saved-command recursion is intentionally not a voice capability.
+    for(const item of choices(catalog,id)){
+      if(id==='navigate')action(`Öffne ${item.name}`,`${item.name} anzeigen`,id,item.id);
+      else if(id==='scene')action(choose([`Szene ${item.name} öffnen`,`Öffne Szene ${literal(id,item)}`],{action:id,target:item.id}),`${item.name} als Programmszene auswählen`,id,item.id);
+      else if(id==='transition')action(`Übergang auf ${item.name}`,`${item.name} für folgende Szenenwechsel`,id,item.id);
+      else if(id==='start'||id==='stop')action(`${item.id==='both'?'Beide virtuelle Kameras':item.id==='twitch'?'Twitch virtuelle Kamera':'TikTok virtuelle Kamera'} ${id==='start'?'starten':'stoppen'}`,`${item.name}: virtuelle Kamera ${id==='start'?'starten':'stoppen'}`,id,item.id);
+      else if(['source','overlay','jarvis','control','broadcast-profile'].includes(id)){
+        const noun={source:'Bildquelle',overlay:'Einblendung',jarvis:'Jarvis-Schalter',control:'Funktion','broadcast-profile':'Auto-Broadcast Profil'}[id];
+        switchExample(id,item,noun);
+        if(id==='control'&&item.id==='chatWindow.detached'){
+          action('Chatfenster entkoppeln','Chatfenster separat anzeigen',id,item.id,{op:'on'});action('Chatfenster koppeln','Chatfenster wieder im Hauptfenster anzeigen',id,item.id,{op:'off'});
+        }
+      }else if(['chain','event','hotkey','broadcast','media'].includes(id)){
+        const spec={chain:['Starte Aktionskette',''],event:['Löse Ereignis',' aus'],hotkey:['Drücke Hotkey',''],broadcast:['Sende Broadcast',''],media:['Spiele Medium',' ab']}[id];
+        const phrase=choose([`${spec[0]} ${spokenChoiceName(item,id)}${spec[1]}`,`${spec[0]} ${literal(id,item)}${spec[1]}`],{action:id,target:item.id}),typedOnly=phrase.includes('"');
+        action(phrase,`${definition.name}: ${item.name}`+(typedOnly?'. Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{},{...(typedOnly?{typedOnly:true}:{})});
+      }else if(id==='connect'){
+        const name={twitch:'Twitch',youtube:'YouTube',tikfinity:'TikFinity'}[item.id];
+        if(name){action(`Verbinde ${name}`,`${name}: Chat-Verbindung herstellen`,id,item.id,{op:'on'});action(`Trenne ${name}`,`${name}: Chat-Verbindung trennen`,id,item.id,{op:'off'});action(`Schalte ${name} Verbindung um`,`${name}: Verbindung umschalten`,id,item.id,{op:'toggle'});}
+      }
+    }
+  }
+  for(const [id,phrase,description]of [
+    ['listen','Hör zu','Einmal auf einen gesprochenen Befehl hören'],['speech-stop','Stopp','Sprachausgabe und aktuelle Aufnahme stoppen'],
+    ['microphones','Mikrofone neu laden','Verfügbare Mikrofone erneut suchen'],['jarvis-settings','Öffne deine Einstellungen','Jarvis-Einstellungen anzeigen'],
+    ['likes-reset','Setze den Like Zähler zurück','Like-Meilensteine für die laufende Sitzung zurücksetzen'],['cancel','Automationen abbrechen','Laufende Aktionsketten abbrechen'],
+    ['tikfinity','Öffne TikFinity','TikFinity-Web öffnen'],['show','Zeige das Hauptfenster','Batto anzeigen'],['gaming','Gaming-Modus an','Oberfläche schließen, Dienste weiterlaufen lassen'],
+    ['prepare','Bereite die Bildquellen vor','Bildquellen für den Sender vorbereiten'],['release','Bildquellen freigeben','Video-Dienst beenden, nachdem die Ausgaben gestoppt sind']
+  ])if(has(id))action(phrase,description,id);
+  if(has('companion'))for(const [op,phrase]of [['on','LIVE Studio Sitzung an'],['off','LIVE Studio Sitzung aus'],['toggle','Schalte LIVE Studio Sitzung um']])action(phrase,'LIVE-Studio-Sitzung im Tool markieren','companion',undefined,{op});
+  if(has('listen'))action('Mikrofon testen','Einmal auf einen gesprochenen Testbefehl hören','listen');
+  if(present('jarvis','events.subscriptions'))action('Bedanke dich für Abos','Abo-Danksagungen einschalten','jarvis','events.subscriptions',{op:'on'});
+  const settings=[
+    ['chatMode','all','Lies alle Chatnachrichten vor','Alle Personen auf den gewählten Plattformen vorlesen'],
+    ['chatMode','moderators','Lies nur Moderatoren vor','Nur Moderatoren und Kanalinhaber vorlesen'],
+    ['chatMode','allowlist','Lies nur die Freigabeliste vor','Nur freigegebene Personen vorlesen'],
+    ['chatSource','window','Lies aus dem Chatfenster vor','Nachrichten aus der Chatfenster-Auswahl'],
+    ['chatSource','connected','Lies aus verbundenen Chats vor','Nachrichten aus verbundenen Chats'],
+    ['events.giftAnnouncement','gift','Geschenk-Ansage auf Geschenkname','Den Namen des Geschenks vorlesen'],
+    ['events.giftAnnouncement','coins','Geschenk-Ansage auf Coins','Den übermittelten Coin-Wert vorlesen'],
+    ['events.giftAnnouncement','both','Geschenk-Ansage auf Geschenkname und Coins','Geschenkname und übermittelten Coin-Wert vorlesen'],
+    ['events.likeThreshold',1000,'Likes ab 1000 ansagen','Like-Schwelle je Person einstellen'],
+    ['events.giftMinimum',10,'Geschenk-Mindestwert auf 10 Coins','Mindestwert für Geschenk-Ansagen einstellen'],
+    ['events.cooldown',8,'Ereignis-Abstand auf 8 Sekunden','Mindestpause zwischen Ereignis-Ansagen'],
+    ['speechRate',160,'Sprechtempo auf 160','Sprechtempo in Wörtern pro Minute'],
+    ['chatCooldown',5,'Chat-Abstand auf 5 Sekunden','Mindestpause zwischen vorgelesenen Chatnachrichten'],
+    ['chatMaxLength',280,'Chat-Länge auf 280 Zeichen','Maximale Länge vorgelesener Chatnachrichten'],
+    ['fanAlerts.threshold',80,'Lüfterwarnung ab 80 Prozent','Lüfter-Warnschwelle einstellen'],
+    ['fanAlerts.cooldown',90,'Lüfterwarnung-Abstand auf 90 Sekunden','Mindestpause zwischen Lüfterwarnungen']
+  ];
+  for(const [target,value,phrase,description]of settings)if(present('jarvis-setting',target)){
+    const spec=SETTING_SPECS[target];action(phrase,description+(spec.min===undefined?'':`; ${spec.min}–${spec.max} ${spec.unit}. Zahl frei wählbar.`),'jarvis-setting',target,{value});
+  }
+  if(present('jarvis-setting','speechRate'))for(const [phrase,delta]of [['Sprich langsamer',-10],['Sprich schneller',10]])action(phrase,'Sprechtempo um 10 Wörter pro Minute ändern','jarvis-setting','speechRate',{delta});
+  if(has('transition-duration'))action('Übergangsdauer auf 500 Millisekunden','Dauer für folgende Szenenwechsel; 100–2000 Millisekunden','transition-duration',undefined,{value:500});
+  for(const targetQuery of ['Windows','Jarvis']){
+    const audio=(phrase,description,patch)=>add(phrase,description,'Lautstärke',null,{expectedKind:'audio',expectedIntent:{kind:'audio',targetQuery,...patch}});
+    audio(`${targetQuery} Lautstärke auf 35 Prozent`,'Lautstärke von 0 bis 100 Prozent einstellen',{patch:{volume:35}});
+    audio(`Mach ${targetQuery} leiser`,'Lautstärke um 5 Prozentpunkte senken',{delta:-5});audio(`Mach ${targetQuery} lauter`,'Lautstärke um 5 Prozentpunkte erhöhen',{delta:5});
+    audio(`${targetQuery} stumm`,'Ton stummschalten',{patch:{muted:true}});audio(`Hebe die Stummschaltung von ${targetQuery} auf`,'Ton wieder einschalten',{patch:{muted:false}});
+  }
+  for(const [phrase,description]of [['CPU Temperatur','Temperatur des Prozessors'],['GPU Temperatur','Temperatur der Grafikkarte'],['GPU Spannung','Übermittelte GPU-Spannung'],['CPU Auslastung','Auslastung des Prozessors'],['RAM Auslastung','Belegung des Arbeitsspeichers'],['Lüfterdrehzahl','Drehzahlen der verbundenen Lüfter'],['PC Werte','Wichtigste verfügbare PC-Messwerte']])add(phrase,description+'; nur tatsächlich verfügbare Messwerte.','PC-Messwerte',null,{expectedKind:'sensor'});
+  const template=(phrase,description,category,requiresInput,expectedKind)=>add(phrase,description,category,null,{template:true,requiresInput,expectedKind});
+  template('<Programm> Lautstärke auf 35 Prozent','Programm durch einen eindeutigen aktiven Audiokanal ersetzen.','Lautstärke',['Programm'],'audio');
+  for(const platform of ['Twitch','YouTube'])for(const [verb,last,description]of [['Blockiere','','Person dauerhaft sperren'],['Entblocke','','Person entsperren'],['Sperre',' für 10 Minuten','Person zeitweise stummschalten']])template(`${verb} <Benutzername> auf ${platform}${last}`,`${description}. Namen ersetzen; verbundene Moderationsrechte und separate Bestätigung nötig.`,'Moderation',['Benutzername'],'moderation');
+  template('Filterwort <Begriff> hinzufügen','Begriff ersetzen; passende Nachrichten im Chat ausblenden.','Chat-Filter',['Begriff'],'filter');
+  template('Filterwort <Begriff> entfernen','Begriff ersetzen; vorhandene Filterregel entfernen.','Chat-Filter',['Begriff'],'filter');
+  add('Bestätigen','Nur einen gerade vorgemerkten Moderationsauftrag bestätigen.','Moderation',null,{expectedKind:'confirmation'});
+  add('Abbrechen','Eine vorgemerkte Moderation verwerfen.','Moderation',null,{expectedKind:'cancel-confirmation'});
+  return Number.isFinite(limit)?examples.slice(0,Math.max(0,Math.floor(limit))):examples;
 }
 module.exports = {normalize, normalizeCommand, resolveCommand, commandExamples};

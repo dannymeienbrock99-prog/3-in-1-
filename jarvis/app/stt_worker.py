@@ -11,10 +11,10 @@ network_guard.install()
 
 # A small fixed vocabulary helps short control names without forcing a command
 # or introducing a grammar that would turn unrelated speech into an action.
-COMMAND_VOCABULARY='Jarvis, Batto, Chatfarben, Chatfilter, Chat-Filter, Multi-Chat, Multichat, Touch Deck, Touchdeck, Dual Stream, Pause, Start, Ende, Spiel, Kamera, Mikrofon, Moderation, Auto-Broadcast, Twitch, TikTok, TikFinity, Lautstärke, Lüfter, Arbeitsspeicher, CPU, GPU'
+COMMAND_VOCABULARY='Jarvis, Batto, Chatfarben, Chatfilter, Chat-Filter, Multi-Chat, Multichat, Touch Deck, Touchdeck, Dual Stream, Pause, Start, Ende, Spiel, Kamera, Mikrofon, Moderation, Auto-Broadcast, Twitch, TikTok, TikFinity, Lautstärke, Lüfter, Arbeitsspeicher, CPU, GPU, Commands, öffne, wechsle, wechsel, mach, schalte, zeige'
 
 def parse_transcript(text):
-    pattern=r'^(?:(?:hey|hi|hallo)[,\s]*|h[.]\s*j[.]\s*)?(?:jarvis|javis|jarwis|yavis|havis|dschavis|hiyavis|hayabis|ja,?\s*bis|ja,?\s*wiss)\b[, .!?–—-]*'
+    pattern=r'^(?:(?:hey|hi|hallo|okay|ok)[,\s]*|h[.]\s*j[.]\s*)?(?:jarvis|javis|jarwis|yavis|havis|dschavis|hiyavis|hayabis|ja,?\s*bis|ja,?\s*wiss)\b[, .:!?–—-]*'
     match=re.match(pattern,text.strip(),re.I)
     clean=text.strip()[match.end():].strip() if match else text.strip()
     return {'text':clean,'raw_text':text,'wake_detected':bool(match)}

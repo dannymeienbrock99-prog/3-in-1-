@@ -108,6 +108,11 @@ class JarvisCore extends EventEmitter{
   }
   const connector=/\b(pin|pins|anschluss|stecker)\b|12v.?2.?6|12vhpwr|16.?pin/.test(q);
   const exact=all.filter(s=>{const name=normalize(this.settings.sensorRules[s.id]?.alias||s.name);return name.length>2&&q.includes(name)&&(!connector||/pin|12v.?2.?6|12vhpwr|16.?pin/.test(normalize(s.name+' '+s.device)));});if(exact.length)return exact.slice(0,8);
+  if(/^(?:(?:wie sind|sage mir|sag mir|zeige mir) (?:die )?)?(?:wichtigsten )?(?:pc werte|pc messwerte|pc status)$/.test(q)){
+   return ['CPU Auslastung','GPU Temperatur','RAM Auslastung'].map(query=>{
+    const selected=this.resolveSensors(query);return selected.find(sensor=>fresh(sensor,this.clock()))||selected[0];
+   }).filter(Boolean);
+  }
   let group=/\b(gpu|grafikkarte|grafik)\b/.test(q)?'gpu':/\b(cpu|prozessor)\b/.test(q)?'cpu':/\b(ram|arbeitsspeicher)\b/.test(q)?'ram':/\b(pin|pins|anschluss|stecker)\b/.test(q)?'pin':'';
   if(connector)group='pin';
   let unit=/temperatur|warm|heiss/.test(q)?'°C':/spannung|volt/.test(q)?'V':/strom|ampere/.test(q)?'A':/leistung|watt/.test(q)?'W':/auslastung|last/.test(q)?'%':/drehzahl|umdrehung/.test(q)?'RPM':/takt|mhz/.test(q)?'MHz':'';
@@ -135,6 +140,10 @@ class JarvisCore extends EventEmitter{
   try{
    const revision=this.pendingRevision;
    let catalog=this.getCommandCatalog?.(),aliases={...this.settings.sceneAliases};
+   if(catalog?.sceneMode==='suite'){
+    const scenes=catalog.actions?.find(action=>action.id==='scene')?.choices||[];
+    for(const [key,name] of Object.entries(aliases))if(name&&!scenes.some(scene=>[scene.id,scene.name].some(value=>normalize(value)===normalize(name))))delete aliases[key];
+   }
    if(!catalog){let scenes=[];try{scenes=await this.obs?.scenes()||[];}catch{}catalog={actions:[{id:'scene',choices:scenes.map(id=>({id,name:id}))}]};if(!aliases.pause)aliases.pause=scenes.find(s=>/pause|bin gleich|zuruck/.test(normalize(s)))||'';}
    const intent=resolveCommand(original,{catalog,sceneAliases:aliases});
    const pending=this.pendingModeration;this.pendingModeration=null;
@@ -184,6 +193,13 @@ class JarvisCore extends EventEmitter{
    return this.unavailable(prefix+'Ich konnte diesen Auftrag keiner Funktion zuordnen. Es wurde nichts ausgeführt. Sage zum Beispiel: Öffne das Touch Deck, wechsle zur Pause oder schalte Auto-Broadcast ein. Mit „Welche Befehle kannst du?“ erhältst du Hilfe.');
   }catch(e){this.say(prefix+String(e.message||'Die Aktion ist fehlgeschlagen.'),'error');return {ok:false,text:String(e.message)};}finally{this.commandBusy=false;}
  }
- snapshot(){let examples=[];try{examples=commandExamples(this.getCommandCatalog?.()||{});}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples,eventDefaults:{...DEFAULT_EVENTS,templates:{...DEFAULT_TEMPLATES}},eventTemplateFields:TEMPLATE_FIELDS};}
+ commandExamples(){
+  const catalog=this.getCommandCatalog?.()||{},signature=JSON.stringify([catalog.actions,catalog.voiceActions]);
+  // Reuse the complete command list while only sensor values or toggle states
+  // change. Saved names and available capabilities invalidate the list.
+  if(this.commandExamplesCache?.signature!==signature)this.commandExamplesCache={signature,items:commandExamples(catalog)};
+  return this.commandExamplesCache.items;
+ }
+ snapshot(){let examples=[];try{examples=this.commandExamples();}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples,eventDefaults:{...DEFAULT_EVENTS,templates:{...DEFAULT_TEMPLATES}},eventTemplateFields:TEMPLATE_FIELDS};}
 }
 module.exports={JarvisCore,AlertEngine,allowedChat,isModerator,cleanSettings,DEFAULTS,normalize,fresh,spoken};

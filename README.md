@@ -1,4 +1,4 @@
-# Batto 3-in-1 · 1.8.3
+# Batto 3-in-1 · 1.8.4
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
 
@@ -63,9 +63,9 @@ Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der
 
 ## Jarvis, Szenen und Stream Deck
 
-**Korrektur in 1.8.3:** Jarvis kennt jetzt auch die bisher fehlenden sichtbaren Bereichsnamen wie **Chatfarben** und **Chat-Filter**. „Öffne Chatfarben“, „Eröffne Chatfarben“, „Jarvis öffnet den Chatfilter“ sowie „Kannst du mir bitte den Multi-Chat öffnen?“ und „Kannst du mir bitte das Touch Deck öffnen?“ öffnen die jeweiligen Bedienelemente. Beim Tastendruck erscheint zunächst **Mikrofon wird vorbereitet …**; erst nach **Ich höre zu …** sprechen. Der Beginn einer Aufnahme verwirft keine ersten Wörter wegen einer vorherigen Aktivierung mehr. Chat- und Ereignisansagen warten während einer laufenden Sprachanfrage, damit sie diese nicht unterbrechen. Die tatsächliche Erkennung bleibt vom Mikrofon und den Umgebungsgeräuschen abhängig.
+**Befehlsübersicht in 1.8.4:** Unter Jarvis sind alle verfügbaren Befehle nach Bereichen durchsuchbar, einschließlich der gespeicherten Aktionen deiner Einrichtung. Die Trefferzahl und Seitenauswahl halten die Liste übersichtlich. Eine Karte übernimmt den Satz in die Eingabe; **Ausführen** startet ihn. Direkt am Formular erscheint das Ergebnis. „Wechsel zu Pause“ und Befehle mit dem Verb am Satzende wählen nun die richtige Szene; importierte OBS-Szenennamen überschreiben die eigenen Batto-Szenen nicht. Kurze Menübefehle erhalten einen erweiterten lokalen Erkennungswortschatz. Es wird kein größeres Sprachmodell geladen.
 
-Die Batto-Steuerung ist direkt eingebaut und benötigt kein KI-Modell: „Mach bitte Pause“, „Öffne das Touch Deck“, „Kamera aus“, „Auto-Broadcast an“, „Chat vorlesen aus“ oder „Mach Jarvis leiser“. Auch vorhandene Medien, Hotkeys, Broadcasts und Aktionsketten lassen sich mit eindeutigem Namen aufrufen. **Das kannst du sagen** zeigt Beispiele aus der aktuellen Einrichtung. Anklicken füllt die Eingabe; **Ausführen** startet den Befehl. Unbekannte und mehrdeutige Anweisungen führen keine erratene Aktion aus.
+Die Batto-Steuerung ist direkt eingebaut und benötigt kein KI-Modell: „Mach bitte Pause“, „Öffne das Touch Deck“, „Kamera aus“, „Auto-Broadcast an“, „Chat vorlesen aus“ oder „Mach Jarvis leiser“. Auch vorhandene Medien, Hotkeys, Broadcasts und Aktionsketten lassen sich mit eindeutigem Namen aufrufen. **Alle Jarvis-Befehle** zeigt Beispiele aus der aktuellen Einrichtung. Anklicken füllt die Eingabe; **Ausführen** startet den Befehl. Unbekannte und mehrdeutige Anweisungen führen keine erratene Aktion aus.
 
 **Weitere Befehle:** „Lies alle Chatnachrichten vor“, „Lies nur Moderatoren vor“, „Lies aus dem Chatfenster vor“, „Geschenk-Ansage auf Geschenkname und Coins“, „Lüfterwarnung ab 75 Prozent“ und „Öffne deine Einstellungen“. Die Chat-Befehle schalten das Vorlesen ein und ändern die jeweilige Auswahl. Geschenk- und Lüfterschwellen-Befehle ändern die Einstellung; eine ausgeschaltete Ansage bleibt ausgeschaltet.
 
@@ -123,7 +123,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.3.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.4.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

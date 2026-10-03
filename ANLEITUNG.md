@@ -1,14 +1,14 @@
-# Batto 3-in-1 · Schnellstart 1.8.3
+# Batto 3-in-1 · Schnellstart 1.8.4
 
 Den Windows-Installer öffnen und den separat erhaltenen Installationsschlüssel eingeben. Der private Schlüssel wird nicht im Repository veröffentlicht. Die bisherigen Suite-Einstellungen bleiben bei einem Update erhalten.
 
 ## Jarvis steuert das Programm
 
-**Neu in 1.8.3:** Die sichtbaren Bereiche **Chatfarben** und **Chat-Filter** lassen sich jetzt öffnen: etwa „Öffne Chatfarben“, „Eröffne Chatfarben“ oder „Jarvis öffnet den Chatfilter“. Auch „Kannst du mir bitte den Multi-Chat öffnen?“ und „Kannst du mir bitte das Touch Deck öffnen?“ sind möglich. Nach Tastendruck zunächst **Mikrofon wird vorbereitet …** abwarten und erst bei **Ich höre zu …** sprechen. Der Aufnahmestart schneidet keine ersten Wörter wegen einer vorherigen Aktivierung mehr ab; Chat- und Ereignisansagen warten während der Sprachanfrage. Mikrofon und Umgebungsgeräusche beeinflussen weiterhin die Erkennung.
+**Alle verfügbaren Befehle finden:** In Jarvis unter **Alle Jarvis-Befehle** einen Begriff suchen oder einen Bereich auswählen. Die Liste enthält auch deine gespeicherten Aktionen. Mit der Seitenauswahl weitere Treffer ansehen. Eine Karte übernimmt den Satz in die Eingabe; **Ausführen** startet ihn. Platzhalter vorher durch die gewünschte Person oder den Wert ersetzen. Das Ergebnis steht unmittelbar am Formular und im Verlauf. Zum Beispiel: „Wechsel zu Pause“, „Öffne Chatfarben“, „Öffne Commands“ oder „Ich möchte die Einstellungen öffnen“. Bei Sprache auf **Ich höre zu …** warten. Für Moderation bleiben die Plattformrechte und die angezeigte Bestätigung erforderlich.
 
 Unter **Jarvis** auf **Jetzt zuhören** drücken oder die Jarvis-Taste im Stream Deck verwenden. Auf die Anzeige zum Sprechen warten und einen Befehl sagen. Für den sparsamen Betrieb ist das Mikrofon zwischen Tastendrücken aus. Wer jederzeit mit „Jarvis“ starten möchte, aktiviert unter **Jarvis-Einstellungen → Stimme & Mikrofon** das dauerhafte Mikrofon und **Auf „Jarvis“ warten**.
 
-Alternativ den Befehl eintippen und **Ausführen** drücken. **Das kannst du sagen** zeigt Beispiele aus den verfügbaren Funktionen. Ein Klick übernimmt nur den Text in die Eingabe; **Ausführen** löst die Aktion aus. Bei Sprache steht der erkannte Wortlaut als **ERKANNT** im Verlauf, danach erscheint die Antwort oder ein konkreter Fehler.
+Alternativ den Befehl eintippen und **Ausführen** drücken. **Alle Jarvis-Befehle** zeigt Beispiele aus den verfügbaren Funktionen. Ein Klick übernimmt nur den Text in die Eingabe; **Ausführen** löst die Aktion aus. Bei Sprache steht der erkannte Wortlaut als **ERKANNT** im Verlauf, danach erscheint die Antwort oder ein konkreter Fehler.
 
 | Beispiel | Wirkung |
 | --- | --- |

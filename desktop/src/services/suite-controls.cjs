@@ -35,7 +35,7 @@ class SuiteControls{
   {id:'navigate',name:'Programmbereich öffnen',choices:Object.entries(VIEWS).map(([id,name])=>({id,name}))},
   {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'}, {id:'gaming',name:'Gaming-Modus: Oberfläche schließen, Dienste weiterführen'},
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
- ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
+ ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],sceneMode:this.getDual()?'suite':'obs',scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
  validate(steps,{voice=false}={}){
   if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');

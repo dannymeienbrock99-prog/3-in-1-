@@ -143,14 +143,21 @@ test('filter word requests preserve text and have explicit confirmation/cancella
   assert.deepEqual(resolve('Abbrechen'), {kind: 'cancel-confirmation'});
   assert.equal(resolve('Ja'), null);
 });
-test('help is bounded, dynamically includes existing saved actions and its examples are executable', () => {
+test('the full help includes existing saved actions and every executable example matches its advertised action', () => {
   const examples = commandExamples(catalog);
-  assert(examples.length <= 36);
+  assert(examples.length > 100);
   assert(examples.some(s => s.phrase.includes('Streamstart')));
   assert(examples.some(s => s.phrase.includes('Mein Discord')));
-  for (const example of examples) assert(['action', 'audio'].includes(resolve(example.phrase)?.kind), example.phrase + ': ' + JSON.stringify(resolve(example.phrase)));
+  for (const example of examples) {
+    if(example.template)continue;
+    const result=resolve(example.phrase);
+    if(example.expectedAction)assert.deepEqual(result?.action,example.expectedAction,example.phrase);
+    else if(example.expectedKind==='sensor')assert.equal(result,null,example.phrase+' stays in the sensor query route');
+    else assert.equal(result?.kind,example.expectedKind,example.phrase);
+  }
   assert.equal(commandExamples(catalog, {limit: 3}).length, 3);
   assert.equal(resolve('Welche Befehle kennst du?').kind, 'help');
   assert.equal(resolve('Welche Befehle kannst du?').kind, 'help');
+  assert(resolve('Welche Befehle kannst du?').text.length<900);
   assert.equal(resolve('Jarvis').kind, 'help');
 });

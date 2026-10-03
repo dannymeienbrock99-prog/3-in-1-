@@ -101,10 +101,10 @@ test('internal value actions stay out of deck fields but saved command buttons u
 });
 test('help examples use real available settings and remain valid commands',t=>{
  const f=fixture(t),examples=commandExamples(f.controls.catalog());
- for(const example of examples)assert(['action','audio'].includes(f.parse(example.phrase)?.kind),example.phrase);
+ for(const example of examples){if(example.template||example.expectedKind==='sensor')continue;const result=f.parse(example.phrase);if(example.expectedAction)assert.deepEqual(result?.action,example.expectedAction,example.phrase);else assert.equal(result?.kind,example.expectedKind,example.phrase);}
  assert(examples.some(e=>e.phrase==='Lies alle Chatnachrichten vor'));
  assert(examples.some(e=>e.phrase==='Geschenk-Ansage auf Geschenkname und Coins'));
- assert(examples.length<=36);
+ assert(examples.length>100);
 });
 test('connection and source aliases remain anchored to catalog targets',t=>{
  const f=fixture(t);

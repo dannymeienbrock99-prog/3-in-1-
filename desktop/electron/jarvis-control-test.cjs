@@ -25,9 +25,9 @@ app.whenReady().then(async()=>{
   assert.match(win.webContents.getURL(),/renderer[\\/]index\.html/);
   assert(await js('document.body.innerText.length>100&&Boolean(document.getElementById("view-jarvis"))'));
   checks.push('the expected local application renderer is loaded and nonblank');
-  async function command(text){await js('setView("jarvis")');await pause(100);const before=runtime.jarvis.history.length;
-   await js(`document.getElementById('j-command').value=${JSON.stringify(text)};document.getElementById('j-command-form').requestSubmit()`);
-   for(let i=0;i<100;i++){if(runtime.jarvis.history.length>before&&!runtime.jarvis.commandBusy)return runtime.jarvis.history.at(-1);await pause(40);}throw Error('Command timeout: '+text);
+  async function command(text){await js('setView("jarvis")');await pause(100);const before=runtime.jarvis.history.at(-1)?.id;
+   await js(`document.getElementById('j-command').value=${JSON.stringify(text)};document.getElementById('j-execute').click()`);
+   for(let i=0;i<100;i++){if(runtime.jarvis.history.at(-1)?.id!==before&&runtime.jarvis.history.at(-1)?.kind!=='user'&&!runtime.jarvis.commandBusy)return runtime.jarvis.history.at(-1);await pause(40);}throw Error('Command timeout: '+text);
   }
   async function assertPage(view,control,phrase){
    await until(async()=>await js('S.view')===view,'navigation: '+phrase);
@@ -61,12 +61,49 @@ app.whenReady().then(async()=>{
   runtime.voice.emit('event',{type:'transcript',text:'Multi Chat öffnen'});await pause(180);assert.equal(await js('S.view'),'dashboard');checks.push('recognized voice text reaches the same live navigation');
   assert.equal((await command('Blockiere NichtVorhanden auf Twitch')).kind,'clarification');checks.push('unknown person cannot trigger moderation');
   assert.equal((await command('Schalte irgendetwas ein')).kind,'clarification');checks.push('unknown switches visibly fail without made-up success');
+  assert.equal(await js('document.getElementById("j-command-result").classList.contains("is-error")'),true);assert.match(await js('document.getElementById("j-command-result").textContent'),/Alle Jarvis-Befehle/);checks.push('a rejected ambiguous command remains visible beside the input with a route to the command search');
+  await command('Mach bitte Pause');assert.equal(await js('document.getElementById("suite-toast").hidden'),true);assert.equal(await js('document.getElementById("j-command-result").classList.contains("is-error")'),false);checks.push('a successful command clears a previous error toast so the old failure cannot look like its result');
   await js('setView("jarvis")');await pause(2400);
   assert((await js('document.getElementById("j-log").textContent')).includes('ERKANNT'));checks.push('recognized voice input and outcome appear in the real Jarvis history');
-  assert(await js('document.querySelectorAll("[data-command-example]").length>=6'));
-  await js('document.getElementById("j-more-commands").open=true');await pause(150);
+  const examples=runtime.jarvis.snapshot().commandExamples;
+  assert(examples.length>100,'the full command catalog must not stop at the old 18/100 limits');
+  await openSettings();await click('j-show-commands');assert.equal(await js('document.getElementById("view-jarvis").classList.contains("settings-open")'),false);assert.equal(await js('document.activeElement.id'),'j-command-search');checks.push('the visible Alle Befehle button opens and focuses the catalog directly, including from settings');
+  await click('j-command-reset');assert.equal(await js('document.getElementById("j-command-category").value'),'');
+  const categories=[...new Set(examples.map(item=>item.category||'Grundbefehle'))];
+  assert.deepEqual(await js('[...document.getElementById("j-command-category").options].slice(1).map(item=>item.value)'),categories);
+  const listed=[];for(let page=0;page<Math.ceil(examples.length/40);page++){
+   const phrases=await js('[...document.querySelectorAll("[data-command-example]")].map(item=>item.dataset.commandExample)');assert(phrases.length<=40&&phrases.length>0);listed.push(...phrases);
+   if(page+1<Math.ceil(examples.length/40))await click('j-command-next');
+  }
+  assert.deepEqual(listed.toSorted(),examples.map(item=>item.phrase).toSorted());assert.equal(await js('document.getElementById("j-command-next").disabled'),true);checks.push('all catalog commands and categories are reachable with a maximum of 40 rendered cards per page and no 100-command truncation');
+  await click('j-command-reset');assert.match(await js('document.getElementById("j-command-page").textContent'),/Seite 1 von/);
+  await js('document.querySelector("[data-command-example]").dataset.qaUnchanged="kept"');runtime.emit('state',runtime.snapshot());await pause(120);
+  assert.equal(await js('document.querySelector("[data-command-example]").dataset.qaUnchanged'),'kept');checks.push('unchanged state updates preserve existing command-card DOM without rerendering');
+  const lastExample=examples.at(-1);await field('j-command-search',lastExample.phrase);
+  assert((await js('[...document.querySelectorAll("[data-command-example]")].map(item=>item.dataset.commandExample)')).includes(lastExample.phrase));checks.push('search reaches the final full-catalog command beyond the old first 100 entries');
+  await field('j-command-search','');await field('j-command-category',categories.at(-1));
+  assert((await js('[...document.querySelectorAll("[data-command-category]")].map(item=>item.dataset.commandCategory)')).every(name=>name===categories.at(-1)));
+  await field('j-command-search','nichtvorhandenerjarvisbefehl123');assert.equal(await js('document.querySelectorAll("[data-command-example]").length'),0);assert.match(await js('document.getElementById("j-command-examples").textContent'),/Keine passenden Befehle/);
+  await click('j-command-reset');checks.push('category and search filters work together and a no-match state gives an actionable reset');
+  const template=examples.find(item=>item.template&&/<[^<>]+>/.test(item.phrase));assert(template,'catalog contains an editable command template');await field('j-command-search',template.phrase);const beforeTemplate=runtime.jarvis.history.at(-1)?.id;
+  await js(`[...document.querySelectorAll('[data-command-example]')].find(item=>item.dataset.commandExample===${JSON.stringify(template.phrase)}).click()`);assert.match(await js('document.getElementById("j-command-result").textContent'),/Vorlage.*Platzhalter/);
+  await click('j-execute');assert.equal(runtime.jarvis.history.at(-1)?.id,beforeTemplate);assert.equal(await js('document.getElementById("j-command").value'),template.phrase);assert.match(await js('document.getElementById("j-command-result").textContent'),/Ersetze zuerst/);checks.push('an unchanged command template is visibly blocked before reaching any backend command or external action');await click('j-command-reset');
+  const beforeGreeting=runtime.jarvis.settings.greeting;runtime.jarvis.update({greeting:'QA Suche verändert keine Einstellungen'});runtime.emit('state',runtime.snapshot());await pause(120);
+  assert.equal(await js('document.getElementById("j-greeting").value'),'QA Suche verändert keine Einstellungen');runtime.jarvis.update({greeting:beforeGreeting});runtime.emit('state',runtime.snapshot());checks.push('search and category changes do not mark unrelated Jarvis settings dirty');
+  await command('Start Szene öffnen');await js('setView("jarvis")');await field('j-command-search','Mach bitte Pause');const beforeSelection=runtime.jarvis.history.at(-1)?.id;
+  await js('[...document.querySelectorAll("[data-command-example]")].find(item=>item.dataset.commandExample==="Mach bitte Pause").click()');
+  assert.equal(runtime.jarvis.history.at(-1)?.id,beforeSelection);assert.equal(dual.config.program.scene,'Start');assert.equal(await js('document.getElementById("j-command").value'),'Mach bitte Pause');assert.equal(await js('document.activeElement.id'),'j-command');
+  assert.match(await js('document.getElementById("j-command-result").textContent'),/Befehl übernommen.*Ausführen/);
+  await click('j-execute');await until(()=>dual.config.program.scene==='Pause'&&!runtime.jarvis.commandBusy,'selected example executes only through submit');
+  assert.equal(runtime.jarvis.history.at(-1).kind,'answer');assert.match(await js('document.getElementById("j-command-result").textContent'),/Pause/);checks.push('selecting a displayed example only fills and focuses the input; the explicit execute button changes the actual scene and shows the result');
+  await command('Wechsel zu Pause');assert.equal(dual.config.program.scene,'Pause');assert.equal(runtime.jarvis.history.at(-1).kind,'answer');checks.push('reported Wechsel zu Pause succeeds through the actual text form');
+  await js('setView("jarvis")');await click('j-command-reset');await pause(150);
   fs.writeFileSync(path.join(output,'Jarvis-1600.png'),(await win.webContents.capturePage()).toPNG());
+  await click('j-show-commands');assert(await js('(()=>{const r=document.getElementById("j-command-search").getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;})()'));
+  fs.writeFileSync(path.join(output,'Jarvis-Befehle-1600.png'),(await win.webContents.capturePage()).toPNG());
   win.setSize(1180,850);await pause(200);assert(await js('document.getElementById("content").scrollWidth<=document.getElementById("content").clientWidth+2'));
+  await click('j-show-commands');assert(await js('document.getElementById("j-command-examples").scrollWidth<=document.getElementById("j-command-examples").clientWidth+2'));
+  fs.writeFileSync(path.join(output,'Jarvis-Befehle-1180.png'),(await win.webContents.capturePage()).toPNG());
   fs.writeFileSync(path.join(output,'Jarvis-1180.png'),(await win.webContents.capturePage()).toPNG());checks.push('Jarvis command panel fits both desktop sizes');
   await command('Lies alle Chatnachrichten vor');assert.equal(runtime.jarvis.settings.chatMode,'all');assert.equal(runtime.jarvis.settings.chatEnabled,true);checks.push('voice command switches chat reading to all people and enables it');
   await command('Geschenk-Ansage auf Geschenkname und Coins');assert.equal(runtime.jarvis.settings.events.giftAnnouncement,'both');checks.push('voice command selects gift name and coin announcements');

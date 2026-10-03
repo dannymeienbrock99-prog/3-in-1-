@@ -7,7 +7,7 @@ var other="C:\\OBS\\obs-virtualsource.dll";
 var files=new HashSet<string>(StringComparer.OrdinalIgnoreCase){installed,other};
 var tests=0;
 void Check(bool condition,string message){if(!condition)throw new Exception(message);tests++;}
-CameraEntry Entry(string? path,bool owned=true,string? name="Batto TikTok",string? classId=null)=>new(path,name,classId??id,owned);
+CameraEntry Entry(string? path,bool owned=true,string? name="Batto TikTok",string? classId=null)=>new(path,name,classId??id,owned,true,"E:\\BattoSuite\\resources\\FanAtlas",true);
 bool Ready(CameraEntry e)=>CameraRegistrationPolicy.Ready(e,id,files.Contains);
 bool Repair(CameraEntry e)=>CameraRegistrationPolicy.NeedsRepair(e,id,installed,files.Contains);
 Check(!Ready(Entry(old)),"A deleted install path is not ready.");
@@ -24,4 +24,28 @@ Check(Repair(Entry(installed,name:"")),"Repair a missing device-category entry."
 Check(!Ready(Entry(installed,classId:Guid.Empty.ToString())),"A mismatched category CLSID is not ready.");
 Check(Repair(Entry(installed,classId:Guid.Empty.ToString())),"Repair a mismatched category CLSID.");
 Check(Repair(new(null,null,null,false)),"First-time installation must register both class and category.");
-Console.WriteLine($"Camera registration: {tests} checks passed; no registry writes or capture.");
+var machine="C:\\Program Files\\Common Files\\CrazyBatto\\VirtualCam\\x64\\obs-virtualsource.dll";
+files.Add(machine);
+Check(!CameraRegistrationPolicy.SystemReady(Entry(installed),id,machine,files.Contains),"Per-user app DLL is not a protected machine registration.");
+Check(CameraRegistrationPolicy.SystemReady(Entry(machine),id,machine,files.Contains),"Explicit owned machine registration is ready.");
+Check(!CameraRegistrationPolicy.SystemReady(Entry(machine) with{HasFilterData=false},id,machine,files.Contains),"Missing filter metadata must not report LIVE Studio readiness.");
+Check(!CameraRegistrationPolicy.SystemReady(Entry(machine) with{ActivationVerified=false},id,machine,files.Contains),"A failed or unverified elevated COM activation must not report LIVE Studio readiness.");
+Check(!CameraRegistrationPolicy.SystemReady(Entry(machine,owned:false),id,machine,files.Contains),"A foreign camera is not advertised as Batto system readiness.");
+Check(!CameraRegistrationPolicy.CanRegisterSystem(Entry(other,owned:false),id,files.Contains),"Never replace a healthy foreign machine registration.");
+Check(CameraRegistrationPolicy.CanRegisterSystem(new(null,null,null,false),id,files.Contains),"Allow first machine camera installation.");
+Check(CameraRegistrationPolicy.CanRegisterSystem(Entry(old),id,files.Contains),"Allow repairing owned machine camera registration.");
+Check(Repair(Entry(installed) with{HasFilterData=false}),"Upgrade older per-user entries lacking filter metadata.");
+var install="E:\\BattoSuite\\resources\\FanAtlas";
+Check(CameraRegistrationPolicy.CanUnregister(Entry(machine),machine,install),"Current owner can remove its exact machine registration.");
+Check(!CameraRegistrationPolicy.CanUnregister(Entry(machine),machine,"C:\\old\\FanAtlas"),"Old uninstaller cannot remove a newer installation's machine camera.");
+Check(!CameraRegistrationPolicy.CanUnregister(Entry(machine,owned:false),machine,install),"Foreign machine registration must survive uninstall.");
+Check(!CameraRegistrationPolicy.CanUnregister(Entry(machine) with{InstallPath=null},machine,install),"Machine uninstall requires an explicit install owner.");
+// Real Windows COM metadata serialization, without any registry writes or devices.
+var data=CameraFilterData.Create();
+Check(data.Length>=32,"Windows serializes nonempty camera filter metadata.");
+Check(BitConverter.ToUInt32(data,0)==2,"Windows metadata describes REGFILTER2 version 2.");
+Check(BitConverter.ToUInt32(data,4)==0x200000,"Camera is MERIT_DO_NOT_USE, never auto-inserted into arbitrary filter graphs.");
+Check(BitConverter.ToUInt32(data,8)==1,"Metadata contains exactly one pin.");
+Check(data.AsSpan().IndexOf(new Guid("73646976-0000-0010-8000-00AA00389B71").ToByteArray())>=0,"Metadata contains the actual Video media type.");
+Check(data.AsSpan().IndexOf(new Guid("32595559-0000-0010-8000-00AA00389B71").ToByteArray())>=0,"Metadata contains the reader's YUY2 subtype.");
+Console.WriteLine($"Camera registration: {tests} checks passed; Windows serialization checked, no registry writes or capture.");

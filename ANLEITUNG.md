@@ -1,4 +1,10 @@
-# Batto 3-in-1 · Schnellstart 1.8.5
+# Batto 3-in-1 · Schnellstart 1.8.6
+
+## Virtuelle Kameras in LIVE Studio · 1.8.6
+
+**Dual Stream → Virtuelle Kameras einrichten** richtet die beiden Geräte auch für Programme mit Administratorrechten ein. Die Windows-Abfrage einmal bestätigen, anschließend LIVE Studio vollständig schließen und neu öffnen. Danach bei **Kamera hinzufügen → Kamera** die Ausgabe **Batto TikTok** auswählen; **Batto Twitch** liefert Querformat. Die Kameraausgabe vorher in Batto starten.
+
+Nur die Kameraeinrichtung benötigt Administratorrechte. Batto und seine Vorschau laufen weiterhin normal. Die kleine Kamerakomponente liegt geschützt unter den gemeinsamen Windows-Programmdateien; es wird kein zusätzlicher Hintergrunddienst gestartet. Wird die Windows-Abfrage abgebrochen, zeigt Batto die fehlende Einrichtung an. Bei stiller Installation diesen Schritt anschließend im Programm ausführen.
 
 ## Dual Stream in 1.8.5
 

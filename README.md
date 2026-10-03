@@ -1,4 +1,10 @@
-# Batto 3-in-1 · 1.8.5
+# Batto 3-in-1 · 1.8.6
+
+## Virtuelle Kameras in LIVE Studio · 1.8.6
+
+**Dual Stream → Virtuelle Kameras einrichten** richtet die beiden Geräte auch für Programme mit Administratorrechten ein. Die Windows-Abfrage einmal bestätigen, anschließend LIVE Studio vollständig schließen und neu öffnen. Danach bei **Kamera hinzufügen → Kamera** die Ausgabe **Batto TikTok** auswählen; **Batto Twitch** liefert Querformat. Die Kameraausgabe vorher in Batto starten.
+
+Nur die Kameraeinrichtung benötigt Administratorrechte. Batto und seine Vorschau laufen weiterhin normal. Die kleine Kamerakomponente liegt geschützt unter den gemeinsamen Windows-Programmdateien; es wird kein zusätzlicher Hintergrunddienst gestartet. Wird die Windows-Abfrage abgebrochen, zeigt Batto die fehlende Einrichtung an. Bei stiller Installation diesen Schritt anschließend im Programm ausführen.
 
 ## Dual Stream in 1.8.5
 
@@ -57,7 +63,7 @@ Unter **Dual Stream** gewünschte Spiel-/Fenster-/Bildschirmquelle und Kamera au
 
 1. **Geräte erkennen**, Quellen zuordnen und aktivieren; Layout speichern.
 2. **Kamera einschalten**: Die Vorschau startet nach der Geräteauswahl automatisch. Für gespeicherte Quellen **Vorschau starten** drücken.
-3. **Kamera starten** oder **Beide Kameras starten**. In LIVE Studio **Batto TikTok**, für Querformat **Batto Twitch** als Kamera wählen. Falls Geräte fehlen: **Virtuelle Kameras einrichten**, dann die Kameraliste im Zielprogramm neu öffnen.
+3. **Kamera starten** oder **Beide Kameras starten**. In LIVE Studio **Batto TikTok**, für Querformat **Batto Twitch** als Kamera wählen. Falls Geräte fehlen: **Virtuelle Kameras einrichten**, die Windows-Abfrage bestätigen und LIVE Studio vollständig neu starten.
 4. Mikrofon, PC-Ton und eigentlichen Sendestart direkt im Zielprogramm einstellen. Virtuelle Kameras transportieren nur Video. Medien-Ton wird ebenfalls nicht über das Kameragerät übertragen.
 
 Der Installer richtet zwei DirectShow-Kameras für den aktuellen Windows-Benutzer ein. Bestehende funktionsfähige OBS-VirtualCam-Registrierungen werden erhalten und können deshalb „OBS-Camera“ / „OBS-Camera2“ heißen. Eine von einem anderen Sender belegte Kamera wird nicht übernommen. Die eingebaute OBS Virtual Camera bleibt unberührt.
@@ -132,7 +138,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.5.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.6.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

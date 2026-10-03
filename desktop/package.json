@@ -1,6 +1,6 @@
 {
   "name": "batto-3-in-1",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "Batto 3-in-1 mit der Originaloberfläche von OBS Tool 2.4.7",
   "main": "electron/suite-entry.cjs",
   "author": "Crazy_Batto",

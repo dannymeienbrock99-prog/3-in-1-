@@ -12,7 +12,12 @@ class DualStream extends EventEmitter {
  root(){return this.config.obsRoot||path.join(process.env.ProgramFiles||'C:\\Program Files','obs-studio');}
  running(){return Object.values(this.state.outputs||{}).some(x=>['camera','live','connecting','test'].includes(x.state));}
  live(){return Object.values(this.state.outputs||{}).some(x=>['live','connecting'].includes(x.state));}
- async registerCameras(){if(this.running())throw Error('Kameras erst stoppen.');await this.release();await promisify(execFile)(this.executable,['--register-cameras'],{windowsHide:true,timeout:15000});await this.probe();return this.snapshot();}
+ async registerCameras(){
+  if(this.running())throw Error('Kameras erst stoppen.');await this.release();
+  try{await promisify(execFile)(this.executable,['--setup-cameras'],{windowsHide:true,timeout:180000});}
+  catch(error){throw Error(String(error.stderr||'Kameraeinrichtung nicht abgeschlossen. Bitte die Windows-Administratorbestätigung für die virtuellen Kameras bestätigen.').trim());}
+  await this.probe();return this.snapshot();
+ }
  snapshot(){return {revision:this.revision,companionLive:this.companionLive,config:this.config,profile:profile(this.config),keys:Object.fromEntries(platforms.map(p=>[p,!!this.credentials[p]])),libraryFound:fs.existsSync(path.join(this.root(),'bin','64bit','obs.dll')),engineRunning:!!this.native?.process,state:this.state,probe:this.probeResult,busy:this.busy,error:this.error};}
  emitState(){this.emit('state',this.snapshot());}
  serial(fn,silent=false,publish=true){const action=this.queue.then(async()=>{this.busy=true;if(!silent)this.emitState();try{return await fn();}catch(e){this.error=e.message;throw e;}finally{this.busy=false;if(publish)this.emitState();}});this.queue=action.catch(()=>{});return action;}

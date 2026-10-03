@@ -231,7 +231,15 @@ internal sealed class Engine : IDisposable {
 
 internal static class Program {
  [STAThread] static int Main(string[] args){
-  if(args.Contains("--register-cameras")||args.Contains("--unregister-cameras")){try{if(args.Contains("--register-cameras"))CameraRegistration.Register();else CameraRegistration.Unregister();Console.WriteLine(JsonSerializer.Serialize(CameraRegistration.Status()));return 0;}catch(Exception e){Console.Error.WriteLine(e.Message);return 1;}}
+  if(args.Any(a=>a is "--register-cameras" or "--unregister-cameras" or "--setup-cameras" or "--register-cameras-system" or "--unregister-cameras-system")){
+   try{
+    if(args.Contains("--setup-cameras"))CameraRegistration.Setup();
+    else if(args.Contains("--register-cameras-system")){var index=Array.IndexOf(args,"--register-cameras-system");CameraRegistration.RegisterSystem(index+1<args.Length?args[index+1]:null);}
+    else if(args.Contains("--unregister-cameras-system"))CameraRegistration.Unregister(true);
+    else if(args.Contains("--register-cameras"))CameraRegistration.Register();else CameraRegistration.Unregister();
+    Console.WriteLine(JsonSerializer.Serialize(CameraRegistration.Status()));return 0;
+   }catch(Exception e){Console.Error.WriteLine(e.Message);return 1;}
+  }
   Console.InputEncoding=new System.Text.UTF8Encoding(false);Console.OutputEncoding=new System.Text.UTF8Encoding(false);
   using var engine=new Engine(args.Length>0?args[0]:"");
   try{engine.Initialize();Console.WriteLine("BATTO_JSON:"+JsonSerializer.Serialize(new{ready=true}));}

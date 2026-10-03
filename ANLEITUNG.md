@@ -1,4 +1,14 @@
-# Batto 3-in-1 · Schnellstart 1.8.9
+# Batto 3-in-1 · Schnellstart 1.9.0
+
+## OBS-Stinger und Szenenwechsel · 1.9.0
+
+Der **OBS-Import übernimmt jetzt Stinger-Videoübergänge** einschließlich Datei und Umschaltpunkt. Unter **Dual Stream → OBS-Szenensammlung importieren** die OBS-Exportdatei auswählen. Mit **Nur Übergänge übernehmen** bleiben bereits eingerichtete Szenen, Kameras und Anordnungen erhalten. Die Videodateien müssen auf dem PC weiterhin erreichbar sein. Fremde OBS-Übergangsplugins werden nicht geladen; nicht unterstützte Übergänge erscheinen als Hinweis.
+
+Unter **Übergang** den importierten Stinger auswählen und **Übergang speichern** drücken. Der nächste Szenenwechsel verwendet diese Auswahl für TikTok und Twitch. Stinger-Länge und Umschaltpunkt stammen aus dem Video beziehungsweise den OBS-Einstellungen; **Dauer (ms)** gilt für die Überblendung. Ton wird weiterhin in LIVE Studio eingestellt, da die virtuelle Kamera das Bild überträgt.
+
+Jarvis versteht zum Beispiel **„Übergang auf Stinger“**, **„TikTok Pause mit Stinger“** und **„Twitch Start mit Stinger“**. Der Szenenname muss zu einer vorhandenen Szene passen. Normale Szenenbefehle verwenden den aktuell gewählten Übergang. Touch Deck und Stream Deck bieten dieselben Übergänge zur Auswahl. Bei einer fehlenden Datei oder einem noch laufenden Übergang erscheint eine verständliche Meldung.
+
+Für geringen Speicherverbrauch werden Stinger erst beim ersten Wechsel geladen. Das vollständige Video wird nicht vorab in den Arbeitsspeicher geladen; nach dem Wechsel werden seine Videoressourcen wieder freigegeben. **Video-Dienst ausschalten** gibt die Videoressourcen frei.
 
 ## Drei Kameras · 1.8.9
 

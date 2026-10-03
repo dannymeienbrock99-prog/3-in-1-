@@ -42,7 +42,9 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{const detached=sender
   case 'obs-import-apply':{
    const pending=pendingImports.get(e.sender);if(!pending||pending.token!==value?.token||pending.expires<Date.now())throw Error('Bitte die OBS-Datei erneut auswählen; die Importvorschau ist abgelaufen.');
    service.assertRevision(value);service.assertRevision({baseRevision:pending.revision});if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');
-   const imported=require('./obs-scene-import.cjs').applyCollection(pending.data,{config:service.config,mapping:value.mapping,sources:value.sources,devices:service.probeResult?.devices});
+   if(value.transitionsOnly!==undefined&&typeof value.transitionsOnly!=='boolean')throw Error('Ungültige Importauswahl.');
+   const importer=require('./obs-scene-import.cjs');
+   const imported=(value.transitionsOnly?importer.applyTransitions:importer.applyCollection)(pending.data,{config:service.config,mapping:value.mapping,sources:value.sources,devices:service.probeResult?.devices});
    if(fs.existsSync(service.file))fs.copyFileSync(service.file,path.join(service.directory,'dual-stream.before-obs-import-'+Date.now()+'.json'));
    await service.save(imported.config);pendingImports.delete(e.sender);return {...snapshot(),importWarnings:imported.warnings,importSummary:imported.summary};
   }

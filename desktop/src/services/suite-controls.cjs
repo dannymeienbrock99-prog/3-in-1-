@@ -1,6 +1,7 @@
 'use strict';
 const {SETTING_SPECS,validateSetting,applySetting}=require('./jarvis-setting-actions.cjs');
 const {sceneChoices}=require('../dual-stream/config.cjs');
+const {transitionChoices,assertTransitionFiles}=require('../dual-stream/transitions.cjs');
 const SCENES=['Spiel','Pause','Start','Ende'];
 const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'iCUE LINK Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschgeschenke',widgets:'TikFinity-Widgets',livecenter:'TikTok LIVE Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Chat-Filter',hologram:'Chatfarben',platforms:'Plattformen',commands:'Commands',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys / Multi-Action',events:'Events',media:'Medien',pools:'Medien-Pools',tts:'TTS',discord:'Discord',streamerbot:'Streamer.bot',backups:'Backups',settings:'Einstellungen',diagnostics:'Diagnose 2.1'};
 async function connectAdapter(adapter,name,op){
@@ -18,14 +19,14 @@ class SuiteControls{
  catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{},dual=this.getDual(),scenes=sceneChoices(dual?.config).map(({value,label,name,...metadata})=>({id:value,name:label,...(name?{sceneName:name}:{}),...metadata}));return {actions:[
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
-  {id:'scene',name:'Szene und Übergang',choices:scenes,transition:true},
+  {id:'scene',name:'Szene und Übergang',choices:scenes,transition:true,transitionChoices:transitionChoices(dual?.config)},
   {id:'start',name:'Virtuelle Kamera starten',choices:this.targets()}, {id:'stop',name:'Virtuelle Kamera stoppen',choices:this.targets()},
   {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['camera2','Kamera 2'],['camera3','Kamera 3'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
   {id:'overlay',name:'Einblendung an/aus',choices:[{id:'chat',name:'Chat'},{id:'events',name:'Ereignisse'}],switch:true},
   {id:'jarvis',name:'Jarvis-Einstellung an/aus',choices:[['voiceEnabled','Sprachausgabe'],['microphoneEnabled','Dauerhaft zuhören'],['wakeWord','Aktivierungswort'],['headphones','Kopfhörermodus'],['chatEnabled','Chat vorlesen'],['events.enabled','Stream-Ereignisse'],['events.gifts','Geschenke'],['events.follows','Follower'],['events.likes','Likes'],['events.subscriptions','Abo-Danksagungen'],['fanAlerts.enabled','Lüfterwarnungen'],['gamingMode','Gaming-Sparmodus']].map(([id,name])=>({id,name})),switch:true},
   {id:'microphones',name:'Mikrofone neu laden'},
   ...(typeof host?.jarvisSettings==='function'?[{id:'jarvis-settings',name:'Jarvis-Einstellungen öffnen'}]:[]),
-  {id:'transition',name:'Szenenübergang wählen',choices:[{id:'fade',name:'Überblendung'},{id:'cut',name:'Schnitt'}]},
+  {id:'transition',name:'Szenenübergang wählen',choices:transitionChoices(dual?.config)},
   {id:'likes-reset',name:'Jarvis Like-Zähler zurücksetzen'},
   {id:'companion',name:'LIVE-Studio-Sitzung markieren',switch:true},
   {id:'control',name:'Bot / Chat / Auto-Broadcast schalten',choices:legacy.controls||[],switch:true},
@@ -41,7 +42,21 @@ class SuiteControls{
  validate(steps,{voice=false}={}){
   if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');
   // Validate the complete combination before any side effect.
-  const catalog=this.catalog();for(const s of steps){const definition=[...catalog.actions,...(voice?catalog.voiceActions:[])].find(x=>x.id===s?.action);if(!definition)throw Error('Unbekannte Tastenaktion.');if(definition.choices&&!definition.choices.some(x=>x.id===s.target))throw Error('Bitte ein vorhandenes Ziel wählen.');if(definition.switch&&!['on','off','toggle'].includes(s.op||'toggle'))throw Error('Ungültiger Schalter.');if(s.action==='command'&&(typeof s.text!=='string'||!s.text.trim()||s.text.length>500))throw Error('Bitte einen kurzen Befehl eintragen.');if(s.action==='scene'&&(s.transition&&!['fade','cut'].includes(s.transition)||s.durationMs!==undefined&&(!Number.isInteger(s.durationMs)||s.durationMs<100||s.durationMs>2000)))throw Error('Ungültiger Übergang.');if(s.action==='jarvis-setting')validateSetting(s);if(s.action==='transition-duration'&&(!Number.isInteger(s.value)||s.value<100||s.value>2000))throw Error('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');}
+  const catalog=this.catalog(),dual=this.getDual(),transitions=transitionChoices(dual?.config);let effectiveTransition=dual?.config.program?.transition;
+  for(const s of steps){
+   const definition=[...catalog.actions,...(voice?catalog.voiceActions:[])].find(x=>x.id===s?.action);
+   if(!definition)throw Error('Unbekannte Tastenaktion.');
+   if(definition.choices&&!definition.choices.some(x=>x.id===s.target))throw Error('Bitte ein vorhandenes Ziel wählen.');
+   if(definition.switch&&!['on','off','toggle'].includes(s.op||'toggle'))throw Error('Ungültiger Schalter.');
+   if(s.action==='command'&&(typeof s.text!=='string'||!s.text.trim()||s.text.length>500))throw Error('Bitte einen kurzen Befehl eintragen.');
+   if(s.action==='scene'&&(s.transition&&!transitions.some(item=>item.id===s.transition)||s.durationMs!==undefined&&(!Number.isInteger(s.durationMs)||s.durationMs<100||s.durationMs>2000)))throw Error('Ungültiger Übergang.');
+   if(dual?.config&&(s.action==='scene'||s.action==='transition')){
+    effectiveTransition=s.action==='transition'?s.target:s.transition||effectiveTransition;
+    assertTransitionFiles(dual.config,effectiveTransition);
+   }
+   if(s.action==='jarvis-setting')validateSetting(s);
+   if(s.action==='transition-duration'&&(!Number.isInteger(s.value)||s.value<100||s.value>2000))throw Error('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');
+  }
  }
  async executeFromJarvis(value){
   if(!value||value.steps||value.action==='command')throw Error('Dieser Sprachbefehl kann sich nicht selbst aufrufen.');
@@ -65,7 +80,7 @@ class SuiteControls{
    case 'jarvis-setting':return applySetting(r.jarvis,s);
    case 'jarvis-settings':return host.jarvisSettings();
    case 'microphones':r.voice.send({command:'devices'});return {ok:true,text:'Die Mikrofonliste wird aktualisiert.'};
-   case 'transition':case 'transition-duration':{if(!d)throw Error('Dual Stream ist nicht verfügbar.');const result=await d.serial(()=>d.program({...d.config.program,...(s.action==='transition'?{transition:s.target}:{durationMs:s.value})}));if(result?.ok===false)throw Error(result.error||result.text||'Der Übergang wurde nicht gespeichert.');return {ok:true,text:s.action==='transition'?`Szenenübergang: ${s.target==='fade'?'Überblendung':'Schnitt'}.`:`Übergangsdauer: ${s.value} Millisekunden.`};}
+   case 'transition':case 'transition-duration':{if(!d)throw Error('Dual Stream ist nicht verfügbar.');const result=await d.serial(()=>d.program({...d.config.program,...(s.action==='transition'?{transition:s.target}:{durationMs:s.value})}));if(result?.ok===false)throw Error(result.error||result.text||'Der Übergang wurde nicht gespeichert.');return {ok:true,text:s.action==='transition'?`Szenenübergang: ${transitionChoices(d.config).find(item=>item.id===s.target)?.name||s.target}.`:`Übergangsdauer: ${s.value} Millisekunden.`};}
    case 'companion':d.companionLive=enabled(d.companionLive);d.emitState();return;
    case 'likes-reset':r.jarvis.events.resetLikes();return;
    case 'scene':return d?d.serial(()=>d.scene(s.target,s.transition,s.durationMs)):r.jarvis.obs.setScene(s.target);

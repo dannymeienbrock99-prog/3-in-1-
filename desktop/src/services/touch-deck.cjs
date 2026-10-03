@@ -21,7 +21,9 @@ function normalizeStep(step,actions){
  if(definition.switch){if(!['on','off','toggle'].includes(step.op||'toggle'))throw Error('Ungültiger Schalter.');result.op=step.op||'toggle';}
  if(step.action==='command'){if(typeof step.text!=='string'||!step.text.trim()||step.text.length>500)throw Error('Bitte einen kurzen Jarvis-Befehl eintragen.');result.text=step.text.trim();}
  if(step.action==='scene'){
-  if(step.transition!==undefined){if(!['fade','cut'].includes(step.transition))throw Error('Ungültiger Übergang.');result.transition=step.transition;}
+  // Keep a removed imported transition visible on saved buttons. Execution
+  // checks the live catalog before any step, so it can never silently fade.
+  if(step.transition!==undefined&&step.transition!==''){if(typeof step.transition!=='string'||!(['fade','cut'].includes(step.transition)||/^obs-transition:[a-zA-Z0-9_-]{1,100}$/.test(step.transition)))throw Error('Ungültiger Übergang.');result.transition=step.transition;}
   if(step.durationMs!==undefined){if(!Number.isInteger(step.durationMs)||step.durationMs<100||step.durationMs>2000)throw Error('Die Übergangsdauer muss zwischen 100 und 2000 ms liegen.');result.durationMs=step.durationMs;}
  }
  return result;

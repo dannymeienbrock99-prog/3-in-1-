@@ -38,11 +38,15 @@ test('suite: real sensors, isolated OBS protocol, authenticated API, native Stre
   await assert.rejects(()=>suite.fan.configure('curve',{name:'Bad',sensorLabel:'GPU',points:[{temperature:80,duty:30},{temperature:30,duty:100}]}));
   const sensor=suite.fan.snapshot.sensors.find(s=>s.unit==='°C')||suite.fan.snapshot.sensors[0];
   sd=new WebSocketServer({host:'127.0.0.1',port:0});await new Promise(r=>sd.once('listening',r));const messages=[],waiters=[];let socket;
-  const wait=predicate=>{const i=messages.findIndex(predicate);if(i>=0)return Promise.resolve(messages.splice(i,1)[0]);return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Plugin timeout')),10000);waiters.push({predicate,resolve:e=>{clearTimeout(timer);resolve(e);}});});};
+  const wait=predicate=>{const i=messages.findIndex(predicate);if(i>=0)return Promise.resolve(messages.splice(i,1)[0]);return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Plugin timeout: '+predicate.toString())),10000);waiters.push({predicate,resolve:e=>{clearTimeout(timer);resolve(e);}});});};
   sd.on('connection',s=>{socket=s;s.on('message',raw=>{const e=JSON.parse(raw),i=waiters.findIndex(w=>w.predicate(e));if(i>=0)waiters.splice(i,1)[0].resolve(e);else messages.push(e);});});
   plugin=spawn(path.join(root,'streamdeck/de.crazybatto.suite.sdPlugin/bin/FanAtlas.Deck.exe'),['-port',String(sd.address().port),'-pluginUUID','TEST','-registerEvent','registerPlugin'],{windowsHide:true,env:{...process.env,FANATLAS_TEST_BRIDGE:path.join(dir,'FanAtlas/bridge.json'),BATTO_TEST_BRIDGE:path.join(dir,'bridge.json')}});
   await wait(e=>e.event==='registerPlugin');const send=(event,context,action,payload={})=>socket.send(JSON.stringify({event,context,action:'de.crazybatto.suite.'+action,payload}));
   send('willAppear','sensor','sensor',{settings:{sensorId:sensor.id}});assert((await wait(e=>e.event==='setImage'&&e.context==='sensor')).payload.image.startsWith('data:image/png;base64,'));
+  // The initial key image can be the offline placeholder before the two-second poll.
+  // A catalog request acknowledges actual data readiness before testing key actions.
+  send('propertyInspectorDidAppear','sensor','sensor');const ready=await wait(e=>e.event==='sendToPropertyInspector'&&e.context==='sensor');
+  assert(ready.payload.online,'native plugin has loaded FanAtlas state');assert(ready.payload.catalog.sensors.some(s=>s.id===sensor.id));assert.equal(ready.payload.catalog.selectedCurveId,curveId);
   send('willAppear','fan','fan',{settings:{tileId:testFan.id,mode:'percent'}});assert((await wait(e=>e.event==='setImage'&&e.context==='fan')).payload.image.startsWith('data:image/png;base64,'));
   send('keyDown','fan','fan');assert.equal((await wait(e=>e.event==='setSettings'&&e.context==='fan')).payload.mode,'rpm');
   send('keyDown','sensor','sensor');await wait(e=>e.event==='showOk'&&e.context==='sensor');

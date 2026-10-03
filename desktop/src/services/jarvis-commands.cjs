@@ -60,6 +60,7 @@ const SOURCE_ALIASES = {
   camera3: ['kamera','cam','webcam'].flatMap(noun => [`${noun} 3`,`${noun} drei`,`dritte ${noun}`]),
   game: ['spielbild','spielquelle','bildschirm','spiel aufnahme']
 };
+const TRANSITION_ALIASES = {fade:['überblendung','uberblendung','überblenden','uberblenden','fade'],cut:['schnitt','cut']};
 const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleich zuruck'],
   spiel: ['spiel', 'spielszene', 'spiel szene', 'gaming', 'weiter', 'zuruck zum spiel'],
   start: ['start', 'startszene', 'start szene', 'stream startet'], ende: ['ende', 'endszene', 'ende szene', 'stream ende']};
@@ -268,6 +269,8 @@ function quotedCatalogCommand(input,catalog){
     if(matches.length!==1)return ambiguous(matches.length?'Mehrere Ziele heißen so. Verwende die eindeutige Variante aus der Befehlsliste oder benenne sie um.':'Diesen Namen finde ich nicht. Wähle einen vorhandenen Eintrag aus der Befehlsliste.');
     return {kind:'action',action:{action:id,target:matches[0].id,...extra},reply:id==='scene'?sceneReply(matches[0]):`${matches[0].name}: ${extra.op==='on'?'eingeschaltet':extra.op==='off'?'ausgeschaltet':extra.op==='toggle'?'umgeschaltet':'ausgeführt'}.`};
   };
+  const transition=new RegExp('^(?:(?:stelle|stell|setze|setz) (?:den )?)?(?:ubergang|szenenubergang) auf '+marker+'$').exec(text);
+  if(transition)return finish('transition',!!transition[1]);
   for(const [id,noun,verb,last]of kinds){
     const match=new RegExp('^(?:'+verb+' '+article+noun+' '+marker+'(?: aus| ab)?|'+article+noun+' '+marker+' '+last+')$').exec(text);
     if(match)return finish(id,!!(match[1]||match[2]));
@@ -278,7 +281,7 @@ function quotedCatalogCommand(input,catalog){
   }
   return null;
 }
-function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
+function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransition = false} = {}) {
   if (typeof input !== 'string' || input.length > 1500) return null;
   const text = normalizeCommand(input);
   if (!text) return {kind: 'help', text: 'Ich höre. Sag zum Beispiel: Mach bitte Pause, öffne das Touch Deck oder Windows Lautstärke auf 35 Prozent.'};
@@ -323,6 +326,26 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   }
   const profileSwitch=switchPhrase(literalText),profileMatch=profileSwitch&&/^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.exec(profileSwitch.query);
   if(profileMatch)return select(catalog,'broadcast-profile',profileMatch[1],{},{op:profileSwitch.op});
+  const transition=/^(?:(?:stelle|stell|setze|setz) (?:den )?)?(?:ubergang|szenenubergang) auf (.+)$/.exec(text);
+  if(transition)return select(catalog,'transition',transition[1],TRANSITION_ALIASES);
+  if(!withoutTransition){
+    const withTransition=/^(.+?) mit (?:(?:dem )?(?:szenen)?ubergang )?(.+?)(?: (?:von )?(\d+) (?:millisekunden|ms))?$/.exec(text);
+    if(withTransition){
+      // A complete saved scene name containing "mit" takes precedence. Only a
+      // real scene command may gain a transition; connections and audio keep
+      // their own meaning (for example "Verbinde dich mit Twitch").
+      const plain=resolveCommand(input,{catalog,sceneAliases,withoutTransition:true});
+      if(plain?.kind==='action')return plain;
+      const base=resolveCommand(withTransition[1],{catalog,sceneAliases,withoutTransition:true});
+      if(base?.kind==='action'&&base.action.action==='scene'){
+        const selected=select(catalog,'transition',withTransition[2],TRANSITION_ALIASES);
+        if(selected.kind!=='action')return {...selected,text:'Diesen Übergang kann ich nicht eindeutig auswählen. Wähle einen verfügbaren Übergang aus der Befehlsliste.'};
+        const durationMs=withTransition[3]===undefined?undefined:Number(withTransition[3]);
+        if(durationMs!==undefined&&(durationMs<100||durationMs>2000))return ambiguous('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');
+        return {...base,action:{...base.action,transition:selected.action.target,...(durationMs===undefined?{}:{durationMs})}};
+      }
+    }
+  }
   if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
   // These exact, observed speech-recognition variants only open a harmless page.
   // Never apply fuzzy correction to switches, saved actions or moderation.
@@ -336,12 +359,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if(/^(?:(?:offne|zeige|zeig) (?:mir )?(?:die )?(?:deine|jarvis) einstellungen|(?:die )?(?:deine|jarvis) einstellungen (?:offnen|anzeigen))$/.test(text))return definition(catalog,'jarvis-settings')?simple(catalog,'jarvis-settings','Jarvis-Einstellungen geöffnet.'):select(catalog,'navigate','jarvis',NAVIGATION);
   if(/^(?:mikrofone (?:neu laden|suchen|aktualisieren)|lade (?:die )?mikrofone neu|suche (?:nach )?mikrofonen)$/.test(text))return simple(catalog,'microphones','Die Mikrofonliste wird aktualisiert.');
   if(/^(?:teste (?:das |mein |dein )?mikrofon|mikrofon testen|starte (?:den )?mikrofontest)$/.test(text))return simple(catalog,'listen','Ich höre für den Mikrofontest.');
-  const transition=/^(?:(?:stelle|stell|setze|setz) (?:den )?)?(?:ubergang|szenenubergang) auf (uberblendung|fade|schnitt|cut)$/.exec(text);
-  if(transition)return select(catalog,'transition',/^(?:fade|uberblendung)$/.test(transition[1])?'fade':'cut');
   const duration=/^(?:(?:stelle|stell|setze|setz) (?:die )?)?ubergangsdauer auf (.+?) (?:millisekunden|ms)$/.exec(text);
   if(duration){const value=spokenInteger(duration[1]);if(!Number.isInteger(value)||value<100||value>2000)return ambiguous('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');const result=simple(catalog,'transition-duration','Übergangsdauer aktualisiert.');if(result.kind==='action')result.action.value=value;return result;}
-  const withTransition=/^(.+?) mit (?:dem ubergang )?(uberblendung|fade|schnitt|cut)(?: (?:von )?(\d+) (?:millisekunden|ms))?$/.exec(text);
-  if(withTransition){const base=resolveCommand(withTransition[1],{catalog,sceneAliases});if(base?.kind==='action'&&base.action.action==='scene'){const durationMs=withTransition[3]===undefined?undefined:Number(withTransition[3]);if(durationMs!==undefined&&(durationMs<100||durationMs>2000))return ambiguous('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');return {...base,action:{...base.action,transition:/^(?:fade|uberblendung)$/.test(withTransition[2])?'fade':'cut',...(durationMs===undefined?{}:{durationMs})}};}return ambiguous('Nenne eine vorhandene Szene mit Überblendung oder Schnitt.');}
   if (/^(?:(?:schalte|mach|mache) )?(?:das )?mikrofon (?:aus|an|ein|stumm)$/.test(text)) return ambiguous('Meinst du das Jarvis-Mikrofon? Sag dafür: Dauerhaft zuhören aus oder Dauerhaft zuhören an.');
   const audio = audioCommand(text);
   if (audio) return audio;
@@ -477,7 +496,15 @@ function commandExamples(catalog = {}, {limit} = {}) {
         const paired=details?(item.partnerName?` Gekoppelt mit ${details.platform==='tiktok'?'Twitch':'TikTok'} ${item.partnerName}; beide Ausgaben wechseln gemeinsam.`:' Dieselbe Szene wird für beide Ausgaben verwendet.'):'';
         action(phrase,`${item.name} als Programmszene auswählen.`+paired+(typedOnly?' Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{}, {...(details?{category:details.platformName+'-Szenen'}:{}),...(typedOnly?{typedOnly:true}:{})});
       }
-      else if(id==='transition')action(`Übergang auf ${item.name}`,`${item.name} für folgende Szenenwechsel`,id,item.id);
+      else if(id==='transition'){
+        const phrase=choose([`Übergang auf ${item.name}`,`Übergang auf ${literal(id,item)}`],{action:id,target:item.id}),typedOnly=phrase.includes('"');
+        action(phrase,`${item.name} für folgende Szenenwechsel`+(item.type==='stinger'?'; Ablauf und Schnittpunkt kommen aus dem OBS-Stinger.':'')+(typedOnly?' Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{},{...(typedOnly?{typedOnly:true}:{})});
+        if(item.type==='stinger'&&!typedOnly){
+          const examples=['tiktok','twitch'].map(platform=>choices(catalog,'scene').find(scene=>sceneDetails(scene)?.platform===platform)).filter(Boolean);
+          if(!examples.length){const scene=choices(catalog,'scene').find(scene=>scene.id==='Pause');if(scene)examples.push(scene);}
+          for(const scene of examples){const combined=`${sceneDetails(scene)?.spokenName||'Szene '+scene.name+' öffnen'} mit ${item.name}`,expected={action:'scene',target:scene.id,transition:item.id};if(sameAction(combined,expected))action(combined,`${scene.name} mit ${item.name} auswählen; beide Ausgaben wechseln gemeinsam.`,'scene',scene.id,{transition:item.id});}
+        }
+      }
       else if(id==='start'||id==='stop')action(`${item.id==='both'?'Beide virtuelle Kameras':item.id==='twitch'?'Twitch virtuelle Kamera':'TikTok virtuelle Kamera'} ${id==='start'?'starten':'stoppen'}`,`${item.name}: virtuelle Kamera ${id==='start'?'starten':'stoppen'}`,id,item.id);
       else if(['source','overlay','jarvis','control','broadcast-profile'].includes(id)){
         const noun={source:'Bildquelle',overlay:'Einblendung',jarvis:'Jarvis-Schalter',control:'Funktion','broadcast-profile':'Auto-Broadcast Profil'}[id];

@@ -125,7 +125,14 @@ internal static class Obs {
  [DllImport(D)] public static extern nint obs_source_get_settings(nint source);
  [DllImport(D)] public static extern void obs_source_load(nint source);
  [DllImport(D)] public static extern void obs_sceneitem_remove(nint item);
+ [DllImport(D)] public static extern void obs_sceneitem_set_order_position(nint item,int position);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_transition_is_active(nint transition);
+ [DllImport(D)] public static extern float obs_transition_get_time(nint transition);
  [DllImport(D)] public static extern int obs_source_media_get_state(nint source);
  [DllImport(D)] public static extern long obs_source_media_get_time(nint source);
+ [DllImport(D)] public static extern long obs_source_media_get_duration(nint source);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void SourceEnum(nint parent,nint child,nint data);
+ [DllImport(D)] public static extern void obs_source_enum_full_tree(nint source,SourceEnum callback,nint data);
+ [DllImport(D)] public static extern nint obs_source_get_id(nint source);
  [DllImport(D)] public static extern void obs_source_set_volume(nint source,float volume);
 }

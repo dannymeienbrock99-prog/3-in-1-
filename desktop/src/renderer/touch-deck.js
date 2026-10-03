@@ -461,7 +461,8 @@
     if (definition.choices) step.target = definition.choices[0]?.id || '';
     if (definition.switch) step.op = 'toggle';
     if (definition.text) step.text = '';
-    if (definition.transition) { step.transition = 'fade'; step.durationMs = 350; }
+    // Scene buttons inherit the current Dual Stream transition unless the user
+    // explicitly pins an effect to this button.
     return step;
   }
   function createButton(type) {
@@ -652,18 +653,27 @@
       else { clearTimeout(entry.timer); volumeWrites.delete(id); }
     }
   }
+  function transitionFields(step,index,definition) {
+    if (!definition?.transition) return '';
+    const transitions=definition.transitionChoices || catalog.actions.find(action=>action.id==='transition')?.choices || [{id:'fade',name:'Überblenden'},{id:'cut',name:'Schnitt'}];
+    const selected=step.transition || '',available=transitions.some(item=>item.id===selected),stinger=transitions.find(item=>item.id===selected)?.type==='stinger';
+    return `<div class="td-two"><label>Übergang<select data-td-step="${index}" data-td-field="transition">${option('','Aktuellen Übergang verwenden',selected)}${selected&&!available?option(selected,'Gespeicherter Übergang nicht verfügbar',selected):''}${transitions.map(item=>option(item.id,item.name,selected)).join('')}</select></label><label>${stinger?'Dauer: aus Stinger-Videodatei':'Dauer (ms; leer = aktuell)'}<input data-td-step="${index}" data-td-field="durationMs" type="number" min="100" max="2000" step="50" placeholder="Aktuelle Dauer" value="${esc(step.durationMs ?? '')}"${stinger?' disabled':''}></label></div>`;
+  }
   function renderSteps(item) {
     const steps = item.steps || (item.steps = [defaultStep()]);
     $('type-editor').innerHTML = `<h4>Aktionen nacheinander</h4><div class="td-steps">${steps.map((step, index) => {
       const definition = catalog.actions.find(action => action.id === step.action);
-      return `<fieldset class="td-step"><legend>Aktion ${index + 1}</legend><label>Aktion<select data-td-step="${index}" data-td-field="action">${!definition ? option(step.action,'Nicht verfügbare Aktion',step.action) : ''}${catalog.actions.map(action => option(action.id,action.name,step.action)).join('')}</select></label>${definition?.choices ? `<label>Ziel<select data-td-step="${index}" data-td-field="target">${!definition.choices.some(choice => choice.id === step.target) ? option(step.target || '', definition.choices.length ? 'Ziel auswählen' : 'Noch keine Einträge vorhanden',step.target) : ''}${definition.choices.map(choice => option(choice.id,choice.name || choice.title || choice.id,step.target)).join('')}</select></label>` : ''}${definition?.switch ? `<label>Schalten<select data-td-step="${index}" data-td-field="op">${[['toggle','Umschalten'],['on','Einschalten'],['off','Ausschalten']].map(([id,name]) => option(id,name,step.op || 'toggle')).join('')}</select></label>` : ''}${definition?.text ? `<label>Gespeicherter Befehl<input data-td-step="${index}" data-td-field="text" maxlength="500" value="${esc(step.text)}" placeholder="Zum Beispiel: Wie warm ist die Grafikkarte?"></label>` : ''}${definition?.transition ? `<div class="td-two"><label>Übergang<select data-td-step="${index}" data-td-field="transition">${[['fade','Überblenden'],['cut','Schnitt']].map(([id,name]) => option(id,name,step.transition || 'fade')).join('')}</select></label><label>Dauer (ms)<input data-td-step="${index}" data-td-field="durationMs" type="number" min="100" max="2000" step="50" value="${esc(step.durationMs ?? 350)}"></label></div>` : ''}<div class="td-step-tools"><button data-td-up="${index}"${index === 0 ? ' disabled' : ''} aria-label="Aktion ${index + 1} nach oben">↑</button><button data-td-down="${index}"${index === steps.length - 1 ? ' disabled' : ''} aria-label="Aktion ${index + 1} nach unten">↓</button><button data-td-remove-step="${index}"${steps.length === 1 ? ' disabled' : ''}>Entfernen</button></div></fieldset>`;
+      return `<fieldset class="td-step"><legend>Aktion ${index + 1}</legend><label>Aktion<select data-td-step="${index}" data-td-field="action">${!definition ? option(step.action,'Nicht verfügbare Aktion',step.action) : ''}${catalog.actions.map(action => option(action.id,action.name,step.action)).join('')}</select></label>${definition?.choices ? `<label>Ziel<select data-td-step="${index}" data-td-field="target">${!definition.choices.some(choice => choice.id === step.target) ? option(step.target || '', definition.choices.length ? 'Ziel auswählen' : 'Noch keine Einträge vorhanden',step.target) : ''}${definition.choices.map(choice => option(choice.id,choice.name || choice.title || choice.id,step.target)).join('')}</select></label>` : ''}${definition?.switch ? `<label>Schalten<select data-td-step="${index}" data-td-field="op">${[['toggle','Umschalten'],['on','Einschalten'],['off','Ausschalten']].map(([id,name]) => option(id,name,step.op || 'toggle')).join('')}</select></label>` : ''}${definition?.text ? `<label>Gespeicherter Befehl<input data-td-step="${index}" data-td-field="text" maxlength="500" value="${esc(step.text)}" placeholder="Zum Beispiel: Wie warm ist die Grafikkarte?"></label>` : ''}${transitionFields(step,index,definition)}<div class="td-step-tools"><button data-td-up="${index}"${index === 0 ? ' disabled' : ''} aria-label="Aktion ${index + 1} nach oben">↑</button><button data-td-down="${index}"${index === steps.length - 1 ? ' disabled' : ''} aria-label="Aktion ${index + 1} nach unten">↓</button><button data-td-remove-step="${index}"${steps.length === 1 ? ' disabled' : ''}>Entfernen</button></div></fieldset>`;
     }).join('')}</div><button id="td-step-add"${steps.length >= 8 ? ' disabled' : ''}>+ Aktion hinzufügen</button><p class="td-help">Szenen und Übergänge steuern die vorhandenen Batto-Ausgaben. Chat- und Bot-Aktionen verwenden deine bestehenden Einstellungen.</p>`;
     $('type-editor').querySelectorAll('[data-td-field]').forEach(input => {
       input.addEventListener(input.tagName === 'INPUT' ? 'input' : 'change', () => {
         if (busy) return;
         const index = Number(input.dataset.tdStep), field = input.dataset.tdField;
         if (field === 'action') { steps[index] = defaultStep(input.value); changed(); renderSteps(item); renderGrid(); return; }
-        steps[index][field] = field === 'durationMs' ? Number(input.value) : input.value; changed();
+        if ((field === 'transition' || field === 'durationMs') && input.value === '') delete steps[index][field];
+        else steps[index][field] = field === 'durationMs' ? Number(input.value) : input.value;
+        changed();
+        if (field === 'transition') renderSteps(item);
       });
     });
     for (const direction of ['up','down']) $('type-editor').querySelectorAll(`[data-td-${direction}]`).forEach(button => { button.onclick = () => { if (busy) return; const index = Number(button.dataset[direction === 'up' ? 'tdUp' : 'tdDown']), next = index + (direction === 'up' ? -1 : 1); if (next < 0 || next >= steps.length) return; [steps[index], steps[next]] = [steps[next], steps[index]]; changed(); renderSteps(item); }; });

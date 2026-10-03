@@ -13,6 +13,7 @@ internal sealed class Engine : IDisposable {
  readonly Dictionary<string,string> cameraTargets=new(StringComparer.OrdinalIgnoreCase);
  static readonly string[] CameraIds={"camera","camera2","camera3"};
  readonly List<string> importWarnings=new();
+ readonly Dictionary<string,JsonNode> transitionDefinitions=new(StringComparer.Ordinal);
  readonly HashSet<nint> videoSources=new();
  readonly Dictionary<string,Destination> destinations=new();
  readonly List<string> encoders=new();
@@ -25,8 +26,8 @@ internal sealed class Engine : IDisposable {
  nint graphics;
  string encoder="";
  bool prepared; nint media; readonly List<nint> mediaItems=new(); bool mediaVideo; long mediaDeadline;
- sealed class Destination { public Dictionary<string,nint> scenes=new(); public Dictionary<string,string> sceneLabels=new(); public string selected="Spiel"; public VirtualCamera? camera; public nint transition,chat,events,chatItem,eventItem; public nint scene,sourceScene,view,video,videoEncoder,audioEncoder,output,service,previewSource; public long previewDeadline; public int width,height,bitrate; public bool requested,recording; public string error=""; }
- public Engine(string root){this.root=Path.GetFullPath(root);previewTimer=new System.Threading.Timer(_=>{lock(Sync){if(disposed)return;foreach(var d in destinations.Values)if(d.previewSource!=0&&Environment.TickCount64>=d.previewDeadline)ReleasePreview(d);}},null,250,250);}
+ sealed class Destination { public Dictionary<string,nint> scenes=new(); public Dictionary<string,string> sceneLabels=new(); public string selected="Spiel",transitionId="fade"; public VirtualCamera? camera; public nint transition,transitionItem,chat,events,chatItem,eventItem; public nint scene,sourceScene,view,video,videoEncoder,audioEncoder,output,service,previewSource; public long previewDeadline; public int width,height,bitrate; public bool requested,recording; public string error=""; }
+ public Engine(string root){this.root=Path.GetFullPath(root);previewTimer=new System.Threading.Timer(_=>{lock(Sync){if(disposed)return;foreach(var d in destinations.Values){if(d.previewSource!=0&&Environment.TickCount64>=d.previewDeadline)ReleasePreview(d);ReleaseFinishedTransition(d);}}},null,250,250);}
  static void ReleasePreview(Destination d){if(d.previewSource==0)return;var source=d.previewSource;d.previewSource=0;d.previewDeadline=0;Obs.obs_source_dec_active(source);}
  static string S(JsonNode? n,string key,string fallback="")=>n?[key]?.GetValue<string>()??fallback;
  static bool B(JsonNode? n,string key,bool fallback=false)=>n?[key]?.GetValue<bool>()??fallback;
@@ -178,6 +179,10 @@ internal sealed class Engine : IDisposable {
   if(destinations.Values.Any(d=>d.camera!=null||d.output!=0&&Obs.obs_output_active(d.output)))throw new InvalidOperationException("Erst beide Ausgaben stoppen.");
   Reset();
   try{
+   foreach(var definition in config["transitions"]?.AsArray()??new JsonArray()){
+    if(definition==null)continue;string id=S(definition,"id");
+    if(id.Length==0||id is "cut" or "fade"||transitionDefinitions.Count>=64||!transitionDefinitions.TryAdd(id,definition.DeepClone()))throw new InvalidOperationException("Ungültige oder doppelte OBS-Übergänge.");
+   }
    var selected=config["sources"]!;
    ValidateCameras(selected);
    if(test){sources["game"]=Source("color_source","Gemeinsames Testbild",new{color=0xFF603CB0,width=1280,height=720});sources["camera"]=Source("color_source","Kameraplatzhalter für Test",new{color=0xFF35C5EE,width=640,height=480});foreach(string id in CameraIds.Skip(1))if(B(selected[id],"enabled"))sources[id]=Source("color_source","Kameraplatzhalter "+id,new{color=id=="camera2"?0xFF41C828u:0xFFF04949u,width=640,height=480});}
@@ -225,7 +230,7 @@ internal sealed class Engine : IDisposable {
     }
     d.transition=Source("fade_transition","Übergang "+platform,new{});Obs.obs_transition_set_size(d.transition,(uint)d.width,(uint)d.height);
     d.selected=S(config["program"],"scene","Spiel");if(!d.scenes.ContainsKey(d.selected))d.selected="Spiel";
-    Obs.obs_transition_set(d.transition,Obs.obs_scene_get_source(d.scenes[d.selected]));Obs.obs_scene_add(d.scene,d.transition);
+    Obs.obs_transition_set(d.transition,Obs.obs_scene_get_source(d.scenes[d.selected]));d.transitionItem=Obs.obs_scene_add(d.scene,d.transition);
     foreach(string kind in new[]{"chat","events"}){
      var text=Source("text_gdiplus",kind+" "+platform,new{text="",font=new{face="Segoe UI",size=Math.Max(24,d.width/32),flags=0},color=0xFFFFFF,outline=true,outline_size=2,bk_color=0x121212,bk_opacity=70,extents=true,extents_cx=(int)(d.width*.94),extents_cy=(int)(d.height*(kind=="chat"?.20:.10)),word_wrap=true});
      var item=Obs.obs_scene_add(d.scene,text);var pos=new Obs.Vec(d.width*.03f,d.height*(kind=="chat"?.67f:.88f));var size=new Obs.Vec(d.width*.94f,d.height*(kind=="chat"?.20f:.10f));
@@ -239,9 +244,65 @@ internal sealed class Engine : IDisposable {
    prepared=true;return Status();
   }catch{Reset();throw;}
  }
+ (string NativeType,JsonObject Settings) TransitionSettings(string id){
+  if(id is "cut" or "fade")return ("fade_transition",new JsonObject());
+  if(!transitionDefinitions.TryGetValue(id,out var definition))throw new InvalidOperationException("Dieser OBS-Übergang ist nicht importiert.");
+  var input=definition["settings"];string type=S(definition,"type");
+  if(type!="stinger")throw new InvalidOperationException("Dieser OBS-Übergang wird nicht unterstützt.");
+  string name=S(definition,"name","Stinger"),file=S(input,"path");
+  string LocalFile(string value){if(!Path.IsPathFullyQualified(value)||value.StartsWith(@"\\")||!File.Exists(value))throw new InvalidOperationException("Die lokale Videodatei für den Übergang „"+name+"“ fehlt. Bitte neu zuordnen.");return Path.GetFullPath(value);}
+  // Never forward arbitrary media/decoder settings from an imported document.
+  // Full-video RAM preloading and local audio monitoring are deliberately off.
+  var settings=new JsonObject{["path"]=LocalFile(file),["transition_point"]=(int)Math.Clamp(N(input,"transition_point"),0,120000),["tp_type"]=N(input,"tp_type")==1?1:0,["hw_decode"]=B(input,"hw_decode",true),["preload"]=false,["enable_monitoring"]=false,["audio_monitoring"]=0,["audio_fade_style"]=N(input,"audio_fade_style")==1?1:0,["track_matte_enabled"]=B(input,"track_matte_enabled"),["track_matte_layout"]=(int)Math.Clamp(N(input,"track_matte_layout"),0,3),["invert_matte"]=B(input,"invert_matte")};
+  if(B(settings,"track_matte_enabled")&&N(settings,"track_matte_layout")==2)settings["track_matte_path"]=LocalFile(S(input,"track_matte_path"));
+  return ("obs_stinger_transition",settings);
+ }
+ static void ReplaceTransition(Destination d,nint next,string id){
+  var nextItem=Need(Obs.obs_scene_add(d.scene,next),"Übergang konnte nicht eingefügt werden.");
+  // Keep the program picture below chat, event and temporary media overlays.
+  Obs.obs_sceneitem_set_order_position(nextItem,0);Obs.obs_sceneitem_remove(d.transitionItem);Obs.obs_source_release(d.transition);d.transition=next;d.transitionItem=nextItem;d.transitionId=id;
+ }
+ void ReleaseFinishedTransition(Destination d){
+  if(d.transition==0||d.transitionId=="fade"||Obs.obs_transition_get_time(d.transition)<1)return;
+  nint next=0;
+  try{
+   // Stinger preloads its first frame again at the end. Release its decoder
+   // entirely while idle; the selected transition remains in desktop config.
+   next=Source("fade_transition","Ruhendes Szenenbild",new{});Obs.obs_transition_set_size(next,(uint)d.width,(uint)d.height);Obs.obs_transition_set(next,Obs.obs_scene_get_source(d.scenes[d.selected]));ReplaceTransition(d,next,"fade");next=0;
+  }catch{if(next!=0)Obs.obs_source_release(next);} // Keep the current picture if allocation fails.
+ }
  public object Scene(string name,string transition,int duration,string platform="both"){
-  if(!prepared||!new[]{"cut","fade"}.Contains(transition)||duration<100||duration>2000||!new[]{"both","tiktok","twitch"}.Contains(platform)||destinations.Where(x=>platform=="both"||x.Key==platform).Any(x=>!x.Value.scenes.ContainsKey(name)))throw new InvalidOperationException("Ungültige Szene oder Übergang.");
-  foreach(var pair in destinations.Where(x=>platform=="both"||x.Key==platform)){var d=pair.Value;ReleasePreview(d);var target=Obs.obs_scene_get_source(d.scenes[name]);if(transition=="cut")Obs.obs_transition_set(d.transition,target);else if(!Obs.obs_transition_start(d.transition,0,(uint)duration,target))throw new InvalidOperationException("Übergang läuft noch. Bitte kurz warten.");d.selected=name;}
+  if(!prepared||duration<100||duration>2000||!new[]{"both","tiktok","twitch"}.Contains(platform)||destinations.Where(x=>platform=="both"||x.Key==platform).Any(x=>!x.Value.scenes.ContainsKey(name)))throw new InvalidOperationException("Ungültige Szene oder Übergang.");
+  var spec=TransitionSettings(transition);string resourceId=transition=="cut"?"fade":transition;
+  var targets=destinations.Where(x=>platform=="both"||x.Key==platform).ToArray();
+  // Validate both canvases before either changes. A quick second press must not
+  // leave TikTok and Twitch at different points in the same Stinger video.
+  if(transition!="cut"&&targets.Any(x=>Obs.obs_transition_is_active(x.Value.transition)&&Obs.obs_transition_get_time(x.Value.transition)<1))throw new InvalidOperationException("Übergang läuft noch. Bitte kurz warten.");
+  var replacements=new Dictionary<Destination,nint>();
+  try{
+   foreach(var pair in targets){var d=pair.Value;if(d.transitionId==resourceId)continue;
+    if(spec.NativeType=="obs_stinger_transition"){LoadModule("obs-ffmpeg");if(!loadedModules.Contains("obs-ffmpeg"))throw new InvalidOperationException("Die Videobibliothek für Stinger-Übergänge fehlt.");}
+    var next=Source(spec.NativeType,"Übergang "+pair.Key,spec.Settings);replacements[d]=next;
+    Obs.obs_source_set_audio_mixers(next,0);Obs.obs_source_set_muted(next,true);
+    if(spec.NativeType=="obs_stinger_transition"){
+     // The decoder opens its file asynchronously. Starting too soon would use
+     // a zero duration and cut at the wrong frame on the first selection.
+     bool Ready(){int children=0;bool ready=true;Obs.SourceEnum inspect=(_,child,_)=>{if(Obs.Str(Obs.obs_source_get_id(child))!="ffmpeg_source")return;children++;ready&=Obs.obs_source_media_get_duration(child)>0;};Obs.obs_source_enum_full_tree(next,inspect,0);return children>0&&ready;}
+     var wait=Stopwatch.StartNew();while(!Ready()&&wait.ElapsedMilliseconds<3000)Thread.Sleep(20);
+     if(!Ready())throw new InvalidOperationException("Die Stinger-Videodatei konnte nicht geladen werden. Bitte Format und Datei prüfen.");
+    }
+    Obs.obs_transition_set_size(next,(uint)d.width,(uint)d.height);Obs.obs_transition_set(next,Obs.obs_scene_get_source(d.scenes[d.selected]));
+   }
+   foreach(var pair in targets){var d=pair.Value;
+    if(replacements.TryGetValue(d,out var next)){ReplaceTransition(d,next,resourceId);replacements.Remove(d);}
+    var target=Obs.obs_scene_get_source(d.scenes[name]);
+    // OBS rejects transitioning to the same source; identical scene/alias
+    // selections are successful no-ops, including paired platform aliases.
+    if(transition=="cut"||d.scenes[name]==d.scenes[d.selected])Obs.obs_transition_set(d.transition,target);
+    else if(!Obs.obs_transition_start(d.transition,0,(uint)duration,target))throw new InvalidOperationException("Übergang konnte nicht gestartet werden.");
+    d.selected=name;
+   }
+  }finally{foreach(var pending in replacements.Values)Obs.obs_source_release(pending);}
   return Status();
  }
  public object Overlay(string chat,string events,bool chatVisible,bool eventsVisible){
@@ -327,12 +388,16 @@ internal sealed class Engine : IDisposable {
   using var stream=new MemoryStream();bitmap.Save(stream,System.Drawing.Imaging.ImageFormat.Png);return new{image="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray()),width,height,mode,scene=d.selected,sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}).ToArray(),capturedAt=DateTimeOffset.UtcNow};
  }
  public object TestMediaState()=>sources.Where(s=>videoSources.Contains(s.Value)).Select(s=>new{id=s.Key,active=Obs.obs_source_active(s.Value),milliseconds=Obs.obs_source_media_get_time(s.Value)}).ToArray();
+ public object TestTransitionState()=>destinations.ToDictionary(pair=>pair.Key,pair=>{
+  var children=new List<object>();Obs.SourceEnum inspect=(_,child,_)=>{if(Obs.Str(Obs.obs_source_get_id(child))=="ffmpeg_source")children.Add(new{active=Obs.obs_source_active(child),milliseconds=Obs.obs_source_media_get_time(child),duration=Obs.obs_source_media_get_duration(child)});};
+  Obs.obs_source_enum_full_tree(pair.Value.transition,inspect,0);return new{id=pair.Value.transitionId,children};
+ });
  public object Status()=>new{prepared,encoder,virtualCameras=CameraRegistration.Status(),version=Obs.Str(Obs.obs_get_version_string()),sourceCount=sources.Values.Distinct().Count(),importWarnings=importWarnings.ToArray(),sceneCount=ownedScenes.Count,overlays=destinations.ToDictionary(x=>x.Key,x=>new{chatWidth=Obs.obs_source_get_width(x.Value.chat),eventWidth=Obs.obs_source_get_width(x.Value.events)}),
   sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value),active=Obs.obs_source_active(s.Value)}),
   renderedFrames=Obs.obs_get_total_frames(),laggedFrames=Obs.obs_get_lagged_frames(),
-  outputs=destinations.ToDictionary(x=>x.Key,x=>{var d=x.Value;bool active=d.output!=0&&Obs.obs_output_active(d.output);ulong bytes=d.output==0?0:Obs.obs_output_get_total_bytes(d.output);if(d.requested&&!active)d.error="Ausgabe beendet oder Verbindung fehlgeschlagen. Sendezugang und Netzwerk prüfen.";return (object)new{cameraName=CameraRegistration.Name(x.Key=="tiktok"?1:2),scene=d.selected,sceneLabel=d.sceneLabels.GetValueOrDefault(d.selected,d.selected),d.width,d.height,d.bitrate,state=d.camera!=null?"camera":d.requested?(active?(bytes>0?(d.recording?"test":"live"):"connecting"):"error"):"stopped",bytes,frames=d.camera?.Frames??(d.output==0?0:Obs.obs_output_get_total_frames(d.output)),droppedFrames=d.output==0?0:Obs.obs_output_get_frames_dropped(d.output),error=d.error,muted=(mixers&(x.Key=="tiktok"?1:2))==0};})};
+  outputs=destinations.ToDictionary(x=>x.Key,x=>{var d=x.Value;bool active=d.output!=0&&Obs.obs_output_active(d.output);ulong bytes=d.output==0?0:Obs.obs_output_get_total_bytes(d.output);if(d.requested&&!active)d.error="Ausgabe beendet oder Verbindung fehlgeschlagen. Sendezugang und Netzwerk prüfen.";return (object)new{cameraName=CameraRegistration.Name(x.Key=="tiktok"?1:2),scene=d.selected,sceneLabel=d.sceneLabels.GetValueOrDefault(d.selected,d.selected),transition=d.transitionId,transitionActive=Obs.obs_transition_is_active(d.transition)&&Obs.obs_transition_get_time(d.transition)<1,d.width,d.height,d.bitrate,state=d.camera!=null?"camera":d.requested?(active?(bytes>0?(d.recording?"test":"live"):"connecting"):"error"):"stopped",bytes,frames=d.camera?.Frames??(d.output==0?0:Obs.obs_output_get_total_frames(d.output)),droppedFrames=d.output==0?0:Obs.obs_output_get_frames_dropped(d.output),error=d.error,muted=(mixers&(x.Key=="tiktok"?1:2))==0};})};
  static void ReleaseOutput(Destination d){StopOutput(d);if(d.output!=0)Obs.obs_output_release(d.output);if(d.service!=0)Obs.obs_service_release(d.service);if(d.videoEncoder!=0)Obs.obs_encoder_release(d.videoEncoder);if(d.audioEncoder!=0)Obs.obs_encoder_release(d.audioEncoder);d.output=d.service=d.videoEncoder=d.audioEncoder=0;}
- void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.transition!=0)Obs.obs_source_release(d.transition);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();foreach(var scene in ownedScenes)Obs.obs_scene_release(scene);ownedScenes.Clear();captureItems.Clear();cameraTargets.Clear();importWarnings.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values.Distinct())Obs.obs_source_release(s);sources.Clear();backgroundSources.Clear();videoSources.Clear();mixers=3;}
+ void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.transition!=0)Obs.obs_source_release(d.transition);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();foreach(var scene in ownedScenes)Obs.obs_scene_release(scene);ownedScenes.Clear();captureItems.Clear();cameraTargets.Clear();importWarnings.Clear();transitionDefinitions.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values.Distinct())Obs.obs_source_release(s);sources.Clear();backgroundSources.Clear();videoSources.Clear();mixers=3;}
  public void Dispose(){lock(Sync){if(disposed)return;disposed=true;previewTimer.Dispose();if(started){Reset();Obs.obs_shutdown();started=false;}if(graphics!=0){Marshal.FreeCoTaskMem(graphics);graphics=0;}}}
 }
 
@@ -367,6 +432,7 @@ internal static class Program {
      "snapshot"=>engine.Snapshot(req!["platform"]!.GetValue<string>(),req["mode"]?.GetValue<string>()??"program"),
      "test-prepare" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.Prepare(req!["config"]!,true),
      "test-media-state" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.TestMediaState(),
+     "test-transition-state" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.TestTransitionState(),
      "test-record" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.Start(req!["platform"]!.GetValue<string>(),null,null,req["path"]!.GetValue<string>()),
      "quit"=>null,_=>throw new InvalidOperationException("Unbekannte Video-Aktion.")};
     Console.WriteLine("BATTO_JSON:"+JsonSerializer.Serialize(new{id=req?["id"]?.GetValue<int>(),ok=true,result}));if(command=="quit")break;}

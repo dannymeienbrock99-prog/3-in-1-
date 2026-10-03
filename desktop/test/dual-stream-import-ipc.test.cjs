@@ -27,6 +27,12 @@ for(const preload of ['preload.cjs','dual-preload.cjs'])test(preload+': actual e
   assert.equal(result.config.obsCollection.scenes.length,1);assert(result.sceneChoices.some(x=>x.value==='obs:pause'));assert.equal(result.config.obsCollection.sources[0].settings.file,media);
   const backup=fs.readdirSync(directory).find(n=>n.startsWith('dual-stream.before-obs-import-'));assert(backup);assert.equal(fs.readFileSync(path.join(directory,backup),'utf8'),preImport);
   await assert.rejects(invoke('obs-import-apply',{...request,token:fresh.token,baseRevision:result.revision}),/erneut auswählen/);
+  const transitionFile=path.join(directory,'stinger.webm');fs.writeFileSync(transitionFile,'synthetic path fixture');
+  const withTransition=JSON.parse(fs.readFileSync(input,'utf8'));withTransition.transitions=[{name:'Stinger',id:'obs_stinger_transition',settings:{path:transitionFile}}];withTransition.current_transition='Stinger';fs.writeFileSync(input,JSON.stringify(withTransition));
+  const beforeOnly=structuredClone(service.config),onlyPreview=await invoke('obs-import-preview');assert.equal(onlyPreview.transitions.length,1);
+  const only=await invoke('obs-import-apply',{token:onlyPreview.token,baseRevision:onlyPreview.baseRevision,transitionsOnly:true});
+  assert.deepEqual(only.config.obsCollection,beforeOnly.obsCollection);assert.deepEqual(only.config.sources,beforeOnly.sources);assert.deepEqual(only.config.layouts,beforeOnly.layouts);assert.equal(only.config.program.scene,beforeOnly.program.scene);assert.equal(only.config.program.transition,only.config.transitions[0].id);assert.equal(only.transitionChoices.length,3);
+  await assert.rejects(invoke('obs-import-apply',{token:onlyPreview.token,baseRevision:only.revision,transitionsOnly:true}),/erneut auswählen/);
   service.state.outputs={tiktok:{state:'camera'}};await assert.rejects(invoke('obs-import-preview'),/stoppen/);service.state.outputs={};
   await invoke('background-clear',{platform:'twitch',scene:'Pause',baseRevision:service.revision});assert.equal(service.config.program.platformBackgrounds.twitch.Pause,null);assert.equal(fs.existsSync(media),true);assert.equal(service.config.obsCollection.aliases.twitch.Pause,undefined);assert.equal(service.config.obsCollection.scenes.length,1);
  }finally{await bootstrap?.close();delete require.cache[bootstrapPath];Module._load=load;if(previous===undefined)delete process.env.BATTO_SUITE_DATA;else process.env.BATTO_SUITE_DATA=previous;fs.rmSync(directory,{recursive:true,force:true});}

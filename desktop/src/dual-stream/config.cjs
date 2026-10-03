@@ -18,7 +18,13 @@ function validate(input){
  // Upgrade only the old factory layout; preserve deliberately arranged layouts.
  if(!input.layoutRevision){const [g,camera]=['game','camera'].map(id=>c.layouts.tiktok.find(x=>x.source===id));if(g.x===0&&g.y===.22&&g.width===1&&g.height===.56&&camera.x===.53&&camera.y===.02&&camera.width===.44&&camera.height===.19)c.layouts.tiktok=defaults().layouts.tiktok;}
  const program=input.program||{};c.program={scene:['Spiel','Pause','Start','Ende'].includes(program.scene)?program.scene:'Spiel',transition:program.transition==='cut'?'cut':'fade',durationMs:Number.isInteger(program.durationMs)?Math.max(100,Math.min(2000,program.durationMs)):350,chat:program.chat===true,events:program.events!==false,backgrounds:{}};
- for(const scene of ['Pause','Start','Ende'])c.program.backgrounds[scene]=str(program.backgrounds?.[scene]||'',2000);
+ // null means deliberately removed; empty/absent keeps the legacy factory background.
+ for(const scene of ['Pause','Start','Ende'])c.program.backgrounds[scene]=program.backgrounds?.[scene]===null?null:str(program.backgrounds?.[scene]||'',2000);
+ c.program.platformBackgrounds={tiktok:{},twitch:{}};
+ for(const p of platforms)for(const scene of ['Pause','Start','Ende']){
+  const value=program.platformBackgrounds?.[p]?.[scene];
+  if(value!==undefined)c.program.platformBackgrounds[p][scene]=value===null?null:str(value,2000);
+ }
  return c;
 }
 function importProject(data){

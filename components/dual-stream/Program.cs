@@ -7,6 +7,7 @@ using System.IO;
 
 internal sealed class Engine : IDisposable {
  readonly Dictionary<string,nint> sources=new();
+ readonly Dictionary<string,nint> backgroundSources=new(StringComparer.OrdinalIgnoreCase);
  readonly Dictionary<string,Destination> destinations=new();
  readonly List<string> encoders=new();
  readonly Obs.Log quietLog=(_,_,_,_)=>{}; // Never log RTMP credentials, URLs or OBS internals to the parent/UI.
@@ -23,6 +24,7 @@ internal sealed class Engine : IDisposable {
  static nint Need(nint p,string message)=>p!=0?p:throw new InvalidOperationException(message);
  static nint Settings(object value)=>Need(Obs.obs_data_create_from_json(JsonSerializer.Serialize(value)),"Einstellungen konnten nicht gelesen werden.");
  public void Initialize(){
+  if(Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")!="1")CameraRegistration.TryRepair(); // Restore a moved installation before enumeration; synthetic QA never writes the registry.
   string bin=Path.Combine(root,"bin","64bit");
   if(!File.Exists(Path.Combine(bin,"obs.dll")))throw new InvalidOperationException("Im gewählten Ordner fehlen die OBS-Bibliotheken.");
   Environment.CurrentDirectory=bin;Obs.SetDllDirectory(bin);
@@ -88,7 +90,7 @@ internal sealed class Engine : IDisposable {
      else{sources[name]=Source(name=="microphone"?"wasapi_input_capture":"wasapi_output_capture",name=="microphone"?"Gemeinsames Mikrofon":"Gemeinsamer PC-Ton",new{device_id=target});Obs.obs_source_set_audio_mixers(sources[name],3);Obs.obs_set_output_source(name=="microphone"?1u:2u,sources[name]);}
     }
    }
-   if(!sources.ContainsKey("game")&&!sources.ContainsKey("camera"))throw new InvalidOperationException("Bitte zuerst eine Bildquelle auswählen und einschalten.");
+   // Background-only scenes remain usable without opening a physical camera.
    // Audio comes exclusively from the explicitly enabled microphone / desktop inputs.
    // A camera or game plugin must not silently add another audio source.
    foreach(var s in sources)Obs.obs_source_set_audio_mixers(s.Value,s.Key is "microphone" or "desktop"?3u:0u);
@@ -105,10 +107,16 @@ internal sealed class Engine : IDisposable {
     }
     foreach(string name in new[]{"Pause","Start","Ende"}){
      var stage=SceneCreate(name+" "+platform,d.width,d.height);d.scenes[name]=stage;
-     string file=S(config["program"]?["backgrounds"],name);
+     var platformBackgrounds=config["program"]?["platformBackgrounds"]?[platform] as JsonObject;
+     string file=platformBackgrounds?.ContainsKey(name)==true?S(platformBackgrounds,name):S(config["program"]?["backgrounds"],name);
      if(!string.IsNullOrEmpty(file)&&File.Exists(file)){
-      string id="background-"+name;if(!sources.ContainsKey(id))sources[id]=Source("image_source",name+" Hintergrund",new{file,unload=false});
-      var item=Obs.obs_scene_add(stage,sources[id]);var size=new Obs.Vec(d.width,d.height);Obs.obs_sceneitem_set_bounds_type(item,2);Obs.obs_sceneitem_set_bounds(item,ref size);
+      var extension=Path.GetExtension(file).ToLowerInvariant();bool video=new[]{".mp4",".webm",".mkv",".mov",".m4v",".avi"}.Contains(extension);
+      if(!video&&!new[]{".png",".jpg",".jpeg",".webp",".bmp",".gif"}.Contains(extension))throw new InvalidOperationException("Dieses Hintergrundformat wird nicht unterstützt.");
+      string id="background-"+platform+"-"+name;
+      // Reuse identical local backgrounds across both canvases. A video is decoded once.
+      var shared=backgroundSources.GetValueOrDefault(file);
+      if(shared==0){if(video)LoadModule("obs-ffmpeg");shared=Source(video?"ffmpeg_source":"image_source",name+" Hintergrund "+platform,video?(object)new{local_file=file,is_local_file=true,looping=true,hw_decode=true,restart_on_activate=true,close_when_inactive=true}:new{file,unload=true});Obs.obs_source_set_audio_mixers(shared,0);backgroundSources[file]=shared;sources[id]=shared;}
+      var item=Obs.obs_scene_add(stage,shared);var size=new Obs.Vec(d.width,d.height);Obs.obs_sceneitem_set_bounds_type(item,2);Obs.obs_sceneitem_set_bounds(item,ref size);
      }
     }
     d.transition=Source("fade_transition","Übergang "+platform,new{});Obs.obs_transition_set_size(d.transition,(uint)d.width,(uint)d.height);
@@ -150,12 +158,12 @@ internal sealed class Engine : IDisposable {
  }
  public object MediaState(){if(media!=0&&(Environment.TickCount64>mediaDeadline||mediaVideo&&Obs.obs_source_media_get_state(media) is 5 or 6 or 7))ClearMedia();return new{active=media!=0};}
  public object MediaStop(){ClearMedia();return new{ok=true};}
- void EnsureVideo(Destination d){if(d.video!=0)return;var video=Video(d.width,d.height);d.video=Need(Obs.obs_view_add2(d.view,ref video),"Videoausgabe konnte nicht erstellt werden.");}
+ void EnsureVideo(Destination d){if(d.video!=0)return;var video=Video(d.width,d.height);d.video=Need(Obs.obs_view_add2(d.view,ref video),"Videoausgabe konnte nicht erstellt werden.");Obs.obs_source_inc_active(Obs.obs_scene_get_source(d.scene));}
  public object StartCamera(string platform){
   if(!prepared||!destinations.TryGetValue(platform,out var d))throw new InvalidOperationException("Erst Quellen vorbereiten.");
   if(d.camera!=null)throw new InvalidOperationException("Diese virtuelle Kamera läuft bereits.");
   int slot=platform=="tiktok"?1:2;if(!CameraRegistration.Ready(slot))throw new InvalidOperationException("Virtuelle Kameras erst einrichten.");
-  EnsureVideo(d);try{d.camera=new VirtualCamera(d.video,d.width,d.height,slot);d.error="";}catch{Obs.obs_view_remove(d.view);d.video=0;throw;}return Status();
+  EnsureVideo(d);try{d.camera=new VirtualCamera(d.video,d.width,d.height,slot);d.error="";}catch{Obs.obs_view_remove(d.view);Obs.obs_source_dec_active(Obs.obs_scene_get_source(d.scene));d.video=0;throw;}return Status();
  }
  public object Start(string platform,string? server,string? key,string? file=null){
   if(!prepared||!destinations.TryGetValue(platform,out var d))throw new InvalidOperationException("Erst Quellen vorbereiten.");
@@ -180,19 +188,27 @@ internal sealed class Engine : IDisposable {
  static void StopOutput(Destination d){
   d.camera?.Dispose();d.camera=null;
   if(d.output!=0&&Obs.obs_output_active(d.output)){Obs.obs_output_stop(d.output);var t=Stopwatch.StartNew();while(Obs.obs_output_active(d.output)&&t.ElapsedMilliseconds<4000)Thread.Sleep(30);if(Obs.obs_output_active(d.output)){Obs.obs_output_force_stop(d.output);t.Restart();while(Obs.obs_output_active(d.output)&&t.ElapsedMilliseconds<2000)Thread.Sleep(20);}}
-  d.requested=false;if(d.video!=0){Obs.obs_view_remove(d.view);d.video=0;}
+  d.requested=false;if(d.video!=0){Obs.obs_view_remove(d.view);Obs.obs_source_dec_active(Obs.obs_scene_get_source(d.scene));d.video=0;}
  }
  public object Mute(string platform,bool muted){uint bit=platform=="tiktok"?1u:2u;var configMix=muted?0u:bit;mixers=(mixers&~bit)|configMix;foreach(string id in new[]{"microphone","desktop"})if(sources.TryGetValue(id,out var source))Obs.obs_source_set_audio_mixers(source,mixers);if(media!=0)Obs.obs_source_set_audio_mixers(media,mixers);return Status();}
  uint mixers=3;
- public object Snapshot(string platform){
+ public object Snapshot(string platform,string mode="program"){
   if(!prepared||!destinations.TryGetValue(platform,out var d))throw new InvalidOperationException("Erst Quellen vorbereiten.");
+  if(mode is not "program" and not "sources")throw new InvalidOperationException("Unbekannte Vorschau.");
+  var previewSource=Obs.obs_scene_get_source(mode=="sources"?d.scenes["Spiel"]:d.scene);
+  // The auxiliary preview must show the inputs without changing the program scene.
+  // AUX views alone do not activate media playback. Balance activation for this
+  // bounded preview, including children, without changing either program scene.
+  Obs.obs_source_inc_active(previewSource);
+  try{
+  if(sources.Any(s=>Obs.obs_source_get_width(s.Value)==0))Thread.Sleep(120);
   int width=d.width>d.height?640:360,height=d.width>d.height?360:640;byte[] pixels=new byte[width*height*4];nint render=0,surface=0;
   Obs.obs_enter_graphics();
   try{
    render=Need(Obs.gs_texrender_create(5,0),"Vorschaubild nicht verfügbar.");surface=Need(Obs.gs_stagesurface_create((uint)width,(uint)height,5),"Vorschaubild nicht verfügbar.");
    Obs.gs_viewport_push();Obs.gs_projection_push();Obs.gs_matrix_push();
    try{if(!Obs.gs_texrender_begin(render,(uint)width,(uint)height))throw new InvalidOperationException("Vorschaubild nicht verfügbar.");
-    try{Obs.gs_matrix_identity();Obs.gs_ortho(0,d.width,0,d.height,-100,100);var black=new Obs.Color{a=1};Obs.gs_clear(1,ref black,1,0);Obs.obs_source_video_render(Obs.obs_scene_get_source(d.scene));}finally{Obs.gs_texrender_end(render);}
+    try{Obs.gs_matrix_identity();Obs.gs_ortho(0,d.width,0,d.height,-100,100);var black=new Obs.Color{a=1};Obs.gs_clear(1,ref black,1,0);Obs.obs_source_video_render(previewSource);}finally{Obs.gs_texrender_end(render);}
    }finally{Obs.gs_matrix_pop();Obs.gs_projection_pop();Obs.gs_viewport_pop();}
    Obs.gs_stage_texture(surface,Obs.gs_texrender_get_texture(render));
    if(!Obs.gs_stagesurface_map(surface,out var data,out uint stride))throw new InvalidOperationException("Vorschaubild konnte nicht gelesen werden.");
@@ -201,14 +217,15 @@ internal sealed class Engine : IDisposable {
   using var bitmap=new System.Drawing.Bitmap(width,height,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
   var locked=bitmap.LockBits(new System.Drawing.Rectangle(0,0,width,height),System.Drawing.Imaging.ImageLockMode.WriteOnly,System.Drawing.Imaging.PixelFormat.Format32bppArgb);
   try{for(int y=0;y<height;y++)Marshal.Copy(pixels,y*width*4,locked.Scan0+y*locked.Stride,width*4);}finally{bitmap.UnlockBits(locked);}
-  using var stream=new MemoryStream();bitmap.Save(stream,System.Drawing.Imaging.ImageFormat.Png);return new{image="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray()),width,height,sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}).ToArray(),capturedAt=DateTimeOffset.UtcNow};
+  using var stream=new MemoryStream();bitmap.Save(stream,System.Drawing.Imaging.ImageFormat.Png);return new{image="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray()),width,height,mode,scene=d.selected,sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}).ToArray(),capturedAt=DateTimeOffset.UtcNow};
+  }finally{Obs.obs_source_dec_active(previewSource);}
  }
  public object Status()=>new{prepared,encoder,virtualCameras=CameraRegistration.Status(),version=Obs.Str(Obs.obs_get_version_string()),sourceCount=sources.Count,overlays=destinations.ToDictionary(x=>x.Key,x=>new{chatWidth=Obs.obs_source_get_width(x.Value.chat),eventWidth=Obs.obs_source_get_width(x.Value.events)}),
   sources=sources.Select(s=>new{id=s.Key,width=Obs.obs_source_get_width(s.Value),height=Obs.obs_source_get_height(s.Value)}),
   renderedFrames=Obs.obs_get_total_frames(),laggedFrames=Obs.obs_get_lagged_frames(),
   outputs=destinations.ToDictionary(x=>x.Key,x=>{var d=x.Value;bool active=d.output!=0&&Obs.obs_output_active(d.output);ulong bytes=d.output==0?0:Obs.obs_output_get_total_bytes(d.output);if(d.requested&&!active)d.error="Ausgabe beendet oder Verbindung fehlgeschlagen. Sendezugang und Netzwerk prüfen.";return (object)new{cameraName=CameraRegistration.Name(x.Key=="tiktok"?1:2),scene=d.selected,d.width,d.height,d.bitrate,state=d.camera!=null?"camera":d.requested?(active?(bytes>0?(d.recording?"test":"live"):"connecting"):"error"):"stopped",bytes,frames=d.camera?.Frames??(d.output==0?0:Obs.obs_output_get_total_frames(d.output)),droppedFrames=d.output==0?0:Obs.obs_output_get_frames_dropped(d.output),error=d.error,muted=(mixers&(x.Key=="tiktok"?1:2))==0};})};
  static void ReleaseOutput(Destination d){StopOutput(d);if(d.output!=0)Obs.obs_output_release(d.output);if(d.service!=0)Obs.obs_service_release(d.service);if(d.videoEncoder!=0)Obs.obs_encoder_release(d.videoEncoder);if(d.audioEncoder!=0)Obs.obs_encoder_release(d.audioEncoder);d.output=d.service=d.videoEncoder=d.audioEncoder=0;}
- void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.scene!=0)Obs.obs_scene_release(d.scene);if(d.transition!=0)Obs.obs_source_release(d.transition);foreach(var scene in d.scenes.Values)Obs.obs_scene_release(scene);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values)Obs.obs_source_release(s);sources.Clear();mixers=3;}
+ void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.scene!=0)Obs.obs_scene_release(d.scene);if(d.transition!=0)Obs.obs_source_release(d.transition);foreach(var scene in d.scenes.Values)Obs.obs_scene_release(scene);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values)Obs.obs_source_release(s);sources.Clear();backgroundSources.Clear();mixers=3;}
  public void Dispose(){if(started){Reset();Obs.obs_shutdown();started=false;}if(graphics!=0)Marshal.FreeCoTaskMem(graphics);}
 }
 
@@ -232,7 +249,7 @@ internal static class Program {
      "source"=>engine.SourceControl(req!["source"]!.GetValue<string>(),req["enabled"]!.GetValue<bool>()),
      "media"=>engine.Media(req!["path"]!.GetValue<string>(),req["volume"]?.GetValue<double>()??1,req["duration"]?.GetValue<int>()??30),
      "media-state"=>engine.MediaState(),"media-stop"=>engine.MediaStop(),
-     "snapshot"=>engine.Snapshot(req!["platform"]!.GetValue<string>()),
+     "snapshot"=>engine.Snapshot(req!["platform"]!.GetValue<string>(),req["mode"]?.GetValue<string>()??"program"),
      "test-prepare" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.Prepare(req!["config"]!,true),
      "test-record" when Environment.GetEnvironmentVariable("BATTO_DUAL_TEST")=="1"=>engine.Start(req!["platform"]!.GetValue<string>(),null,null,req["path"]!.GetValue<string>()),
      "quit"=>null,_=>throw new InvalidOperationException("Unbekannte Video-Aktion.")};

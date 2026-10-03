@@ -4,7 +4,6 @@
 using System.IO.MemoryMappedFiles;
 using System.IO;
 using System.Runtime.InteropServices;
-using Microsoft.Win32;
 
 internal sealed unsafe class VirtualCamera : IDisposable {
  [StructLayout(LayoutKind.Sequential)] struct OutputInfo {public nint id;public uint flags;public nint name,create,destroy,start,stop,rawVideo;}
@@ -53,29 +52,4 @@ internal sealed unsafe class VirtualCamera : IDisposable {
   }catch(Exception){Error="Ein Kamerabild konnte nicht bereitgestellt werden.";}
  }
  public void Dispose(){if(output!=0){if(Obs.obs_output_active(output))Obs.obs_output_force_stop(output);outputs.TryRemove(output,out _);Obs.obs_output_release(output);output=0;}if(bytes!=null){Volatile.Write(ref *(int*)bytes,0);view!.SafeMemoryMappedViewHandle.ReleasePointer();bytes=null;}view?.Dispose();mapping?.Dispose();view=null;mapping=null;}
-}
-
-internal static class CameraRegistration {
- const string Category="{860BB310-5D01-11D0-BD3B-00A0C911CE86}";
- public static string Id(int slot)=>"{27B05C2D-93DC-474A-A5DA-9BBA34CB2A"+(slot==1?"9C":"9D")+"}";
- public static string Root=>Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../VirtualCam/x64"));
- static string? Existing(int slot){using var key=Registry.ClassesRoot.OpenSubKey("CLSID\\"+Id(slot)+"\\InprocServer32");return key?.GetValue(null) as string;}
- public static bool Ready(int slot){var path=Existing(slot);return path!=null&&File.Exists(path);}
- public static string Name(int slot){using var key=Registry.ClassesRoot.OpenSubKey("CLSID\\"+Category+"\\Instance\\"+Id(slot));return key?.GetValue("FriendlyName") as string??(slot==1?"OBS-Camera":"OBS-Camera2");}
- public static object Status()=>new{tiktok=new{ready=Ready(1),name=Name(1)},twitch=new{ready=Ready(2),name=Name(2)}};
- public static void Register(){
-  string dll=Path.Combine(Root,"obs-virtualsource.dll");if(!File.Exists(dll)||!File.Exists(Path.Combine(Root,"avutil-58.dll"))||!File.Exists(Path.Combine(Root,"swscale-7.dll")))throw new InvalidOperationException("VirtualCam-Komponente fehlt. Bitte Installation reparieren.");
-  for(int slot=1;slot<=2;slot++){
-   // Keep a working third-party registration. Never replace OBS's own camera.
-   using var owner=Registry.CurrentUser.OpenSubKey("Software\\Classes\\CLSID\\"+Id(slot)+"\\InprocServer32");if(Ready(slot)&&!Equals(owner?.GetValue("BattoSuite"),1))continue;
-   string id=Id(slot),name=slot==1?"Batto TikTok":"Batto Twitch";
-   using(var key=Registry.CurrentUser.CreateSubKey("Software\\Classes\\CLSID\\"+id+"\\InprocServer32")){key.SetValue(null,dll);key.SetValue("ThreadingModel","Both");key.SetValue("BattoSuite",1,RegistryValueKind.DWord);}
-   using(var key=Registry.CurrentUser.CreateSubKey("Software\\Classes\\CLSID\\"+Category+"\\Instance\\"+id)){key.SetValue("CLSID",id);key.SetValue("FriendlyName",name);}
-  }
- }
- public static void Unregister(){for(int slot=1;slot<=2;slot++){
-  string id=Id(slot);using var key=Registry.CurrentUser.OpenSubKey("Software\\Classes\\CLSID\\"+id+"\\InprocServer32");var registered=key?.GetValue(null) as string;
-  if(!string.Equals(registered,Path.Combine(Root,"obs-virtualsource.dll"),StringComparison.OrdinalIgnoreCase))continue;
-  key?.Dispose();Registry.CurrentUser.DeleteSubKeyTree("Software\\Classes\\CLSID\\"+id,false);Registry.CurrentUser.DeleteSubKeyTree("Software\\Classes\\CLSID\\"+Category+"\\Instance\\"+id,false);
- }}
 }

@@ -1,4 +1,13 @@
-# Batto 3-in-1 · 1.8.4
+# Batto 3-in-1 · 1.8.5
+
+## Dual Stream in 1.8.5
+
+Unter **Vorschau → Kamera & Spiel prüfen** lassen sich die gemeinsamen Quellen auch während Start, Pause oder Ende ansehen, ohne die Ausgabe umzuschalten. **Spiel-Szene auswählen** übernimmt die Kamera ins Programmbild. Die Vorschau bleibt auf ein Bild pro Sekunde begrenzt. Verschobene Installationen reparieren eigene ungültige Kameraeinträge beim Start des Videodienstes; LIVE Studio anschließend neu öffnen.
+
+**OBS-Szenensammlung importieren** liest eine lokal exportierte JSON-Datei. Vor dem Übernehmen ordnest du Spiel, Start, Pause und Ende für TikTok und Twitch getrennt zu und wählst die gemeinsame Kamera/Spielquelle. Die bisherigen Einstellungen werden gesichert. Übernommen werden geeignete lokale Bild-/Video-Hintergründe und die Anordnung der zwei gemeinsamen Bildquellen. Browserquellen, OBS-Plugins, Filter, zusätzliche Ebenen und nicht exakt übertragbare Beschnitte werden als Hinweise angezeigt. Die Ausgaben bleiben nach dem Import aus.
+
+**Hintergrund löschen** entfernt den Hintergrund aus der ausgewählten Szene und Leinwand; die Originaldatei bleibt erhalten. Die leere Szene bleibt auch nach Neustart schwarz. Identische Hintergrundvideos auf beiden Leinwänden werden gemeinsam dekodiert.
+
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
 
@@ -123,7 +132,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.4.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.5.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

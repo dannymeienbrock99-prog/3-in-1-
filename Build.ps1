@@ -8,6 +8,7 @@ if (-not (Test-Path jarvis/python/python.exe) -or -not (Test-Path jarvis/models/
 & ./jarvis/python/python.exe -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 dotnet publish components/fanatlas-src/FanAtlas/FanAtlas.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet publish components/dual-stream/DualStreamHost.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
+dotnet run --project components/dual-stream-registration-tests/RegistrationTests.csproj -c Release; Check-Exit
 dotnet publish components/audio-control/BattoAudioControl.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 New-Item -ItemType Directory -Force work | Out-Null
 $fanTest = Start-Process -FilePath (Join-Path $PSScriptRoot 'FanAtlas/FanAtlas.exe') -ArgumentList '--fan-tests',('"' + (Join-Path $PSScriptRoot 'work/fan-tests.txt') + '"') -WindowStyle Hidden -Wait -PassThru
@@ -31,7 +32,7 @@ npm ci; Check-Exit
 npm run test:jarvis; Check-Exit
 npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
-node --test test/dual-stream.test.cjs; Check-Exit
+node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs; Check-Exit
 npm run test:core; Check-Exit
 node scripts/audio-playback-regression.cjs; Check-Exit
 node scripts/ui-contract.cjs; Check-Exit
@@ -47,5 +48,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.4.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.5.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

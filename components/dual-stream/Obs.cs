@@ -88,6 +88,10 @@ internal static class Obs {
  [DllImport(D)] public static extern void obs_enter_graphics();
  [DllImport(D)] public static extern void obs_leave_graphics();
  [DllImport(D)] public static extern void obs_source_video_render(nint source);
+ [DllImport(D)] public static extern void obs_source_inc_showing(nint source);
+ [DllImport(D)] public static extern void obs_source_dec_showing(nint source);
+ [DllImport(D)] public static extern void obs_source_inc_active(nint source);
+ [DllImport(D)] public static extern void obs_source_dec_active(nint source);
  [DllImport(D)] public static extern nint gs_texrender_create(int format,int depth);
  [DllImport(D)] public static extern void gs_texrender_destroy(nint render);
  [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool gs_texrender_begin(nint render,uint width,uint height);

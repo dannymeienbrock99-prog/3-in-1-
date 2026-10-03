@@ -1,4 +1,13 @@
-# Batto 3-in-1 · Schnellstart 1.8.4
+# Batto 3-in-1 · Schnellstart 1.8.5
+
+## Dual Stream in 1.8.5
+
+Unter **Vorschau → Kamera & Spiel prüfen** lassen sich die gemeinsamen Quellen auch während Start, Pause oder Ende ansehen, ohne die Ausgabe umzuschalten. **Spiel-Szene auswählen** übernimmt die Kamera ins Programmbild. Die Vorschau bleibt auf ein Bild pro Sekunde begrenzt. Verschobene Installationen reparieren eigene ungültige Kameraeinträge beim Start des Videodienstes; LIVE Studio anschließend neu öffnen.
+
+**OBS-Szenensammlung importieren** liest eine lokal exportierte JSON-Datei. Vor dem Übernehmen ordnest du Spiel, Start, Pause und Ende für TikTok und Twitch getrennt zu und wählst die gemeinsame Kamera/Spielquelle. Die bisherigen Einstellungen werden gesichert. Übernommen werden geeignete lokale Bild-/Video-Hintergründe und die Anordnung der zwei gemeinsamen Bildquellen. Browserquellen, OBS-Plugins, Filter, zusätzliche Ebenen und nicht exakt übertragbare Beschnitte werden als Hinweise angezeigt. Die Ausgaben bleiben nach dem Import aus.
+
+**Hintergrund löschen** entfernt den Hintergrund aus der ausgewählten Szene und Leinwand; die Originaldatei bleibt erhalten. Die leere Szene bleibt auch nach Neustart schwarz. Identische Hintergrundvideos auf beiden Leinwänden werden gemeinsam dekodiert.
+
 
 Den Windows-Installer öffnen und den separat erhaltenen Installationsschlüssel eingeben. Der private Schlüssel wird nicht im Repository veröffentlicht. Die bisherigen Suite-Einstellungen bleiben bei einem Update erhalten.
 

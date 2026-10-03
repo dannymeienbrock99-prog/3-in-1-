@@ -17,26 +17,9 @@ function validateUrl(value, { ws = false, http = false, allowEmpty = true } = {}
   } catch { return false; }
 }
 
-function isTikFinityWidgetUrl(value) {
-  try {
-    const url = new URL(String(value || '').trim());
-    const hostname = url.hostname.toLowerCase();
-    return url.protocol === 'https:'
-      && (hostname === 'tikfinity.zerody.one' || hostname.endsWith('.tikfinity.zerody.one'))
-      && /^\/widget(?:\/|$)/i.test(url.pathname);
-  } catch { return false; }
-}
-
-function isTikFinityGiftsWidgetUrl(value) {
-  if (typeof value !== 'string' || value.length > 4096) return false;
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === 'https:'
-      && url.hostname === 'tikfinity.zerody.one'
-      && !url.port && !url.username && !url.password
-      && url.pathname === '/widget/gifts';
-  } catch { return false; }
-}
+const widgetUrls=require('../../renderer/tikfinity-url.js');
+const isTikFinityWidgetUrl=widgetUrls.isValid;
+const isTikFinityGiftsWidgetUrl=widgetUrls.isGifts;
 
 function validateConfig(config) {
   const errors = [];
@@ -50,7 +33,7 @@ function validateConfig(config) {
     if (typeof battle.username!=='string'||(battle.username && !/^[a-zA-Z0-9_.]{1,64}$/.test(battle.username))) errors.push(issue('battleBar.username','TikTok-Benutzername ohne @ eingeben.'));
     if (battle.enabled && battle.provider==='euler' && !battle.username) errors.push(issue('battleBar.username','Für Eulerstream fehlt der TikTok-Benutzername.'));
     let validWidget=false;
-    try { const u=new URL(battle.widgetUrl);validWidget=u.protocol==='https:'&&u.hostname==='tikfinity.zerody.one'&&!u.port&&!u.username&&!u.password&&u.pathname.startsWith('/widget/'); } catch {}
+    validWidget=isTikFinityWidgetUrl(battle.widgetUrl);
     if (typeof battle.widgetUrl!=='string'||battle.widgetUrl.length>4096||(battle.widgetUrl&&!validWidget)||(battle.enabled&&battle.provider==='widget'&&!validWidget)) errors.push(issue('battleBar.widgetUrl','Eine vollständige TikFinity-HTTPS-Widget-Adresse eingeben.'));
     for(const [field,min,max]of [['width',80,1920],['height',40,1080],['x',0,1920],['y',0,1080]])if(!integerIn(battle[field],min,max))errors.push(issue('battleBar.'+field,`Wert muss zwischen ${min} und ${max} liegen.`));
     if(!['top-left','top-right','center','bottom-left','bottom-right'].includes(battle.anchor))errors.push(issue('battleBar.anchor','Eine gültige Position wählen.'));
@@ -81,7 +64,7 @@ function validateConfig(config) {
       else ids.add(id);
       if (!String(widget?.name || '').trim() || String(widget.name).length>80) errors.push(issue(`${base}.name`, 'Widget-Name muss 1 bis 80 Zeichen haben.'));
       if (!TIKFINITY_WIDGET_TYPES.has(String(widget?.eventType || ''))) errors.push(issue(`${base}.eventType`, 'Unbekannter TikFinity-Widget-Typ.'));
-      if (!isTikFinityWidgetUrl(widget?.url)) errors.push(issue(`${base}.url`, 'Widget-URL muss eine HTTPS-Adresse unter tikfinity.zerody.one/widget/ sein.'));
+      if (!isTikFinityWidgetUrl(widget?.url)) errors.push(issue(`${base}.url`, 'Widget-URL muss eine HTTPS-Adresse von widgets.tikfinity.com oder tikfinity.zerody.one/widget/ sein.'));
       if (typeof widget?.enabled !== 'boolean') errors.push(issue(`${base}.enabled`, 'Widget-Status muss aktiviert oder deaktiviert sein.'));
     });
   }
@@ -144,8 +127,10 @@ function validateConfig(config) {
   if (!numberIn(c.appearance?.backgroundDarkness ?? .28, 0, .9)) errors.push(issue('appearance.backgroundDarkness', 'Hintergrund-Abdunklung muss zwischen 0 und 0.9 liegen.'));
   if (c.appearance?.programBackgroundId !== undefined && !['original','gaming-room','tiktok-banner','studio-clean'].includes(c.appearance.programBackgroundId)) errors.push(issue('appearance.programBackgroundId', 'Bitte eines der mitgelieferten Programmbilder wählen.'));
   const chatWidgets=c.appearance?.chatWidgets;
+  if(chatWidgets?.snowAutoStart!==undefined&&typeof chatWidgets.snowAutoStart!=='boolean')errors.push(issue('appearance.chatWidgets.snowAutoStart','Schnee automatisch laden muss ein- oder ausgeschaltet sein.'));
+  for(const field of ['snowUrl','likesUrl','viewersUrl'])if(chatWidgets?.[field]!==undefined&&(typeof chatWidgets[field]!=='string'||(chatWidgets[field].trim()&&!isTikFinityWidgetUrl(chatWidgets[field]))))errors.push(issue('appearance.chatWidgets.'+field,'Bitte einen gültigen TikFinity-HTTPS-Browserlink eintragen.'));
   if (chatWidgets?.giftsEnabled !== undefined && typeof chatWidgets.giftsEnabled !== 'boolean') errors.push(issue('appearance.chatWidgets.giftsEnabled', 'Geschenke-Widget muss aktiviert oder deaktiviert sein.'));
-  if (chatWidgets?.giftsUrl !== undefined && (typeof chatWidgets.giftsUrl !== 'string' || (chatWidgets.giftsUrl.trim() && !isTikFinityGiftsWidgetUrl(chatWidgets.giftsUrl)))) errors.push(issue('appearance.chatWidgets.giftsUrl', 'Geschenke-Widget benötigt eine HTTPS-Adresse unter tikfinity.zerody.one/widget/gifts ohne Zugangsdaten.'));
+  if (chatWidgets?.giftsUrl !== undefined && (typeof chatWidgets.giftsUrl !== 'string' || (chatWidgets.giftsUrl.trim() && !isTikFinityGiftsWidgetUrl(chatWidgets.giftsUrl)))) errors.push(issue('appearance.chatWidgets.giftsUrl', 'Geschenke-Widget benötigt einen TikFinity-HTTPS-Browserlink ohne Zugangsdaten.'));
   const chatBackground=c.appearance?.chatBackground;
   if (!chatBackground || typeof chatBackground !== 'object' || Array.isArray(chatBackground)) errors.push(issue('appearance.chatBackground', 'Chatfenster-Bild-Einstellungen fehlen.'));
   else {

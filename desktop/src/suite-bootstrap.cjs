@@ -11,6 +11,7 @@ function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSend
 handle('state',()=>runtime.snapshot());
 handle('command',value=>runtime.jarvis.execute(value));
 handle('settings',value=>runtime.jarvis.update(value));
+handle('preview-event',value=>runtime.jarvis.previewEvent(value));
 handle('import-status',()=>require('./services/obs-settings-import.cjs').status(app.getPath('userData')));
 handle('import-obs-settings',()=>{
  const importer=require('./services/obs-settings-import.cjs');
@@ -43,4 +44,4 @@ app.whenReady().then(async()=>{
 }).catch(e=>console.error('Suite:',e.message));
 let closePromise;
 function close(){return closePromise||(closePromise=Promise.resolve().then(()=>runtime?.close()));}
-module.exports={close,onEvent:event=>{runtime?.jarvis.onEvent(event);require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};
+module.exports={close,onAcceptedEvent:event=>runtime?.jarvis.onEvent(event),onEvent:event=>{require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};

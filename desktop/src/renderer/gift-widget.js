@@ -1,12 +1,6 @@
 (() => {
   'use strict';
-  const valid = value => {
-    try {
-      const u = new URL(value);
-      return u.protocol === 'https:' && u.hostname === 'tikfinity.zerody.one'
-        && u.pathname === '/widget/gifts' && !u.username && !u.password && !u.port ? u.href : '';
-    } catch { return ''; }
-  };
+  const valid=value=>window.BattoTikfinityUrl?.normalize(value,{giftsOnly:true})||'';
   let panel, frame;
   function applyGifts() {
     if (detached || !S.config) return;
@@ -50,7 +44,7 @@
     box.querySelector('#giftsSave').onclick = async () => {
       try {
         const giftsUrl = box.querySelector('#giftsUrl').value.trim();
-        if (giftsUrl && !valid(giftsUrl)) throw new Error('Bitte eine HTTPS-Adresse von tikfinity.zerody.one/widget/gifts eintragen.');
+        if (giftsUrl && !valid(giftsUrl)) throw new Error('Bitte den TikFinity-HTTPS-Browserlink für Geschenke eintragen.');
         await saveAndSync({ appearance: { chatWidgets: {
           giftsEnabled: box.querySelector('#giftsEnabled').checked, giftsUrl
         } } }, 'Geschenk-Widget gespeichert.');

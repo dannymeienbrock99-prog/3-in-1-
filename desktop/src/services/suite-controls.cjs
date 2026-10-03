@@ -1,4 +1,5 @@
 'use strict';
+const {SETTING_SPECS,validateSetting,applySetting}=require('./jarvis-setting-actions.cjs');
 const SCENES=['Spiel','Pause','Start','Ende'];
 const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschliste',widgets:'Widgets',livecenter:'Live-Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Filter',hologram:'Hologramm',platforms:'Plattformen',commands:'Bot-Befehle',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys',events:'Ereignisse',media:'Medien',pools:'Medien-Pools',tts:'Chat-Stimme',discord:'Discord',streamerbot:'Streamer.bot',backups:'Sicherungen',settings:'Einstellungen',diagnostics:'Diagnose'};
 async function connectAdapter(adapter,name,op){
@@ -20,7 +21,10 @@ class SuiteControls{
   {id:'start',name:'Virtuelle Kamera starten',choices:this.targets()}, {id:'stop',name:'Virtuelle Kamera stoppen',choices:this.targets()},
   {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
   {id:'overlay',name:'Einblendung an/aus',choices:[{id:'chat',name:'Chat'},{id:'events',name:'Ereignisse'}],switch:true},
-  {id:'jarvis',name:'Jarvis-Einstellung an/aus',choices:[['voiceEnabled','Sprachausgabe'],['microphoneEnabled','Dauerhaft zuhören'],['chatEnabled','Chat vorlesen'],['events.enabled','Stream-Ereignisse'],['events.gifts','Geschenke'],['events.follows','Follower'],['events.likes','Likes'],['gamingMode','Gaming-Sparmodus']].map(([id,name])=>({id,name})),switch:true},
+  {id:'jarvis',name:'Jarvis-Einstellung an/aus',choices:[['voiceEnabled','Sprachausgabe'],['microphoneEnabled','Dauerhaft zuhören'],['wakeWord','Aktivierungswort'],['headphones','Kopfhörermodus'],['chatEnabled','Chat vorlesen'],['events.enabled','Stream-Ereignisse'],['events.gifts','Geschenke'],['events.follows','Follower'],['events.likes','Likes'],['events.subscriptions','Abo-Danksagungen'],['fanAlerts.enabled','Lüfterwarnungen'],['gamingMode','Gaming-Sparmodus']].map(([id,name])=>({id,name})),switch:true},
+  {id:'microphones',name:'Mikrofone neu laden'},
+  ...(typeof host?.jarvisSettings==='function'?[{id:'jarvis-settings',name:'Jarvis-Einstellungen öffnen'}]:[]),
+  {id:'transition',name:'Szenenübergang wählen',choices:[{id:'fade',name:'Überblendung'},{id:'cut',name:'Schnitt'}]},
   {id:'likes-reset',name:'Jarvis Like-Zähler zurücksetzen'},
   {id:'companion',name:'LIVE-Studio-Sitzung markieren',switch:true},
   {id:'control',name:'Bot / Chat / Auto-Broadcast schalten',choices:legacy.controls||[],switch:true},
@@ -31,23 +35,23 @@ class SuiteControls{
   {id:'navigate',name:'Programmbereich öffnen',choices:Object.entries(VIEWS).map(([id,name])=>({id,name}))},
   {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'}, {id:'gaming',name:'Gaming-Modus: Oberfläche schließen, Dienste weiterführen'},
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
- ],scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
+ ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
- validate(steps){
+ validate(steps,{voice=false}={}){
   if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');
   // Validate the complete combination before any side effect.
-  const catalog=this.catalog();for(const s of steps){const definition=catalog.actions.find(x=>x.id===s?.action);if(!definition)throw Error('Unbekannte Tastenaktion.');if(definition.choices&&!definition.choices.some(x=>x.id===s.target))throw Error('Bitte ein vorhandenes Ziel wählen.');if(definition.switch&&!['on','off','toggle'].includes(s.op||'toggle'))throw Error('Ungültiger Schalter.');if(s.action==='command'&&(typeof s.text!=='string'||!s.text.trim()||s.text.length>500))throw Error('Bitte einen kurzen Befehl eintragen.');if(s.action==='scene'&&(s.transition&&!['fade','cut'].includes(s.transition)||s.durationMs!==undefined&&(!Number.isInteger(s.durationMs)||s.durationMs<100||s.durationMs>2000)))throw Error('Ungültiger Übergang.');}
+  const catalog=this.catalog();for(const s of steps){const definition=[...catalog.actions,...(voice?catalog.voiceActions:[])].find(x=>x.id===s?.action);if(!definition)throw Error('Unbekannte Tastenaktion.');if(definition.choices&&!definition.choices.some(x=>x.id===s.target))throw Error('Bitte ein vorhandenes Ziel wählen.');if(definition.switch&&!['on','off','toggle'].includes(s.op||'toggle'))throw Error('Ungültiger Schalter.');if(s.action==='command'&&(typeof s.text!=='string'||!s.text.trim()||s.text.length>500))throw Error('Bitte einen kurzen Befehl eintragen.');if(s.action==='scene'&&(s.transition&&!['fade','cut'].includes(s.transition)||s.durationMs!==undefined&&(!Number.isInteger(s.durationMs)||s.durationMs<100||s.durationMs>2000)))throw Error('Ungültiger Übergang.');if(s.action==='jarvis-setting')validateSetting(s);if(s.action==='transition-duration'&&(!Number.isInteger(s.value)||s.value<100||s.value>2000))throw Error('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');}
  }
  async executeFromJarvis(value){
   if(!value||value.steps||value.action==='command')throw Error('Dieser Sprachbefehl kann sich nicht selbst aufrufen.');
-  this.validate([value]);
+  this.validate([value],{voice:true});
   // A saved deck command already owns the control queue. Its validated inner
   // action belongs to that same turn; unrelated actions still respect the lock.
   if(this.busy&&this.jarvisDepth>0)return this.run(value);
-  return this.execute(value);
+  return this.execute(value,{voice:true});
  }
- async execute(value){
-  const steps=value?.steps||[value];this.validate(steps);
+ async execute(value,{voice=false}={}){
+  const steps=value?.steps||[value];this.validate(steps,{voice});
   if(this.busy){if(['speech-stop','cancel','stop'].includes(value?.action)&&!value.steps){const result=await this.run(value);if(result?.ok===false)throw Error(result.text||result.error||'Aktion fehlgeschlagen.');return result||{ok:true};}throw Error('Eine Tastenaktion läuft bereits.');}
   this.busy=true;let completed=0,last;try{for(const step of steps){const result=await this.run(step);if(result?.ok===false)throw Error(result.error||result.message||result.text||'Aktion wurde nicht ausgeführt.');last=result;completed++;}return {ok:true,completed,...(steps.length===1&&last?.text?{text:last.text}:{})};}catch(e){throw Error(`${completed?completed+' Aktionen ausgeführt; danach: ':''}${e.message}`);}finally{this.busy=false;}
  }
@@ -57,6 +61,10 @@ class SuiteControls{
    case 'speech-stop':return r.stopSpeech();
    case 'command':this.jarvisDepth++;try{return await r.jarvis.execute(s.text,{source:'streamdeck'});}finally{this.jarvisDepth--;}
    case 'jarvis':{const [key,sub]=s.target.split('.');const change=sub?{[key]:{...r.jarvis.settings[key],[sub]:enabled(r.jarvis.settings[key][sub])}}:{[key]:enabled(r.jarvis.settings[key])};r.jarvis.update(change);return;}
+   case 'jarvis-setting':return applySetting(r.jarvis,s);
+   case 'jarvis-settings':return host.jarvisSettings();
+   case 'microphones':r.voice.send({command:'devices'});return {ok:true,text:'Die Mikrofonliste wird aktualisiert.'};
+   case 'transition':case 'transition-duration':{if(!d)throw Error('Dual Stream ist nicht verfügbar.');const result=await d.serial(()=>d.program({...d.config.program,...(s.action==='transition'?{transition:s.target}:{durationMs:s.value})}));if(result?.ok===false)throw Error(result.error||result.text||'Der Übergang wurde nicht gespeichert.');return {ok:true,text:s.action==='transition'?`Szenenübergang: ${s.target==='fade'?'Überblendung':'Schnitt'}.`:`Übergangsdauer: ${s.value} Millisekunden.`};}
    case 'companion':d.companionLive=enabled(d.companionLive);d.emitState();return;
    case 'likes-reset':r.jarvis.events.resetLikes();return;
    case 'scene':return d?d.serial(()=>d.scene(s.target,s.transition,s.durationMs)):r.jarvis.obs.setScene(s.target);

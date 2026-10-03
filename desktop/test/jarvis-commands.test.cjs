@@ -41,7 +41,7 @@ test('configured scene aliases must refer to an existing catalog choice', () => 
   assert.equal(resolveCommand('Szene Fremder Code öffnen', {catalog}).kind, 'ambiguous');
 });
 test('all visible tool pages can be opened by exact catalog name or common aliases', () => {
-  for (const [phrase, target] of [['Multi Chat öffnen', 'dashboard'], ['Öffne Chat', 'dashboard'], ['Touch Deck öffnen', 'touchdeck'], ['Dual Stream öffnen', 'dualstream'], ['Öffne die Einstellungen', 'settings'], ['Zeige mir die Lüfter', 'fans'], ['Öffne Jarvis', 'jarvis'], ['Jarvis Einstellungen öffnen', 'settings'], ['Chat Filter öffnen', 'filters'], ['Bot-Befehle öffnen', 'commands']]) action(phrase, {action: 'navigate', target});
+  for (const [phrase, target] of [['Multi Chat öffnen', 'dashboard'], ['Öffne Chat', 'dashboard'], ['Touch Deck öffnen', 'touchdeck'], ['Dual Stream öffnen', 'dualstream'], ['Öffne die Einstellungen', 'settings'], ['Zeige mir die Lüfter', 'fans'], ['Öffne Jarvis', 'jarvis'], ['Jarvis Einstellungen öffnen', 'jarvis'], ['Chat Filter öffnen', 'filters'], ['Bot-Befehle öffnen', 'commands']]) action(phrase, {action: 'navigate', target});
   for (const item of catalog.actions.find(a => a.id === 'navigate').choices) action(`Öffne ${item.name}`, {action: 'navigate', target: item.id});
 });
 test('source, overlay, bot and broadcast switches are explicit and validated', () => {
@@ -145,7 +145,7 @@ test('filter word requests preserve text and have explicit confirmation/cancella
 });
 test('help is bounded, dynamically includes existing saved actions and its examples are executable', () => {
   const examples = commandExamples(catalog);
-  assert(examples.length <= 18);
+  assert(examples.length <= 36);
   assert(examples.some(s => s.phrase.includes('Streamstart')));
   assert(examples.some(s => s.phrase.includes('Mein Discord')));
   for (const example of examples) assert(['action', 'audio'].includes(resolve(example.phrase)?.kind), example.phrase + ': ' + JSON.stringify(resolve(example.phrase)));

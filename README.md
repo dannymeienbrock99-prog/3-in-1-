@@ -1,6 +1,16 @@
-# Batto 3-in-1 · 1.8.1
+# Batto 3-in-1 · 1.8.2
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
+
+## Schnee und TikFinity-Browserlinks
+
+Die neuen Kurzlinks von **widgets.tikfinity.com** und die bisherigen **tikfinity.zerody.one/widget/**-Adressen werden unterstützt. Deine persönlichen Browserlinks bleiben in den lokalen Einstellungen.
+
+Unter **Einstellungen → TikFinity im Chatfenster** den Schnee-Link speichern und **Schnee bei sichtbarem Chat direkt laden** aktivieren. Damit läuft nur die Schneequelle, auch wenn die übrigen Web-Widgets im Sparmodus bleiben. Der Schalter **Schnee** im Multi-Chat bzw. die zugehörige Deck-Aktion startet und stoppt sie ebenfalls. Beim Wechsel in andere Bereiche oder Minimieren wird sie entladen. Bei entkoppeltem Chat gibt das Hauptfenster seine Schneequelle frei.
+
+**Action-Screens für Follower, Likes/Geschenke und Abos:** Unter **TikFinity-Widgets** jeweils einen eigenen Eintrag mit dem passenden Browserlink speichern, **Manuell / Aktionskette** und **Dauerhaft anzeigen** auswählen. Diese Bildschirme erhalten ihre Einblendungen direkt von TikFinity und können ohne Ereignis absichtlich leer sein. Im Chat **Weitere Widgets starten** bzw. **Widgets starten** drücken, damit sie schon vor dem nächsten Ereignis bereit sind. Derselbe Link sollte nur einmal eingebunden werden. Größe und Position bleiben pro Widget einstellbar; **Widgets stoppen** entlädt die Browserquellen.
+
+Die Browserbilder liefern keine verlässlichen Namen, Geschenkwerte oder Ereignisse für Jarvis. Dafür muss **TikFinity Desktop → lokale Bridge** verbunden sein. So benötigt Jarvis keine weiteren Browserfenster zum Mitlesen. Ein geladener Action-Screen bestätigt noch kein empfangenes Live-Ereignis.
 
 ## Programmhintergrund wählen
 
@@ -55,15 +65,23 @@ Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der
 
 Die Batto-Steuerung ist direkt eingebaut und benötigt kein KI-Modell: „Mach bitte Pause“, „Öffne das Touch Deck“, „Kamera aus“, „Auto-Broadcast an“, „Chat vorlesen aus“ oder „Mach Jarvis leiser“. Auch vorhandene Medien, Hotkeys, Broadcasts und Aktionsketten lassen sich mit eindeutigem Namen aufrufen. **Das kannst du sagen** zeigt Beispiele aus der aktuellen Einrichtung. Anklicken füllt die Eingabe; **Ausführen** startet den Befehl. Unbekannte und mehrdeutige Anweisungen führen keine erratene Aktion aus.
 
+**Weitere Befehle:** „Lies alle Chatnachrichten vor“, „Lies nur Moderatoren vor“, „Lies aus dem Chatfenster vor“, „Geschenk-Ansage auf Geschenkname und Coins“, „Lüfterwarnung ab 75 Prozent“ und „Öffne deine Einstellungen“. Die Chat-Befehle schalten das Vorlesen ein und ändern die jeweilige Auswahl. Geschenk- und Lüfterschwellen-Befehle ändern die Einstellung; eine ausgeschaltete Ansage bleibt ausgeschaltet.
+
 **Moderation per Sprache:** „Blockiere NAME auf Twitch“, „Entblocke NAME auf Twitch“ oder „Sperre NAME auf Twitch für 10 Minuten“. Dafür müssen der genaue Benutzer aus dem verbundenen Chat und eine passende Moderationsanmeldung verfügbar sein. Jarvis nennt die geplante Aktion und führt sie erst nach **„Bestätigen“ innerhalb von 45 Sekunden** aus. **„Abbrechen“** oder ein anderer Befehl verwirft die Rückfrage. Ein neuer Versuch braucht wieder eine Bestätigung. TikTok-Sperren werden über die aktuelle TikFinity-Verbindung nicht unterstützt; Jarvis meldet das ausdrücklich.
 
 **Lokaler Chat-Filter:** „Filterwort BEGRIFF hinzufügen“, „Filterwort BEGRIFF entfernen“ und „Chat Filter an / aus“ ändern die lokale Filterliste bzw. deren Aktivierung. Das blendet passende Nachrichten in Batto aus und sperrt keinen Nutzer auf der Plattform.
 
 **Sprechen:** **Jetzt zuhören** oder die Jarvis-Taste im Stream Deck drücken, auf die Sprechbereitschaft warten und einen Befehl sagen. **ERKANNT** zeigt den aufgenommenen Wortlaut, die folgende Antwort das Ergebnis. Das Mikrofon ist standardmäßig nur nach Tastendruck aktiv; für Befehle jederzeit optional unter **Jarvis-Einstellungen → Stimme & Mikrofon** das dauerhafte Mikrofon und **Auf „Jarvis“ warten** einschalten. Getippte Befehle funktionieren auch mit ausgeschaltetem Mikrofon. Sprach- und Texteingabe verwenden denselben Befehlsweg.
 
+**Mikrofon auswählen:** Unter **Stimme & Mikrofon → Mikrofone neu laden** die Eingänge neu einlesen, möglichst den empfohlenen Eintrag wählen und **Gewähltes Mikrofon testen** drücken. Die Auswahl wird gespeichert und Jarvis hört einmal zu; nach der Bereitschaftsanzeige beispielsweise „Hilfe“ sagen. Mit **Sprache speichern** auch die übrigen Sprachoptionen übernehmen. Die Auswahl merkt sich Gerätename und Treiber statt einer wechselnden Windows-Nummer. Beim Öffnen versucht Jarvis passende gemeinsame Aufnahmewege desselben Geräts, sodass andere Programme es weiterverwenden können. Fehlt das gewählte Gerät, wechselt Jarvis nicht unbemerkt zu einem anderen. Nicht nutzbare Eingänge bleiben mit Begründung sichtbar. Bei gleichen Namen die Geräte in Windows eindeutig benennen; bei Zugriffsfehlern die Windows-Mikrofonfreigabe für Desktop-Apps prüfen.
+
 Jarvis spricht standardmäßig **keinen Namen** aus; die frühere voreingestellte Ansprache wird beim Laden entfernt. Begrüßung „Wie kann ich helfen?“ und optionale Ansprache stehen in **Jarvis → Jarvis-Einstellungen**. Taste **Jarvis zuhören** begrüßt dich, hört einen Befehl ab und beendet das einmalige Zuhören nach Antwort oder Stille.
 
-Moderator-Chat, Geschenke, Follower und Like-Meilensteine bleiben einzeln einstellbar. Geschenke nennen Namen, Geschenk, Anzahl und übermittelte Coins nach Abschluss einer Serie; kein erfundener Euro-Wert. Likes zählen je Zuschauer, Standard 10.000. PC-Werte auf gezielte Nachfrage; Lüfterwarnungen standardmäßig beim Überschreiten von 80 %, mit Rücksetzabstand und Mindestpause.
+**Chat vorlesen:** Unter **Nachrichten aus dem Chat vorlesen** die Quelle **Nachrichten aus dem Multi-Chat-Fenster** oder **Alle im Tool empfangenen Chatnachrichten** wählen. Die erste Wahl berücksichtigt nur für die Multi-Chat-Anzeige vorgesehene Nachrichten; die zweite erlaubt auch vom Tool empfangene, dort ausgeblendete Nachrichten. Das betrifft beispielsweise die Anzeige automatischer Broadcasts und setzt kein dauerhaft sichtbares Fenster voraus. In beiden Fällen bleiben Filtertreffer stumm. Zusätzlich separat festlegen, wer vorgelesen werden darf: standardmäßig bestätigte **Moderatoren & Kanalinhaber**, alternativ freigegebene Benutzer-IDs oder alle Personen. Plattformen, Länge und Abstand sind einstellbar. Der Ansagetext verwendet `{username}` und `{message}`, etwa `{username} sagt: {message}`. **Chat-Regeln speichern** übernimmt die Auswahl; nur neue Nachrichten werden vorgelesen. Die Plattform muss verbunden sein. Ein geöffnetes Chatfenster allein stellt keine Verbindung her.
+
+**Ereignisansagen:** Follower, Likes, Geschenke und Abos lassen sich einzeln einschalten. Für jede Art gibt es einen eigenen Text; Geschenke können als Geschenkname, Coin-Wert oder beides angesagt werden. Die Eingabefelder nennen ihre Platzhalter, z. B. `{username}`, `{likecount}`, `{giftname}`, `{giftcount}`, `{coins}` oder `{submonth}`. Die Testtasten sprechen eine ausdrücklich gekennzeichnete **Vorschau mit erfundenen Beispieldaten** und senden kein Stream-Ereignis. **Ansagen speichern** übernimmt die Texte. **Standardtexte einsetzen** füllt die Felder; anschließend speichern.
+
+Likes zählen je Person in den tatsächlich empfangenen Ereignissen; die neue Voreinstellung ist **1.000 Likes**, der Abstand bleibt frei einstellbar und vorhandene eigene Werte bleiben erhalten. Geschenkserien werden nach Abschluss einmalig berücksichtigt. Fehlende Coins oder Abo-Monate werden nicht erfunden; in diesem Fall verwendet Jarvis einen passenden Dank ohne diese Zahl. Die lokale TikFinity-Bridge liefert die TikTok-Ereignisse. PC-Werte kommen auf gezielte Nachfrage; Lüfterwarnungen standardmäßig beim Überschreiten von 80 %, mit Rücksetzabstand und Mindestpause.
 
 Spiel, Pause, Start und Ende mit eigenen Bildern und Schnitt/Überblendung auf beiden Ausgaben. Die Tasten steuern Batto-Szenen, nicht die internen Szenen von LIVE Studio. **LIVE-Studio-Sitzung markieren** aktiviert nur die Live-Regeln für Bot/Auto-Broadcast. Eine gestartete virtuelle Kamera setzt diesen öffentlichen Live-Zustand nicht automatisch.
 
@@ -103,7 +121,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

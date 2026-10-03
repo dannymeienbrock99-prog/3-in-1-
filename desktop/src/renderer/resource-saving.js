@@ -6,13 +6,17 @@
   let senderState;
   function senderChip(){const chip=document.getElementById('obsChip');if(!chip)return;const live=Object.values(senderState?.state?.outputs||{}).some(s=>s.state==='camera');chip.className='chip '+(live||senderState?.companionLive?'ok':'');chip.innerHTML='<i></i>'+(live?'Virtuelle Kamera läuft':senderState?.companionLive?'LIVE-Studio-Sitzung':'Sender bereit');chip.title='Eigener Sender und Szenen unter Dual Stream';}
   window.batto.onDualState(value=>{senderState=value;if(!document.hidden)senderChip();});
-  let requested = false, override = false, savedAutoStart;
+  let requested = false, override = false, savedAutoStart, savedSnow;
+  const requestedKinds=new Set();
   let suspended=false;window.batto.onPresentationState?.(value=>{suspended=!!value;document.body.classList.toggle("presentation-paused",suspended);refresh();});
   const chatVisible = () => !suspended && !document.hidden && (detached || S.view === 'dashboard');
   const enabled = () => override ? requested : S.config?.performance?.webWidgetsAutoStart === true;
-  function applyFrame(frame, url) {
+  function applyFrame(frame, record) {
+    const {url,autoStart}=record,kind=frame.dataset.resourceKind;
+    const permitted=enabled()||(!override&&autoStart)||requestedKinds.has(kind);
+    const ownsSnow=kind!=='snow'||detached||S.config?.windows?.detachedOpen!==true;
     const slot = frame.closest('.chat-extra-slot');
-    const active = frame.isConnected && chatVisible() && enabled() && (!slot || slot.style.visibility === 'visible');
+    const active = frame.isConnected && chatVisible() && permitted && ownsSnow && (!slot || slot.style.visibility === 'visible');
     if (active) {
       if (frame.getAttribute('src') !== url) frame.src = url;
     } else if (frame.hasAttribute('src')) {
@@ -31,11 +35,12 @@
     if (host && !button) {
       button = document.createElement('button');
       button.id = 'resourceWidgets'; button.type = 'button';
-      button.onclick = () => { requested = !enabled(); override = true; refresh(); };
+      button.onclick = () => {requested=!enabled();override=true;requestedKinds.clear();refresh();};
       host.prepend(button);
     }
     if (button) {
-      button.textContent = enabled() ? 'Widgets stoppen' : 'Widgets starten';
+      const any=enabled()||requestedKinds.size>0||(!override&&[...frames.values()].some(r=>r.autoStart));
+      button.textContent = enabled() ? 'Widgets stoppen' : any ? 'Weitere Widgets starten' : 'Widgets starten';
       button.title = 'Sparmodus: Externe Web-Widgets nur bei Bedarf laden. Chat, Bot und Auto-Broadcast laufen weiter.';
       button.setAttribute('aria-pressed', String(enabled()));
     }
@@ -44,11 +49,11 @@
   window.BattoResources = {
     chatVisible,
     get suspended(){return suspended;},
-    setFrameSource(frame, url) {
-      frames.set(frame, url); applyFrame(frame, url);
+    setFrameSource(frame, url, {autoStart=false}={}) {
+      const record={url,autoStart};frames.set(frame,record);applyFrame(frame,record);
     },
     refresh,
-    activate() { requested = true; override = true; refresh(); }
+    activate(kind) { if(kind)requestedKinds.add(kind);else{requested=true;override=true;}refresh(); }
   };
   // Register source policy before any widget script, but wrap renderer functions
   // only after every presentation module has installed its own extensions.
@@ -69,10 +74,12 @@
   document.addEventListener('batto:view', onView);
   document.addEventListener('visibilitychange', onView);
   savedAutoStart = S.config?.performance?.webWidgetsAutoStart === true;
+  savedSnow=S.config?.appearance?.chatWidgets?.snowEnabled!==false&&S.config?.appearance?.chatWidgets?.snowAutoStart===true;
   api.onConfigChanged?.(() => queueMicrotask(() => {
     const next = S.config?.performance?.webWidgetsAutoStart === true;
     if (next !== savedAutoStart) override = false;
-    savedAutoStart = next; refresh();
+    savedAutoStart=next;const snow=S.config?.appearance?.chatWidgets?.snowEnabled!==false&&S.config?.appearance?.chatWidgets?.snowAutoStart===true;
+    if(snow&&!savedSnow)requestedKinds.add('snow');if(!snow)requestedKinds.delete('snow');savedSnow=snow;refresh();
   }));
   const settings = renderSettingsModule;
   renderSettingsModule = function (...args) {

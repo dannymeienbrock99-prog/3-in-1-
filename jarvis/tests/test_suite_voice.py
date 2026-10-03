@@ -22,11 +22,11 @@ class Worker:
     def stop(self): pass
 
 class SuiteVoiceTests(unittest.TestCase):
-    def service(self):
+    def service(self,microphone_class=Microphone):
         source=Path(__file__).resolve().parents[1]/'app'/'suite_voice.py'
         tree=ast.parse(source.read_text(encoding='utf-8'))
         tree.body=[n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='Service']
-        events=[];scope=dict(threading=threading,queue=queue,time=time,Speaker=Speaker,Microphone=Microphone,Worker=Worker,emit=events.append)
+        events=[];scope=dict(threading=threading,queue=queue,time=time,Speaker=Speaker,Microphone=microphone_class,Worker=Worker,emit=events.append)
         exec(compile(tree,str(source),'exec'),scope)
         service=scope['Service']();self.addCleanup(service.close);return service,events
     def wait(self,fn):
@@ -68,5 +68,26 @@ class SuiteVoiceTests(unittest.TestCase):
         self.assertTrue(s.settings['continuous']);self.assertIsNone(s.microphone)
         s.dispatch({'command':'settings','value':{'microphoneEnabled':True,'wakeWord':True}})
         self.assertFalse(s.settings['continuous'])
+    def test_failed_microphone_start_does_not_break_next_push_to_talk_attempt(self):
+        class OnceFailing(Microphone):
+            starts=0
+            def __init__(self,*args,**kwargs):super().__init__(*args,**kwargs);self.error=args[4]
+            def start(self):
+                OnceFailing.starts+=1
+                if OnceFailing.starts==1:self.error('Mikrofon konnte nicht geöffnet werden.')
+        s,e=self.service(OnceFailing);s.dispatch({'command':'listen','greeting':'Hallo'})
+        self.wait(lambda:any(row['type']=='error' for row in e));self.assertIsNone(s.microphone)
+        s.dispatch({'command':'listen','greeting':'Hallo'})
+        self.wait(lambda:s.microphone and s.microphone.requested)
+        self.assertEqual(OnceFailing.starts,2);self.assertTrue(s.listening)
+    def test_successful_device_event_contains_stable_identity_and_selected_format(self):
+        class Selected(Microphone):
+            def __init__(self,*args,**kwargs):super().__init__(*args,**kwargs);self.selected=kwargs['on_device']
+            def start(self):self.selected({'name':'USB Mic','hostapi':'Windows WASAPI','index':37,'samplerate':48000,'captureChannels':2})
+        s,e=self.service(Selected);saved={'name':'USB Mic','hostapi':'Windows WASAPI'}
+        s.dispatch({'command':'settings','value':{'microphone':saved}});self.assertEqual(s.settings['microphone'],saved)
+        self.assertIsNone(s.microphone);s.enable(True)
+        selected=next(row for row in e if row['type']=='microphone-selected')
+        self.assertEqual(selected['microphone'],saved);self.assertEqual(selected['channels'],2);self.assertEqual(selected['samplerate'],48000)
 
 if __name__=='__main__':unittest.main()

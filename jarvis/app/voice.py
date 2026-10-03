@@ -15,24 +15,19 @@ import soundfile as sf
 from config import ROOT, MODELS, DATA, reference_path
 from worker_rpc import Worker
 from legacy_voice import sapi_voices
+from audio_devices import device_list, candidates, open_input
 
 def input_devices():
-    apis = sd.query_hostapis()
-    return [(i, {'name': d['name'], 'hostapi': apis[d['hostapi']]['name']})
-            for i, d in enumerate(sd.query_devices()) if d['max_input_channels']]
+    return [(row['index'], {key:value for key,value in row.items() if key!='index'})
+            for row in device_list(sd, probe=False)]
 
 def preferred_devices():
-    """Prefer one WASAPI identity per physical endpoint, without persisting indices."""
-    devices=input_devices()
-    preferred=[(i,d) for i,d in devices if d['hostapi']=='Windows WASAPI']
-    return preferred or devices
+    """Show all inputs, preferring shared WASAPI without hiding USB/virtual devices."""
+    return [(row['index'], {key:value for key,value in row.items() if key!='index'})
+            for row in device_list(sd)]
 
 def resolve_device(saved):
-    if isinstance(saved, dict):
-        for index, identity in input_devices():
-            if identity == saved: return index
-        raise RuntimeError('Gewähltes Mikrofon nicht verbunden. Bitte den Eingang neu wählen.')
-    return saved if isinstance(saved, int) else None
+    return candidates(saved, sd)[0]['index']
 
 class StreamingVAD:
     def __init__(self):
@@ -53,11 +48,12 @@ class StreamingVAD:
         return peak > .5
 
 class Microphone(threading.Thread):
-    def __init__(self, settings, busy, on_text, on_state, on_error, on_interrupt=None, recognizer=None, speaker=None, on_backend=None, on_ready=None):
+    def __init__(self, settings, busy, on_text, on_state, on_error, on_interrupt=None, recognizer=None, speaker=None, on_backend=None, on_ready=None, on_device=None):
         super().__init__(daemon=True, name='Jarvis Audioaufnahme')
         self.settings, self.busy = settings, busy
         self.on_text, self.on_state, self.on_error = on_text, on_state, on_error
         self.on_ready = on_ready or (lambda text: self.on_state('idle', text))
+        self.on_device = on_device or (lambda device: None)
         self.on_interrupt = on_interrupt or (lambda: None)
         self.quit = threading.Event(); self.record = threading.Event(); self.cancel_record = threading.Event()
         self.amplitude = 0.; self.dropped = 0
@@ -106,17 +102,6 @@ class Microphone(threading.Thread):
 
     def run(self):
         try:
-            import vosk
-            vosk.SetLogLevel(-1)
-            wake_model = vosk.Model(str(MODELS / 'vosk-wake-en'))
-            wake_rec = vosk.KaldiRecognizer(wake_model, 16000, json.dumps(['jarvis', 'hey jarvis', '[unk]']))
-            german = next(MODELS.glob('vosk-model-small-de*'), None)
-            stop_rec = vosk.KaldiRecognizer(vosk.Model(str(german)), 16000,
-                json.dumps(['stopp', 'stop', 'abbrechen', '[unk]'])) if german else None
-            vad = StreamingVAD()
-            device = resolve_device(self.settings.get('microphone'))
-            info = sd.query_devices(device, 'input'); rate = int(info['default_samplerate'])
-            sd.check_input_settings(device=device, channels=1, dtype='int16', samplerate=rate)
             audio_q = queue.Queue(maxsize=8)
             def callback(indata, frames, timing, status):
                 if status: self.dropped += 1
@@ -125,9 +110,25 @@ class Microphone(threading.Thread):
                     try: audio_q.get_nowait()
                     except queue.Empty: pass
                     self.dropped += 1; audio_q.put_nowait(bytes(indata))
-            with sd.RawInputStream(samplerate=rate, blocksize=int(rate*.032), dtype='int16',
-                                   channels=1, device=device, callback=callback):
+            # Validate/open the device before loading recognition models. A bad
+            # driver selection should fail quickly and consume no model memory.
+            with open_input(self.settings.get('microphone'),callback,sd,self.quit) as (_, info):
+                rate=info['samplerate'];channels=info['captureChannels']
                 self.connected.set()
+                self.on_device(info)
+                ambient=self.settings.get('ambient',not self.settings.get('preserve_wake_word'))
+                wake_active=bool(self.settings.get('wake_word') and ambient)
+                wake_rec=stop_rec=None
+                if wake_active or ambient:
+                    import vosk
+                    vosk.SetLogLevel(-1)
+                    if wake_active:
+                        wake_model=vosk.Model(str(MODELS/'vosk-wake-en'))
+                        wake_rec=vosk.KaldiRecognizer(wake_model,16000,json.dumps(['jarvis','hey jarvis','[unk]']))
+                    german=next(MODELS.glob('vosk-model-small-de*'),None)
+                    if german:stop_rec=vosk.KaldiRecognizer(vosk.Model(str(german)),16000,json.dumps(['stopp','stop','abbrechen','[unk]']))
+                vad=StreamingVAD()
+                if self.quit.is_set():return
                 self.on_ready('Mikrofon bereit: ' + info['name'])
                 frames, pre = [], deque(maxlen=40)
                 capture = heard = was_busy = False
@@ -138,13 +139,14 @@ class Microphone(threading.Thread):
                         if time.monotonic()-last_frame>4:raise RuntimeError('Das Mikrofon liefert keine Audiodaten. Verbindung prüfen und Mikrofon erneut einschalten.')
                         continue
                     last_frame=time.monotonic()
+                    if channels==2:raw=audioop.tomono(raw,2,.5,.5)
                     raw, resample_state = audioop.ratecv(raw, 2, 1, rate, 16000, resample_state)
                     if not raw: continue
                     samples = np.frombuffer(raw, '<i2').astype(np.float32)/32768; dt = len(samples)/16000
                     self.amplitude = min(1., float(np.sqrt(np.mean(samples*samples)))*12)
                     speech = vad.speech(samples); busy = self.busy.is_set()
                     if busy != was_busy:
-                        wake_rec.Reset()
+                        if wake_rec:wake_rec.Reset()
                         if stop_rec: stop_rec.Reset()
                         frames.clear(); pre.clear(); capture = False
                         cooldown = time.monotonic() + (.25 if not busy else 0); was_busy = busy
@@ -167,12 +169,13 @@ class Microphone(threading.Thread):
                     if self.decoding.is_set() or time.monotonic() < cooldown: continue
                     if not capture:
                         pre.append(raw); wake = False
-                        if self.settings.get('wake_word'):
+                        if wake_rec:
                             final = wake_rec.AcceptWaveform(raw)
                             data = json.loads(wake_rec.Result() if final else wake_rec.PartialResult())
                             wake = any(w in data.get('text', data.get('partial', '')).split() for w in ('jarvis', 'javis'))
                         if self.record.is_set() or wake or (self.settings.get('continuous') and speech):
-                            self.record.clear(); wake_rec.Reset()
+                            self.record.clear()
+                            if wake_rec:wake_rec.Reset()
                             capture = True; frames = list(pre); heard = False; silence = elapsed = 0.
                             wake_capture=wake
                             if wake:

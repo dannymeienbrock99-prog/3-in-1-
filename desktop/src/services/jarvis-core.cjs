@@ -2,13 +2,20 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
-const {JarvisEvents,eventSettings,DEFAULT_EVENTS}=require('./jarvis-events.cjs');
+const {JarvisEvents,eventSettings,DEFAULT_EVENTS,DEFAULT_TEMPLATES,TEMPLATE_FIELDS,validateTemplates,validateTemplate,renderTemplate}=require('./jarvis-events.cjs');
 const {resolveCommand,commandExamples,normalizeCommand}=require('./jarvis-commands.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
 const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,speechVolume:100,speechMuted:false,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
- chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
+ chatEnabled:true,chatMode:'moderators',chatSource:'window',chatTemplate:'{username} sagt: {message}',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
  fanAlerts:{enabled:true,threshold:80,hysteresis:5,cooldown:90},sceneAliases:{pause:'',spiel:'',start:'',ende:''},sensorRules:{},learn:true,localAi:false,aiPort:11435,aiModel:'qwen3:8b',voiceRuntime:''};
 function finite(value,min,max,fallback){return typeof value==='number'&&Number.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
+function microphoneIdentity(value){
+ if(Number.isInteger(value)&&value>=0)return value;
+ if(value&&typeof value==='object'&&!Array.isArray(value)&&typeof value.name==='string'&&typeof value.hostapi==='string'&&value.name.trim()&&value.hostapi.trim()&&value.name.length<=300&&value.hostapi.length<=100&&!/[\x00-\x1f]/.test(value.name+value.hostapi))return {name:value.name,hostapi:value.hostapi};
+ return null;
+}
+function validChatTemplate(value){return typeof value==='string'&&value.trim().length>0&&value.length<=400&&![...value.matchAll(/\{([^{}]*)\}/g)].some(m=>!['username','message'].includes(m[1]))&&!/[{}]/.test(value.replace(/\{(?:username|message)\}/g,''));}
+function chatText(message,settings){const clean=value=>String(value||'').replace(/https?:\/\/\S+/gi,'Link').replace(/[\x00-\x1f<>]/g,' ').trim();const values={username:clean(message.username||'Chat').slice(0,60),message:clean(message.message).slice(0,settings.chatMaxLength)};return settings.chatTemplate.replace(/\{(username|message)\}/g,(_match,key)=>values[key]).slice(0,1400);}
 function cleanSettings(input={}){
  const s={...DEFAULTS};
  for(const key of ['voiceEnabled','speechMuted','microphoneEnabled','wakeWord','headphones','chatEnabled','learn','localAi','gamingMode']) if(typeof input[key]==='boolean')s[key]=input[key];
@@ -16,6 +23,7 @@ function cleanSettings(input={}){
  s.address=String(input.address??s.address).slice(0,40);if(s.address==='Sir Crazy')s.address='';s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
  s.speechVolume=finite(input.speechVolume,0,100,100);
  s.chatMode=['moderators','allowlist','all'].includes(input.chatMode)?input.chatMode:'moderators';
+ s.chatSource=input.chatSource==='connected'?'connected':'window';s.chatTemplate=validChatTemplate(input.chatTemplate)?input.chatTemplate.trim():DEFAULTS.chatTemplate;
  s.chatPlatforms=Array.isArray(input.chatPlatforms)?input.chatPlatforms.filter(p=>DEFAULTS.chatPlatforms.includes(p)):s.chatPlatforms;
  s.chatAllowlist=Array.isArray(input.chatAllowlist)?input.chatAllowlist.filter(x=>typeof x==='string'&&/^(twitch|youtube|tiktok|cng):[^\s:]{1,160}$/.test(x)).slice(0,100):[];
  for(const k of Object.keys(s.sceneAliases))s.sceneAliases={...s.sceneAliases,[k]:String(input.sceneAliases?.[k]||'').slice(0,150)};
@@ -24,12 +32,13 @@ function cleanSettings(input={}){
    s.sensorRules[id]={alias:String(r.alias||'').slice(0,80),visible:r.visible!==false,readable:r.readable!==false,alert:r.alert===true,mode:['above','below','change'].includes(r.mode)?r.mode:'above',threshold:finite(r.threshold,-100000,1e9,80),delta:finite(r.delta,0.01,1e8,5),hysteresis:finite(r.hysteresis,0,1e6,2),cooldown:finite(r.cooldown,10,3600,60)};
  }
  s.fanAlerts={enabled:input.fanAlerts?.enabled!==false,threshold:finite(input.fanAlerts?.threshold,1,100,80),hysteresis:finite(input.fanAlerts?.hysteresis,1,30,5),cooldown:finite(input.fanAlerts?.cooldown,10,3600,90)};
- s.aiPort=Math.round(finite(input.aiPort,1024,65535,11435));s.aiModel=/^[\w.:/-]{1,80}$/.test(input.aiModel||'')?input.aiModel:'qwen3:8b';s.voiceRuntime=String(input.voiceRuntime||'').slice(0,1000);s.microphone=Number.isInteger(input.microphone)&&input.microphone>=0?input.microphone:null;
+ s.aiPort=Math.round(finite(input.aiPort,1024,65535,11435));s.aiModel=/^[\w.:/-]{1,80}$/.test(input.aiModel||'')?input.aiModel:'qwen3:8b';s.voiceRuntime=String(input.voiceRuntime||'').slice(0,1000);s.microphone=microphoneIdentity(input.microphone);
  return s;
 }
 function isModerator(m){return ['moderator','mod','broadcaster','owner'].includes(String(m.role).toLowerCase())||(m.badges||[]).some(b=>['moderator','broadcaster'].includes(String(b).toLowerCase()));}
 function allowedChat(m,s){
  if(!s.chatEnabled||!s.chatPlatforms.includes(m.platform)||typeof m.message!=='string'||!m.message.trim())return false;
+ if(s.chatSource==='window'&&m.windowVisible===false)return false;
  if(s.chatMode==='all')return true;
  if(s.chatMode==='moderators')return isModerator(m);
  // Only stable platform IDs can be allowlisted; display names are not identities.
@@ -63,7 +72,8 @@ class JarvisCore extends EventEmitter{
  }
  read(name,fallback){try{return JSON.parse(fs.readFileSync(path.join(this.directory,name),'utf8'));}catch{return fallback;}}
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
- update(settings){const previous=this.settings;this.settings=cleanSettings({...this.settings,...settings});if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.save('jarvis-settings.json',this.settings);this.emit('settings',this.settings);return this.settings;}
+ update(settings){if(settings.chatTemplate!==undefined&&!validChatTemplate(settings.chatTemplate))throw Error('Chat-Text: Nutze nur {username} und {message}, höchstens 400 Zeichen.');if(settings.events&&Object.hasOwn(settings.events,'templates'))validateTemplates(settings.events.templates);const previous=this.settings;const next={...previous,...settings};for(const key of ['events','fanAlerts','sceneAliases'])if(settings[key])next[key]={...previous[key],...settings[key]};if(settings.events?.templates)next.events.templates={...previous.events.templates,...settings.events.templates};this.settings=cleanSettings(next);if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.save('jarvis-settings.json',this.settings);this.emit('settings',this.settings);return this.settings;}
+ previewEvent(value={}){const type=value?.type;if(!Object.hasOwn(DEFAULT_TEMPLATES,type))throw Error('Bitte eine vorhandene Ereignisansage auswählen.');const valid=validateTemplate(type,value.template);if(!valid.ok)throw Error(valid.error);const text=renderTemplate(valid.text,{username:'Beispielperson',likecount:'1.000',giftname:'Beispielgeschenk',giftcount:'1',coins:'50',submonth:'3',platform:'TikTok'});return this.say('Vorschau mit erfundenen Beispieldaten. '+text,'preview');}
  say(text,kind='answer',speech=true){const entry={id:crypto.randomUUID(),time:this.clock(),kind,text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);if(speech&&this.settings.voiceEnabled)this.speak(text,{priority:kind==='alert'?2:kind==='chat'?0:1});return {ok:true,text,kind};}
  input(text,source){const entry={id:crypto.randomUUID(),time:this.clock(),kind:'user',source:['voice','typed','streamdeck'].includes(source)?source:'typed',text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);}
  unavailable(text,kind='unrecognized'){return {...this.say(text,kind),ok:false};}
@@ -71,8 +81,7 @@ class JarvisCore extends EventEmitter{
  remember(command,intent){if(!this.settings.learn)return;const key=normalize(command).slice(0,200);const old=this.memory.find(m=>m.command===key);if(old){old.count++;old.last=this.clock();}else this.memory.push({command:key,intent,count:1,last:this.clock()});this.memory=this.memory.sort((a,b)=>b.last-a.last).slice(0,200);this.save('jarvis-memory.json',this.memory);}
  onChat(batch){for(const m of batch){if(!allowedChat(m,this.settings))continue;const key=m.platform+':'+(m.id||crypto.createHash('sha256').update(m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));if(this.chatSeen.has(key))continue;this.chatSeen.set(key,this.clock());
   if(this.clock()-this.lastChat<this.settings.chatCooldown*1000)continue;this.lastChat=this.clock();
-  const body=m.message.replace(/https?:\/\/\S+/gi,'Link').replace(/[\x00-\x1f]/g,' ').slice(0,this.settings.chatMaxLength);
-  this.say(`${this.settings.address?this.settings.address+', ':''}${isModerator(m)?'Moderator ':''}${String(m.username||'Chat').slice(0,60)} sagt: ${body}`,'chat');
+  this.say(`${this.settings.address?this.settings.address+', ':''}${chatText(m,this.settings)}`,'chat');
  }for(const [key,time]of this.chatSeen)if(this.clock()-time>300000)this.chatSeen.delete(key);}
  onEvent(event){this.events.ingest(event,this.settings.events,this.clock());}
  poll(){
@@ -175,6 +184,6 @@ class JarvisCore extends EventEmitter{
    return this.unavailable(prefix+'Ich konnte diesen Auftrag keiner Funktion zuordnen. Es wurde nichts ausgeführt. Sage zum Beispiel: Öffne das Touch Deck, wechsle zur Pause oder schalte Auto-Broadcast ein. Mit „Welche Befehle kannst du?“ erhältst du Hilfe.');
   }catch(e){this.say(prefix+String(e.message||'Die Aktion ist fehlgeschlagen.'),'error');return {ok:false,text:String(e.message)};}finally{this.commandBusy=false;}
  }
- snapshot(){let examples=[];try{examples=commandExamples(this.getCommandCatalog?.()||{});}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples};}
+ snapshot(){let examples=[];try{examples=commandExamples(this.getCommandCatalog?.()||{});}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples,eventDefaults:{...DEFAULT_EVENTS,templates:{...DEFAULT_TEMPLATES}},eventTemplateFields:TEMPLATE_FIELDS};}
 }
 module.exports={JarvisCore,AlertEngine,allowedChat,isModerator,cleanSettings,DEFAULTS,normalize,fresh,spoken};

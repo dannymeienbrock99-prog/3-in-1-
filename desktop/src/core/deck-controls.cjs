@@ -43,13 +43,13 @@ function createDeckControls({getConfig,saveConfig,isDetached,setDetached}) {
         else {
         const widgets=c.chatExtras?.widgets||[],widget=widgets.find(w=>w.id==='batto-battlebar');
         if(!widget)throw new Error('Die Battle-Bar-Adresse fehlt. In Batto unter TikFinity-Widgets → Battle-Bar speichern.');
-        if(enabled){let valid=false;try{const url=new URL(widget.url);valid=url.protocol==='https:'&&url.hostname==='tikfinity.zerody.one'&&url.pathname.startsWith('/widget/')&&!url.username&&!url.password;}catch{}
+        if(enabled){const valid=require('../renderer/tikfinity-url.js').isValid(widget.url);
           if(!valid)throw new Error('Bitte zuerst eine gültige TikFinity-Battle-Bar-Widget-Adresse in Batto speichern.');}
         patch={chatExtras:{widgets:widgets.map(w=>w.id===widget.id?{...w,enabled,permanent:true}:w)}};
         }
       } else if(target==='overlay.snow'||target==='overlay.likeBar'){
         const w=c.appearance?.chatWidgets||{},field=target==='overlay.snow'?'snowEnabled':'likesEnabled';
-        patch={appearance:{chatWidgets:{enabled:true,snowEnabled:w.enabled!==false&&w.snowEnabled!==false,likesEnabled:w.enabled!==false&&w.likesEnabled!==false,[field]:enabled}}};
+        patch={appearance:{chatWidgets:{...(field==='snowEnabled'?{snowAutoStart:enabled}:{}),enabled:true,snowEnabled:w.enabled!==false&&w.snowEnabled!==false,likesEnabled:w.enabled!==false&&w.likesEnabled!==false,[field]:enabled}}};
       } else if(target==='broadcast.profile')patch={autoBroadcast:{items:(c.autoBroadcast.items||[]).map(p=>p.id===profile.id?{...p,enabled}:p)}};
       else if(target==='broadcast.master')patch={autoBroadcast:{enabled}};
       else if(target==='tts.enabled')patch={tts:{enabled}};

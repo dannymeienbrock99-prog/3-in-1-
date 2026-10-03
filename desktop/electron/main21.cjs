@@ -651,7 +651,7 @@ function initCore() {
     onConfig:next=>{settingsService.syncIfClean();applyConfig(next,{autoBroadcast:next.autoBroadcast});}
   });
   chatCore.on('message', (message) => {
-    require('../src/suite-bootstrap.cjs').onChat([require('../src/services/suite-host.cjs').chatForJarvis(message)]);
+    require('../src/suite-bootstrap.cjs').onChat([{...require('../src/services/suite-host.cjs').chatForJarvis(message),windowVisible:chatCore.isMultiChatVisible(message)}]);
     if (chatCore.isMultiChatVisible(message)) send('chat:message', message);
   });
   chatCore.on('moderation', (entry) => { auditStore?.writeModeration(entry); send('moderation:event', entry); });
@@ -665,6 +665,7 @@ function initCore() {
     try { configStore.merge({ moderation: config.moderation, filters: config.filters }); } catch {}
   });
   eventCore.on('event', handleNormalizedEvent);
+  eventCore.on('accepted', event=>require('../src/suite-bootstrap.cjs').onAcceptedEvent(event));
 
   statusMonitor = new StatusMonitor({ obs, onStatus: (status) => send('system:status', status) });
   healthService = new HealthService({
@@ -1080,6 +1081,7 @@ module.exports.getSuiteHost=()=>({
  cancel:()=>{actionEngine.cancelAll();return {ok:true};},
  connect:(name,op)=>require('../src/services/suite-controls.cjs').connectAdapter(adapters[name],name,op),
  navigate:view=>{if(!require('../src/services/suite-controls.cjs').VIEWS[view])throw Error('Unbekannter Bereich.');return navigation.navigate(view,true);},
+ jarvisSettings:async()=>{await navigation.navigate('jarvis',true);await mainWindow.webContents.executeJavaScript("if(!document.getElementById('view-jarvis').classList.contains('settings-open'))document.getElementById('j-settings-toggle').click();true");return {ok:true,text:'Die Jarvis-Einstellungen sind geöffnet.'};},
  show:async()=>{await showMainWindow();return {ok:true};},
  gaming:enterGaming,
  tikfinity:()=>shell.openExternal('https://tikfinity.zerody.one/tiktok/')

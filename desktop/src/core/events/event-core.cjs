@@ -46,6 +46,8 @@ class EventCore extends EventEmitter {
 
     if (this.dedupe.seen(event.eventId)) return { ok: false, duplicate: true, event };
 
+    // Counters need each deduplicated packet before presentation aggregation.
+    this.emit('accepted', event);
     const aggregate = this.aggregator.add(event);
     if (aggregate.emitNow) this.bus.publish(aggregate.event);
     return { ok: true, event: aggregate.event, aggregated: !aggregate.emitNow };

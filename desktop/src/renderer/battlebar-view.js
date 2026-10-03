@@ -2,7 +2,8 @@
   'use strict';
   const finite=(value,fallback)=>Number.isFinite(Number(value))?Number(value):fallback;
   const bound=(value,min,max,fallback)=>Math.max(min,Math.min(max,finite(value,fallback)));
-  function validWidgetUrl(value){try{const u=new URL(String(value));return u.protocol==='https:'&&u.hostname==='tikfinity.zerody.one'&&!u.port&&u.pathname.startsWith('/widget/')&&!u.username&&!u.password?u.href:'';}catch{return '';}}
+  const widgetUrls=typeof module==='object'&&module.exports?require('./tikfinity-url.js'):window.BattoTikfinityUrl;
+  const validWidgetUrl=value=>widgetUrls?.normalize(value)||'';
   function points(value){const raw=value===null||value===undefined?'':String(value);return /^\d{1,40}$/.test(raw)?BigInt(raw):null;}
   function describe(state={},config={}){
     if(config.provider==='widget')return validWidgetUrl(config.widgetUrl)?'TikFinity-Widget · Sichtbare Inhalte werden von TikFinity geliefert.':'TikFinity-Widget-Adresse fehlt.';

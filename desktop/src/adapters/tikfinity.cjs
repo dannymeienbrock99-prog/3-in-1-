@@ -124,7 +124,7 @@ function normalizeTikFinityPacket(packet) {
 
   return {
     kind:'event',
-    value:{ source:'tikfinity', platform:'tiktok', event, data, timestamp:occurredAt, raw:packet }
+    value:{ id:firstText(pickText(packet, ['eventId', 'msgId', 'messageId', 'id']), pickText(data, ['eventId', 'msgId', 'messageId', 'id'])) || undefined, source:'tikfinity', platform:'tiktok', event, data, timestamp:occurredAt, raw:packet }
   };
 }
 

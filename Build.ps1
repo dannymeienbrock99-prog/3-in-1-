@@ -29,6 +29,7 @@ Push-Location desktop
 npm ci; Check-Exit
 & .\node_modules\.bin\electron.cmd scripts/prepare-icons.cjs; Check-Exit
 npm run test:jarvis; Check-Exit
+npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
 node --test test/dual-stream.test.cjs; Check-Exit
 npm run test:core; Check-Exit
@@ -46,5 +47,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.1.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

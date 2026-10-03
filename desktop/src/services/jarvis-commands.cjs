@@ -1,4 +1,5 @@
 'use strict';
+const {SETTING_SPECS,validateSetting}=require('./jarvis-setting-actions.cjs');
 
 // Command recognition stays local. Every executable ID must come from the live
 // control catalog; names spoken by a user never become executable code or paths.
@@ -11,7 +12,7 @@ function normalizeCommand(value) {
   text = text.replace(/^(?:hey|hi|hallo|okay|ok) (?=(?:jarvis|javis|dschavis|jarwis)\b)/, '')
     .replace(/^(?:javis|dschavis|jarwis)\b/, 'jarvis');
   // "Jarvis leiser" addresses his own voice, rather than an omitted command.
-  if (!/^(?:jarvis|javis|dschavis|jarwis) (?:lauter|leiser|lautstarke|stumm|ton|mikrofon)/.test(text)) {
+  if (!/^(?:jarvis|javis|dschavis|jarwis) (?:lauter|leiser|lautstarke|stumm|ton|mikrofon|einstellungen)/.test(text)) {
     text = text.replace(/^(?:(?:hey|hallo|okay|ok) )?(?:jarvis|javis|dschavis|jarwis)\b\s*/, '');
   }
   return text.replace(/^(?:kannst|konntest|wurdest) du (?:mir )?/, '')
@@ -37,6 +38,10 @@ const JARVIS = {
   'events.gifts': ['geschenke', 'geschenke vorlesen', 'geschenke ansagen', 'geschenk ansagen'],
   'events.follows': ['follower', 'follower vorlesen', 'follower ansagen', 'neue follower ansagen'],
   'events.likes': ['likes', 'likes vorlesen', 'likes ansagen', 'like ansagen'],
+  'events.subscriptions': ['abos', 'abos vorlesen', 'abos ansagen', 'abo danksagungen', 'abo danke', 'subscriptions', 'subs', 'abonnenten ansagen'],
+  'fanAlerts.enabled': ['lufterwarnungen', 'lufter warnungen', 'lufterwarnung', 'lufter ansagen'],
+  wakeWord: ['aktivierungswort', 'jarvis aktivierungswort', 'wake word'],
+  headphones: ['kopfhorermodus', 'kopfhorer modus'],
   gamingMode: ['jarvis sparmodus', 'gaming sparmodus', 'sparmodus']
 };
 const CONTROLS = {
@@ -50,7 +55,7 @@ const CONTROLS = {
 const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleich zuruck'],
   spiel: ['spiel', 'spielszene', 'spiel szene', 'gaming', 'weiter', 'zuruck zum spiel'],
   start: ['start', 'startszene', 'start szene', 'stream startet'], ende: ['ende', 'endszene', 'ende szene', 'stream ende']};
-const definition = (catalog, id) => catalog?.actions?.find(a => a?.id === id);
+const definition = (catalog, id) => [...(catalog?.actions||[]),...(catalog?.voiceActions||[])].find(a => a?.id === id);
 const choices = (catalog, id) => (definition(catalog, id)?.choices || []).filter(c => c && typeof c.id === 'string' && typeof c.name === 'string');
 function spokenChoiceName(item, action) {
   // The shared deck catalog decorates these names for drop-downs. Remove only
@@ -77,7 +82,11 @@ function simple(catalog, id, reply) {
 function targetText(value) { return value.replace(/^(?:den|die|das|der|dem|meinen|meine|mein) /, '').trim(); }
 function switchPhrase(text) {
   let query, op, match;
-  if ((match = /^(?:schalte|schalt|mache|mach|stelle|stell|setze|setz) (.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten)$/.exec(text)) ||
+  if ((match = /^blende (.+?) (ein|aus)$/.exec(text))) {
+    query=targetText(match[1]);op=match[2]==='ein'?'on':'off';
+  } else if ((match=/^(verstecke|versteck) (.+)$/.exec(text))) {
+    query=targetText(match[2]);op='off';
+  } else if ((match = /^(?:schalte|schalt|mache|mach|stelle|stell|setze|setz) (.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten)$/.exec(text)) ||
       (match = /^(.+?) (an|ein|aus|stumm|einblenden|ausblenden|einschalten|ausschalten)$/.exec(text))) {
     query = targetText(match[1]); op = /^(?:an|ein|einblenden|einschalten)$/.test(match[2]) ? 'on' : 'off';
   } else if ((match = /^(aktiviere|aktivier|deaktiviere|deaktivier|starte|stoppe|beende) (.+)$/.exec(text))) {
@@ -86,6 +95,58 @@ function switchPhrase(text) {
     query = targetText(match[1]); op = 'toggle';
   }
   return query ? {query, op} : null;
+}
+function spokenInteger(input){
+  const text=input.trim();
+  if(/^\d+$/.test(text))return Number(text);
+  if(/^\d{1,3}(?: \d{3})+$/.test(text))return Number(text.replace(/ /g,''));
+  const units={null:0,ein:1,eins:1,zwei:2,drei:3,vier:4,funf:5,sechs:6,sieben:7,acht:8,neun:9,zehn:10,elf:11,zwolf:12,dreizehn:13,vierzehn:14,funfzehn:15,sechzehn:16,siebzehn:17,achtzehn:18,neunzehn:19,zwanzig:20,dreissig:30,vierzig:40,funfzig:50,sechzig:60,siebzig:70,achtzig:80,neunzig:90,hundert:100,einhundert:100,tausend:1000,eintausend:1000,zehntausend:10000};
+  if(Object.hasOwn(units,text))return units[text];
+  let match=/^(.+?)und(.+)$/.exec(text);
+  if(match&&units[match[1]]>0&&units[match[1]]<10&&units[match[2]]>=20&&units[match[2]]<100)return units[match[1]]+units[match[2]];
+  match=/^(.+?)\s*(?:k|tausend)$/.exec(text);
+  if(match){const value=spokenInteger(match[1]);if(Number.isInteger(value)&&value>0&&value<=100000)return value*1000;}
+  match=/^(?:ein)?hundert([a-z]+)$/.exec(text);
+  if(match){const value=spokenInteger(match[1]);if(Number.isInteger(value)&&value>0&&value<100)return 100+value;}
+  return NaN;
+}
+function settingCommand(text,catalog){
+  const result=(target,value,extra={})=>{
+    if(!choices(catalog,'jarvis-setting').some(c=>c.id===target))return unavailable();
+    const action={action:'jarvis-setting',target,...(value===undefined?{}:{value}),...extra};
+    try{validateSetting(action);}catch(error){return ambiguous(error.message);}
+    return {kind:'action',action,reply:SETTING_SPECS[target].name+' aktualisiert.'};
+  };
+  const exactModes={
+    'lies alle chatnachrichten vor':'all','lies den gesamten chat vor':'all','lies alles im chat vor':'all',
+    'lies nur moderatoren vor':'moderators','lies nur nachrichten von moderatoren vor':'moderators','lies nur moderator nachrichten vor':'moderators',
+    'lies nur freigegebene personen vor':'allowlist','lies nur die freigabeliste vor':'allowlist','lies nur erlaubte personen vor':'allowlist'
+  };
+  if(Object.hasOwn(exactModes,text))return result('chatMode',exactModes[text]);
+  let match=/^(?:(?:stelle|stell|setze|setz) (?:den )?)?chat (?:modus|auswahl) auf (alle|moderatoren|freigabeliste|erlaubte personen)$/.exec(text);
+  if(match)return result('chatMode',{alle:'all',moderatoren:'moderators',freigabeliste:'allowlist','erlaubte personen':'allowlist'}[match[1]]);
+  if(/^(?:lies (?:nachrichten )?aus dem chatfenster vor|chat quelle auf (?:fenster|chatfenster))$/.test(text))return result('chatSource','window');
+  if(/^(?:lies (?:nachrichten )?aus (?:allen )?verbundenen chats vor|chat quelle auf verbundene chats)$/.test(text))return result('chatSource','connected');
+  match=/^(?:(?:stelle|stell|setze|setz) (?:die )?)?(?:geschenk ansage|geschenke ansagen) auf (geschenkname|geschenk|coins|beides|geschenkname und coins|geschenke und coins)$/.exec(text);
+  if(match)return result('events.giftAnnouncement',/und|beides/.test(match[1])?'both':match[1]==='coins'?'coins':'gift');
+  match=/^(?:lies|sage|sag) (?:bei geschenken )?(?:den )?(geschenknamen|geschenkname|coins|geschenkname und coins|geschenknamen und coins) (?:vor|an)$/.exec(text);
+  if(match)return result('events.giftAnnouncement',/ und /.test(match[1])?'both':match[1]==='coins'?'coins':'gift');
+  if(/^(?:sprich|rede) (?:etwas )?(?:schneller|langsamer)$/.test(text)||/^(?:schneller|langsamer) sprechen$/.test(text))return result('speechRate',undefined,{delta:/langsamer/.test(text)?-10:10});
+  const numeric=[
+    ['events.likeThreshold',/^(?:lies|sage|sag) likes ab (.+?) (?:vor|an)$/],
+    ['events.likeThreshold',/^likes ab (.+?) (?:ansagen|vorlesen)$/],
+    ['events.likeThreshold',/^(?:like schwelle|likes schwelle|like grenze|like ansagen) (?:auf|ab) (.+?)(?: likes)?$/],
+    ['events.giftMinimum',/^(?:geschenk mindestwert|geschenke mindestwert) (?:auf|ab) (.+?) coins$/],
+    ['speechRate',/^(?:(?:stelle|stell|setze|setz) (?:das |dein )?)?(?:sprechtempo|sprechgeschwindigkeit) auf (.+?)(?: worter pro minute)?$/],
+    ['fanAlerts.threshold',/^(?:lufterwarnung|lufter warnung|lufterwarnungen|lufter warnschwelle) (?:ab|auf) (.+?) (?:prozent|%)$/],
+    ['fanAlerts.threshold',/^(?:warne|warn) mich (?:bei luftern|bei lufterdrehzahl) ab (.+?) (?:prozent|%)$/],
+    ['events.cooldown',/^(?:ereignis abstand|abstand zwischen ereignis ansagen) auf (.+?) sekunden$/],
+    ['chatCooldown',/^(?:chat abstand|abstand zwischen chatnachrichten) auf (.+?) sekunden$/],
+    ['chatMaxLength',/^chat lange auf (.+?) zeichen$/],
+    ['fanAlerts.cooldown',/^(?:lufterwarnung abstand|abstand zwischen lufterwarnungen) auf (.+?) sekunden$/]
+  ];
+  for(const [target,pattern] of numeric){match=pattern.exec(text);if(match)return result(target,spokenInteger(match[1]));}
+  return null;
 }
 function audioCommand(text) {
   let match;
@@ -150,8 +211,10 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
     return {kind: 'help', text: commandExamples(catalog).map(example => example.phrase).join('. ') + '. Frage außerdem gezielt nach PC-Messwerten, zum Beispiel GPU-Temperatur oder Lüfterdrehzahl.'};
   // Negation and multiple commands must not accidentally execute the first match.
   // These two phrases are explicit requests to stop reading, not negated actions.
-  const stopReading = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse) nicht mehr vor$/.exec(text);
+  const stopReading = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse|abos) nicht mehr vor$/.exec(text);
   if (stopReading) return select(catalog, 'jarvis', `${stopReading[1]} vorlesen`, JARVIS, {op: 'off'});
+  const stopThanks=/^bedanke dich nicht mehr fur (?:neue )?(follower|abos|subs|abonnenten)$/.exec(text);
+  if(stopThanks)return select(catalog,'jarvis',stopThanks[1]==='follower'?'follower':'abos',JARVIS,{op:'off'});
   if (text === 'sprich nicht weiter') return simple(catalog, 'speech-stop', 'Sprachausgabe gestoppt.');
   const moderation = moderationCommand(input);
   // The filter term is literal data; e.g. Filterwort "kein" hinzufügen is an
@@ -159,6 +222,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (moderation?.kind === 'filter') return moderation;
   if (/\b(?:nicht|nichts|kein|keine|keinen|keinem|keiner|ohne|niemals|niemand|niemanden|vielleicht|eventuell|falls|wenn|warum|wieso)\b/.test(text)) return null;
   if (moderation) return moderation;
+  const setting=settingCommand(text,catalog);
+  if(setting)return setting;
   const compound = /\b(?:und|danach|anschliessend|dann|aber|oder)\b/.test(text);
   // The full name of a saved action may legitimately contain "und". It is only
   // accepted with an explicit action verb and an exact catalog match below.
@@ -177,6 +242,15 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
     return select(catalog, id, query);
   }
   if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
+  if(/^(?:(?:offne|zeige|zeig) (?:mir )?(?:die )?(?:deine|jarvis) einstellungen|(?:deine|jarvis) einstellungen (?:offnen|anzeigen))$/.test(text))return definition(catalog,'jarvis-settings')?simple(catalog,'jarvis-settings','Jarvis-Einstellungen geöffnet.'):select(catalog,'navigate','jarvis',NAVIGATION);
+  if(/^(?:mikrofone (?:neu laden|suchen|aktualisieren)|lade (?:die )?mikrofone neu|suche (?:nach )?mikrofonen)$/.test(text))return simple(catalog,'microphones','Die Mikrofonliste wird aktualisiert.');
+  if(/^(?:teste (?:das |mein |dein )?mikrofon|mikrofon testen|starte (?:den )?mikrofontest)$/.test(text))return simple(catalog,'listen','Ich höre für den Mikrofontest.');
+  const transition=/^(?:(?:stelle|stell|setze|setz) (?:den )?)?(?:ubergang|szenenubergang) auf (uberblendung|fade|schnitt|cut)$/.exec(text);
+  if(transition)return select(catalog,'transition',/^(?:fade|uberblendung)$/.test(transition[1])?'fade':'cut');
+  const duration=/^(?:(?:stelle|stell|setze|setz) (?:die )?)?ubergangsdauer auf (.+?) (?:millisekunden|ms)$/.exec(text);
+  if(duration){const value=spokenInteger(duration[1]);if(!Number.isInteger(value)||value<100||value>2000)return ambiguous('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');const result=simple(catalog,'transition-duration','Übergangsdauer aktualisiert.');if(result.kind==='action')result.action.value=value;return result;}
+  const withTransition=/^(.+?) mit (?:dem ubergang )?(uberblendung|fade|schnitt|cut)(?: (?:von )?(\d+) (?:millisekunden|ms))?$/.exec(text);
+  if(withTransition){const base=resolveCommand(withTransition[1],{catalog,sceneAliases});if(base?.kind==='action'&&base.action.action==='scene'){const durationMs=withTransition[3]===undefined?undefined:Number(withTransition[3]);if(durationMs!==undefined&&(durationMs<100||durationMs>2000))return ambiguous('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');return {...base,action:{...base.action,transition:/^(?:fade|uberblendung)$/.test(withTransition[2])?'fade':'cut',...(durationMs===undefined?{}:{durationMs})}};}return ambiguous('Nenne eine vorhandene Szene mit Überblendung oder Schnitt.');}
   if (/^(?:(?:schalte|mach|mache) )?(?:das )?mikrofon (?:aus|an|ein|stumm)$/.test(text)) return ambiguous('Meinst du das Jarvis-Mikrofon? Sag dafür: Dauerhaft zuhören aus oder Dauerhaft zuhören an.');
   const audio = audioCommand(text);
   if (audio) return audio;
@@ -226,13 +300,15 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (/^(?:gaming modus (?:aus|deaktivieren)|zeige (?:das )?hauptfenster|programm anzeigen|batto anzeigen)$/.test(text)) return simple(catalog, 'show', 'Batto geöffnet.');
   if (/^(?:automationen abbrechen|brich (?:die |alle )?automationen ab|stoppe (?:die |alle )?automationen)$/.test(text)) return simple(catalog, 'cancel', 'Automationen abgebrochen.');
   if (/^(?:like zahler zurucksetzen|setze (?:den )?like zahler zuruck|likes zurucksetzen)$/.test(text)) return simple(catalog, 'likes-reset', 'Like-Zähler zurückgesetzt.');
-  const connection = /^(verbinde|trenne) (?:den |die |das )?(twitch|tiktok|tikfinity|youtube)(?: chat| verbindung)?$/.exec(text) || /^(twitch|tiktok|tikfinity|youtube)(?: chat| verbindung)? (verbinden|trennen)$/.exec(text);
+  const connection = /^(verbinde|trenne) (?:(?:dich mit|die verbindung zu|den|die|das) )?(twitch|tiktok|tikfinity|youtube)(?: chat| verbindung)?$/.exec(text) || /^(twitch|tiktok|tikfinity|youtube)(?: chat| verbindung)? (verbinden|trennen)$/.exec(text);
   if (connection) {
     const prefix = /^(verbinde|trenne)$/.test(connection[1]);
     const query = prefix ? connection[2] : connection[1];
     return select(catalog, 'connect', query === 'tiktok' ? 'tikfinity' : query, {}, {op: /^(verbinde|verbinden)$/.test(prefix ? connection[1] : connection[2]) ? 'on' : 'off'});
   }
-  const read = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse) vor$/.exec(text);
+  const thanks=/^bedanke dich fur (?:neue )?(follower|abos|subs|abonnenten)$/.exec(text);
+  if(thanks)return select(catalog,'jarvis',thanks[1]==='follower'?'follower':'abos',JARVIS,{op:'on'});
+  const read = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse|abos) vor$/.exec(text);
   if (read) return select(catalog, 'jarvis', `${read[1]} vorlesen`, JARVIS, {op: 'on'});
   const sw = switchPhrase(text);
   if (sw) {
@@ -256,7 +332,7 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   }
   return null;
 }
-function commandExamples(catalog = {}, {limit = 18} = {}) {
+function commandExamples(catalog = {}, {limit = 36} = {}) {
   const examples = [], has = id => !!definition(catalog, id), present = (id, target) => choices(catalog, id).some(c => c.id === target);
   const add = (phrase, description) => examples.push({phrase, description});
   if (present('scene', 'Start')) add('Start Szene öffnen', 'Startszene auswählen');
@@ -277,6 +353,24 @@ function commandExamples(catalog = {}, {limit = 18} = {}) {
     const item = choices(catalog, id).find(c => c.name.length <= 100 && !choices(catalog, id).some(other => other !== c && normalize(spokenChoiceName(other, id)) === normalize(spokenChoiceName(c, id))));
     if (item) add(`${prefix} ${spokenChoiceName(item, id)}${id === 'broadcast-profile' ? ' an' : id === 'media' ? ' ab' : ''}`, `${definition(catalog, id).name}: ${item.name}`);
   }
-  return examples.slice(0, Math.max(1, Math.min(30, Number.isFinite(limit) ? Math.floor(limit) : 18)));
+  if(has('jarvis-settings'))add('Öffne deine Einstellungen','Jarvis-Einstellungen anzeigen');
+  for(const [target,phrase,description] of [
+    ['chatMode','Lies alle Chatnachrichten vor','Alle Personen auf den gewählten Plattformen vorlesen'],
+    ['chatMode','Lies nur Moderatoren vor','Nur Moderatoren vorlesen'],
+    ['chatMode','Lies nur die Freigabeliste vor','Nur freigegebene Personen vorlesen'],
+    ['chatSource','Lies aus dem Chatfenster vor','Nachrichten aus der Chatfenster-Auswahl'],
+    ['chatSource','Lies aus verbundenen Chats vor','Nachrichten aus verbundenen Chats'],
+    ['events.likeThreshold','Likes ab 1000 ansagen','Like-Schwelle einstellen'],
+    ['events.giftAnnouncement','Geschenk-Ansage auf Geschenkname und Coins','Geschenkname und Coins vorlesen'],
+    ['speechRate','Sprechtempo auf 160','Sprechtempo einstellen'],
+    ['speechRate','Sprich langsamer','Sprechtempo um 10 Wörter pro Minute senken'],
+    ['fanAlerts.threshold','Lüfterwarnung ab 80 Prozent','Lüfter-Warnschwelle einstellen']
+  ])if(present('jarvis-setting',target))add(phrase,description);
+  if(present('jarvis','events.subscriptions'))add('Bedanke dich für Abos','Abo-Danksagungen einschalten');
+  if(has('microphones'))add('Mikrofone neu laden','Verfügbare Mikrofone erneut suchen');
+  if(has('listen'))add('Mikrofon testen','Jarvis hört einmal auf einen gesprochenen Befehl');
+  if(has('transition'))add('Übergang auf Überblendung','Übergang für folgende Szenenwechsel einstellen');
+  if(has('transition-duration'))add('Übergangsdauer auf 500 Millisekunden','Dauer für folgende Szenenwechsel einstellen');
+  return examples.slice(0, Math.max(1, Math.min(60, Number.isFinite(limit) ? Math.floor(limit) : 36)));
 }
 module.exports = {normalize, normalizeCommand, resolveCommand, commandExamples};

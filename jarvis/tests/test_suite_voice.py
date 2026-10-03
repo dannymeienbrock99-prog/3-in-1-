@@ -9,13 +9,14 @@ class Speaker:
     def stop(self): pass
     def close(self): pass
 class Microphone:
-    def __init__(self,*args,**kwargs): self.speaker=kwargs['speaker'];self.requested=False;self.stopped=False;self.on_ready=kwargs['on_ready']
+    def __init__(self,*args,**kwargs): self.speaker=kwargs['speaker'];self.requested=False;self.stopped=False;self.cancelled=False;self.on_ready=kwargs['on_ready']
     def start(self): pass
     def request(self):
         if not self.speaker.finished:raise AssertionError('Listening before greeting completed')
         self.requested=True
         self.on_ready('Mikrofon bereit: Testgerät')
     def stop(self): self.stopped=True
+    def cancel_turn(self): self.cancelled=True;self.requested=False
 class Worker:
     def __init__(self,*args): pass
     def stop(self): pass
@@ -54,5 +55,18 @@ class SuiteVoiceTests(unittest.TestCase):
         self.assertEqual(settings['speech_volume'],35);self.assertTrue(settings['speech_muted']);self.assertTrue(s.listening)
         s.dispatch({'command':'settings','value':{'speechVolume':140,'speechMuted':False}})
         self.assertEqual(settings['speech_volume'],100);self.assertFalse(settings['speech_muted']);self.assertTrue(s.listening)
+    def test_stop_cancels_pending_command_without_closing_enabled_microphone(self):
+        s,e=self.service();s.enable(True);microphone=s.microphone
+        s.dispatch({'command':'stop'})
+        self.assertTrue(microphone.cancelled);self.assertFalse(microphone.stopped)
+        self.assertIs(s.microphone,microphone);self.assertFalse(s.listening)
+    def test_continuous_commands_need_explicit_microphone_without_wake_word(self):
+        s,e=self.service()
+        s.dispatch({'command':'settings','value':{'microphoneEnabled':False,'wakeWord':False}})
+        self.assertFalse(s.settings['continuous']);self.assertIsNone(s.microphone)
+        s.dispatch({'command':'settings','value':{'microphoneEnabled':True,'wakeWord':False}})
+        self.assertTrue(s.settings['continuous']);self.assertIsNone(s.microphone)
+        s.dispatch({'command':'settings','value':{'microphoneEnabled':True,'wakeWord':True}})
+        self.assertFalse(s.settings['continuous'])
 
 if __name__=='__main__':unittest.main()

@@ -14,3 +14,4 @@ if(process.argv.includes('--suite-resources')&&process.env.BATTO_TEST_INSTANCE==
 if(process.argv.includes('--dual-stream-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./dual-stream-test.cjs');
 if(process.argv.includes('--touch-deck-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./touch-deck-test.cjs');
 if(process.argv.includes('--touch-advanced-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./touch-advanced-test.cjs');
+if(process.argv.includes('--jarvis-control-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./jarvis-control-test.cjs');

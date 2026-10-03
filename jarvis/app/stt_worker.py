@@ -46,7 +46,7 @@ def run():
             samples = np.frombuffer(base64.b64decode(job['audio']), dtype='<i2').astype(np.float32)/32768
             def transcribe():
                 segments,_=model.transcribe(samples,language='de',beam_size=3,vad_filter=True,
-                    condition_on_previous_text=False,initial_prompt='Jarvis. Programme, Rechner, Editor, Arbeitsspeicher, RAM und SSD.')
+                    condition_on_previous_text=False,initial_prompt='Jarvis. Batto Touch Deck, Dual Stream, Pause, Start, Ende, Spiel, Kamera, Mikrofon, Chatfilter, Moderation, Auto-Broadcast, Twitch, TikTok, TikFinity, Lautstärke, Lüfter, Arbeitsspeicher, CPU und GPU.')
                 return ' '.join(s.text.strip() for s in segments).strip()
             try:text=transcribe()
             except RuntimeError as exc:

@@ -142,6 +142,7 @@ function validateConfig(config) {
   if (!integerIn(c.backup?.keep ?? 5, 1, 100)) errors.push(issue('backup.keep', 'Backup-Anzahl muss zwischen 1 und 100 liegen.'));
   if (!numberIn(c.appearance?.uiScale ?? 1, .5, 2)) errors.push(issue('appearance.uiScale', 'UI-Skalierung muss zwischen 0.5 und 2 liegen.'));
   if (!numberIn(c.appearance?.backgroundDarkness ?? .28, 0, .9)) errors.push(issue('appearance.backgroundDarkness', 'Hintergrund-Abdunklung muss zwischen 0 und 0.9 liegen.'));
+  if (c.appearance?.programBackgroundId !== undefined && !['original','gaming-room','tiktok-banner','studio-clean'].includes(c.appearance.programBackgroundId)) errors.push(issue('appearance.programBackgroundId', 'Bitte eines der mitgelieferten Programmbilder wählen.'));
   const chatWidgets=c.appearance?.chatWidgets;
   if (chatWidgets?.giftsEnabled !== undefined && typeof chatWidgets.giftsEnabled !== 'boolean') errors.push(issue('appearance.chatWidgets.giftsEnabled', 'Geschenke-Widget muss aktiviert oder deaktiviert sein.'));
   if (chatWidgets?.giftsUrl !== undefined && (typeof chatWidgets.giftsUrl !== 'string' || (chatWidgets.giftsUrl.trim() && !isTikFinityGiftsWidgetUrl(chatWidgets.giftsUrl)))) errors.push(issue('appearance.chatWidgets.giftsUrl', 'Geschenke-Widget benötigt eine HTTPS-Adresse unter tikfinity.zerody.one/widget/gifts ohne Zugangsdaten.'));

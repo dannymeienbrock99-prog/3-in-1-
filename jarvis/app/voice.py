@@ -66,7 +66,12 @@ class Microphone(threading.Thread):
         self.connected=threading.Event(); self.speaker=speaker;self.on_backend=on_backend or (lambda value:None)
 
     def request(self):
-        self.cancel_record.clear(); self.record.set()
+        # Keep an outstanding cancellation until the audio thread has cleared
+        # the previous capture, then begin the explicitly requested new turn.
+        self.record.set()
+
+    def cancel_turn(self):
+        self.record.clear(); self.cancel_record.set(); self.decode_cancel.set()
 
     def stop(self):
         self.quit.set(); self.decode_cancel.set()
@@ -78,11 +83,17 @@ class Microphone(threading.Thread):
                 result = self.recognizer.call({'audio': base64.b64encode(raw).decode()}, self.decode_cancel)
                 if result.get('backend'):self.on_backend(result['backend'])
                 text = result.get('text', '').strip()
-                text = re.sub(r'^(?:hey\s+)?(?:jarvis|javis|dschavis)[,.:!\s]*', '', text, flags=re.I).strip()
+                prefix = re.match(r'^(?:hey\s+)?(?:jarvis|javis|dschavis)\b[,.:!\s]*', text, flags=re.I)
+                if prefix:text=text[prefix.end():].strip()
                 if not self.quit.is_set() and not self.decode_cancel.is_set():
                     if require_wake and not result.get('wake_detected'):
                         self.on_state('idle','Aktivierung nicht bestätigt · sage „Jarvis“ oder drücke Sprechen')
-                    elif text: self.busy.set(); self.on_text(text)
+                    elif text:
+                        # Suite command routing distinguishes "Jarvis leiser"
+                        # (his voice) from "leiser" (Windows sound). Preserve
+                        # that address while leaving the legacy Desktop unchanged.
+                        addressed = self.settings.get('preserve_wake_word') and (result.get('wake_detected') or prefix)
+                        self.busy.set(); self.on_text(('Jarvis ' if addressed else '')+text)
                     elif require_wake and result.get('wake_detected'):
                         self.record.set();self.on_state('listening','Ich höre zu …')
                     else:

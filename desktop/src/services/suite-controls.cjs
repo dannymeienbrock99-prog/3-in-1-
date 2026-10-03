@@ -1,8 +1,18 @@
 'use strict';
 const SCENES=['Spiel','Pause','Start','Ende'];
 const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschliste',widgets:'Widgets',livecenter:'Live-Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Filter',hologram:'Hologramm',platforms:'Plattformen',commands:'Bot-Befehle',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys',events:'Ereignisse',media:'Medien',pools:'Medien-Pools',tts:'Chat-Stimme',discord:'Discord',streamerbot:'Streamer.bot',backups:'Sicherungen',settings:'Einstellungen',diagnostics:'Diagnose'};
+async function connectAdapter(adapter,name,op){
+ if(!adapter)throw Error('Chat-Verbindung fehlt.');
+ const on=op==='on'||op==='toggle'&&!adapter.getStatus().connected;
+ const result=await (on?adapter.connect():adapter.disconnect());
+ if(result?.ok===false)throw Error(result.error||result.message||'Verbindung fehlgeschlagen.');
+ const state=adapter.getStatus(),label={twitch:'Twitch',youtube:'YouTube',tikfinity:'TikFinity'}[name]||name;
+ if(on&&!state.connected){if(state.state==='error'||state.error)throw Error(state.error||'Verbindung fehlgeschlagen.');return {ok:true,text:`${label}: Verbindungsaufbau gestartet. Noch nicht verbunden.`};}
+ if(!on&&state.connected)throw Error('Die Verbindung wurde noch nicht getrennt.');
+ return {ok:true,text:`${label}: ${on?'verbunden':'getrennt'}.`};
+}
 class SuiteControls{
- constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;}
+ constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;this.jarvisDepth=0;}
  catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{};return {actions:[
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
@@ -23,22 +33,33 @@ class SuiteControls{
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
  ],scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
- async execute(value){
-  if(this.busy){if(['speech-stop','cancel','stop'].includes(value?.action)&&!value.steps)return this.run(value).then(()=>({ok:true}));throw Error('Eine Tastenaktion läuft bereits.');}
-  const steps=value?.steps||[value];if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');
+ validate(steps){
+  if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');
   // Validate the complete combination before any side effect.
   const catalog=this.catalog();for(const s of steps){const definition=catalog.actions.find(x=>x.id===s?.action);if(!definition)throw Error('Unbekannte Tastenaktion.');if(definition.choices&&!definition.choices.some(x=>x.id===s.target))throw Error('Bitte ein vorhandenes Ziel wählen.');if(definition.switch&&!['on','off','toggle'].includes(s.op||'toggle'))throw Error('Ungültiger Schalter.');if(s.action==='command'&&(typeof s.text!=='string'||!s.text.trim()||s.text.length>500))throw Error('Bitte einen kurzen Befehl eintragen.');if(s.action==='scene'&&(s.transition&&!['fade','cut'].includes(s.transition)||s.durationMs!==undefined&&(!Number.isInteger(s.durationMs)||s.durationMs<100||s.durationMs>2000)))throw Error('Ungültiger Übergang.');}
-  this.busy=true;let completed=0;try{for(const step of steps){const result=await this.run(step);if(result?.ok===false)throw Error(result.error||result.message||result.text||'Aktion wurde nicht ausgeführt.');completed++;}return {ok:true,completed};}catch(e){throw Error(`${completed?completed+' Aktionen ausgeführt; danach: ':''}${e.message}`);}finally{this.busy=false;}
+ }
+ async executeFromJarvis(value){
+  if(!value||value.steps||value.action==='command')throw Error('Dieser Sprachbefehl kann sich nicht selbst aufrufen.');
+  this.validate([value]);
+  // A saved deck command already owns the control queue. Its validated inner
+  // action belongs to that same turn; unrelated actions still respect the lock.
+  if(this.busy&&this.jarvisDepth>0)return this.run(value);
+  return this.execute(value);
+ }
+ async execute(value){
+  const steps=value?.steps||[value];this.validate(steps);
+  if(this.busy){if(['speech-stop','cancel','stop'].includes(value?.action)&&!value.steps){const result=await this.run(value);if(result?.ok===false)throw Error(result.text||result.error||'Aktion fehlgeschlagen.');return result||{ok:true};}throw Error('Eine Tastenaktion läuft bereits.');}
+  this.busy=true;let completed=0,last;try{for(const step of steps){const result=await this.run(step);if(result?.ok===false)throw Error(result.error||result.message||result.text||'Aktion wurde nicht ausgeführt.');last=result;completed++;}return {ok:true,completed,...(steps.length===1&&last?.text?{text:last.text}:{})};}catch(e){throw Error(`${completed?completed+' Aktionen ausgeführt; danach: ':''}${e.message}`);}finally{this.busy=false;}
  }
  async run(s){const r=this.runtime,d=this.getDual(),host=this.getHost();const enabled=current=>s.op==='on'?true:s.op==='off'?false:!current;
   switch(s.action){
    case 'listen':return r.listen();
    case 'speech-stop':return r.stopSpeech();
-   case 'command':return r.jarvis.execute(s.text,{source:'streamdeck'});
+   case 'command':this.jarvisDepth++;try{return await r.jarvis.execute(s.text,{source:'streamdeck'});}finally{this.jarvisDepth--;}
    case 'jarvis':{const [key,sub]=s.target.split('.');const change=sub?{[key]:{...r.jarvis.settings[key],[sub]:enabled(r.jarvis.settings[key][sub])}}:{[key]:enabled(r.jarvis.settings[key])};r.jarvis.update(change);return;}
    case 'companion':d.companionLive=enabled(d.companionLive);d.emitState();return;
    case 'likes-reset':r.jarvis.events.resetLikes();return;
-   case 'scene':return d.serial(()=>d.scene(s.target,s.transition,s.durationMs));
+   case 'scene':return d?d.serial(()=>d.scene(s.target,s.transition,s.durationMs)):r.jarvis.obs.setScene(s.target);
    case 'start':return d.serial(()=>d.start(s.target));
    case 'stop':return d.serial(()=>d.stop(s.target));
    case 'mute':return d.serial(()=>d.mute(s.target,enabled(d.config.destinations[s.target].muted)));
@@ -58,4 +79,4 @@ class SuiteControls{
   }
  }
 }
-module.exports={SuiteControls,SCENES,VIEWS};
+module.exports={SuiteControls,SCENES,VIEWS,connectAdapter};

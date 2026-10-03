@@ -22,8 +22,7 @@ function getDeck(){
  if(deck)return deck;
  const runtime=require('./suite-bootstrap.cjs').getRuntime();if(!runtime)throw Error('Batto startet noch. Bitte kurz warten.');
  const {TouchDeck}=require('./services/touch-deck.cjs');
- const {TouchAudio}=require('./services/touch-audio.cjs');
- const audio=new TouchAudio({helperPath:path.join(app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..'),'FanAtlas/BattoAudioControl.exe'),getJarvis:()=>({volume:runtime.jarvis.settings.speechVolume,muted:runtime.jarvis.settings.speechMuted}),setJarvis:patch=>{runtime.jarvis.update({...runtime.jarvis.settings,...(patch.volume===undefined?{}:{speechVolume:patch.volume}),...(patch.muted===undefined?{}:{speechMuted:patch.muted})});return {volume:runtime.jarvis.settings.speechVolume,muted:runtime.jarvis.settings.speechMuted};}});
+ const audio=runtime.getAudio();
  windows.initialize({directory:runtime.directory,changed});
  deck=new TouchDeck({directory:runtime.directory,controls:runtime.controls,audio,webRoot:path.join(__dirname,'touch-mobile'),getWindowStatus:windows.status,getPresentation:()=>presentation,getVisualRevision:()=>visualRevision,
   pressPlugin:async button=>(await activateButton(button)).press(button.id),

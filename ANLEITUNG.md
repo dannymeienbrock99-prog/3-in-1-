@@ -1,6 +1,33 @@
-# Batto 3-in-1 · Schnellstart 1.8.0
+# Batto 3-in-1 · Schnellstart 1.8.1
 
 Den Windows-Installer öffnen und den separat erhaltenen Installationsschlüssel eingeben. Der private Schlüssel wird nicht im Repository veröffentlicht. Die bisherigen Suite-Einstellungen bleiben bei einem Update erhalten.
+
+## Jarvis steuert das Programm
+
+Unter **Jarvis** auf **Jetzt zuhören** drücken oder die Jarvis-Taste im Stream Deck verwenden. Auf die Anzeige zum Sprechen warten und einen Befehl sagen. Für den sparsamen Betrieb ist das Mikrofon zwischen Tastendrücken aus. Wer jederzeit mit „Jarvis“ starten möchte, aktiviert unter **Jarvis-Einstellungen → Stimme & Mikrofon** das dauerhafte Mikrofon und **Auf „Jarvis“ warten**.
+
+Alternativ den Befehl eintippen und **Ausführen** drücken. **Das kannst du sagen** zeigt Beispiele aus den verfügbaren Funktionen. Ein Klick übernimmt nur den Text in die Eingabe; **Ausführen** löst die Aktion aus. Bei Sprache steht der erkannte Wortlaut als **ERKANNT** im Verlauf, danach erscheint die Antwort oder ein konkreter Fehler.
+
+| Beispiel | Wirkung |
+| --- | --- |
+| „Mach bitte Pause.“ | Batto-Pause-Szene mit gespeichertem Übergang |
+| „Öffne das Touch Deck.“ | Touch Deck anzeigen |
+| „Kamera aus.“ | Kamerabild im eigenen Sender ausblenden |
+| „Auto-Broadcast an.“ | Automatische Bot-Nachrichten einschalten |
+| „Chat vorlesen aus.“ | Jarvis-Chatansagen ausschalten |
+| „Mach Jarvis leiser.“ | Jarvis-Lautstärke verringern |
+| „Windows Lautstärke auf 35 Prozent.“ | Gesamtlautstärke ändern |
+| „GPU Temperatur.“ | Nur den angefragten Messwert nennen |
+
+Auch gespeicherte Medien, Hotkeys, Broadcasts und Aktionsketten lassen sich mit ihrem eindeutigen Namen aufrufen, etwa „Starte Aktionskette Pause“. Die Befehlsübersicht enthält passende Beispiele aus der aktuellen Einrichtung. Kamera- und Live-Studio-Befehle steuern die Batto-Ausgaben; sie starten keinen öffentlichen Stream. Die Befehle benötigen kein KI-Modell. Unbekannte oder mehrdeutige Anweisungen führen keine erratene Aktion aus. Vorgelesener Chat löst keine Befehle aus.
+
+**Moderation per Sprache:** „Blockiere NAME auf Twitch“, „Entblocke NAME auf Twitch“ oder „Sperre NAME auf Twitch für 10 Minuten“. Dafür müssen der genaue Benutzer aus dem verbundenen Chat und eine passende Moderationsanmeldung verfügbar sein. Jarvis nennt die geplante Aktion und führt sie erst nach **„Bestätigen“ innerhalb von 45 Sekunden** aus. **„Abbrechen“** oder ein anderer Befehl verwirft die Rückfrage. Ein neuer Versuch braucht wieder eine Bestätigung. TikTok-Sperren werden über die aktuelle TikFinity-Verbindung nicht unterstützt; Jarvis meldet das ausdrücklich.
+
+**Lokaler Chat-Filter:** „Filterwort BEGRIFF hinzufügen“, „Filterwort BEGRIFF entfernen“ und „Chat Filter an / aus“ ändern die lokale Filterliste bzw. deren Aktivierung. Das blendet passende Nachrichten in Batto aus und sperrt keinen Nutzer auf der Plattform.
+
+## Programmhintergrund wählen
+
+Unter **Einstellungen → Allgemein → Programmhintergrund** stehen **Gaming-Zimmer**, **TikTok-Banner**, **Studio ohne Schrift** und **Original – Marmor** zur Wahl. Gaming-Zimmer ist voreingestellt. Die Auswahl wirkt sofort als Vorschau; **Alles speichern & synchronisieren** oder **Anwenden** speichert sie für den nächsten Start. Die Abdunklung lässt sich daneben einstellen. Die Startseite behält ihr bisheriges Bild. Es sind ruhige Standbilder ohne zusätzliche Animation oder laufenden Bildprozess.
 
 ## Handy oder Tablet verbinden
 

@@ -7,8 +7,7 @@
     const cfg = safe(() => S.config) || {};
     const appearance = cfg.appearance || {};
     const root = document.documentElement;
-    if (appearance.programBackground !== false) root.style.setProperty('--program-background', "url('../assets/marble.jpg')");
-    else root.style.setProperty('--program-background', "url('../assets/marble.jpg')");
+    window.BattoProgramBackground?.apply(appearance,safe(()=>S.view)||'');
     root.style.setProperty('--background-darkness', String(Math.max(0, Math.min(.9, Number(appearance.backgroundDarkness ?? .28)))));
     document.querySelectorAll('.card,.module-card,.panel-section').forEach((el) => {
       el.style.setProperty('opacity', '1');
@@ -104,7 +103,7 @@
     const wrap = document.createElement('div');
     wrap.id = 'settings21';
     wrap.innerHTML =
-      section('Settings Service 2.1', `<div class="form-grid"><div><label>Suche in Einstellungen</label><input id="stSearch21" placeholder="z. B. OBS, TTS, Port, CNG, FFmpeg"></div><div><label>Programmhintergrund Abdunklung</label><input id="stBgDark21" type="range" min="0" max="0.8" step="0.02" value="${cfg.appearance?.backgroundDarkness ?? .28}"></div></div><label class="check"><input id="stBg21" type="checkbox" ${cfg.appearance?.programBackground !== false ? 'checked' : ''}> Hochgeladenes CRAZY_BATTO-Programmhintergrundbild verwenden</label><div class="toolbar"><button id="stTest21">Testen</button><button class="primary" id="stApply21">Anwenden</button><button id="stDiscard21">Verwerfen</button><button id="stResetGeneral21">Allgemein auf Standard</button><button id="stResetNetwork21">Netzwerk auf Standard</button></div><div id="stResult21" class="composer-hint">Änderungen werden erst durch Anwenden persistent.</div>`)
+      section('Settings Service 2.1', `<div class="form-grid"><div><label>Suche in Einstellungen</label><input id="stSearch21" placeholder="z. B. OBS, TTS, Port, CNG, FFmpeg"></div><div><label>Programmhintergrund Abdunklung</label><input id="stBgDark21" type="range" min="0" max="0.8" step="0.02" value="${cfg.appearance?.backgroundDarkness ?? .28}"></div></div><label class="check"><input id="stBg21" type="checkbox" ${cfg.appearance?.programBackground !== false ? 'checked' : ''}> Gewählten Programmhintergrund anzeigen</label><div class="toolbar"><button id="stTest21">Testen</button><button class="primary" id="stApply21">Anwenden</button><button id="stDiscard21">Verwerfen</button><button id="stResetGeneral21">Allgemein auf Standard</button><button id="stResetNetwork21">Netzwerk auf Standard</button></div><div id="stResult21" class="composer-hint">Änderungen werden erst durch Anwenden persistent.</div>`)
       + section('Automatische Synchronisierung', `<label class="check"><input id="syncEnabled21" type="checkbox" ${sync.enabled !== false ? 'checked' : ''}> Modul-Synchronisierung aktiviert</label><div class="form-grid four">${Object.keys(modules).map((name) => `<label class="check"><input data-sync21="${esc(name)}" type="checkbox" ${modules[name] !== false ? 'checked' : ''}> ${esc(name)}</label>`).join('')}</div><p>Eine angewendete Einstellung wird als gemeinsame Source of Truth an die laufenden Module verteilt.</p>`);
     el.prepend(wrap);
 
@@ -113,15 +112,15 @@
       const q = search.value.trim().toLowerCase();
       el.querySelectorAll('.panel-section').forEach((s) => { s.style.display = !q || s.textContent.toLowerCase().includes(q) ? '' : 'none'; });
     };
-    document.querySelector('#stBgDark21').oninput = (e) => document.documentElement.style.setProperty('--background-darkness', e.target.value);
-    document.querySelector('#stBg21').onchange = apply21Appearance;
+    document.querySelector('#stBgDark21').oninput = (e) => {const input=document.querySelector('#stDarkness');if(input){input.value=Math.round(Number(e.target.value)*100);input.dispatchEvent(new Event('input'));}else document.documentElement.style.setProperty('--background-darkness',e.target.value);};
+    document.querySelector('#stBg21').onchange = (e) => {const input=document.querySelector('#stBackground');if(input){input.checked=e.target.checked;input.dispatchEvent(new Event('change'));}};
     document.querySelector('#stTest21').onclick = async () => {
       const http = await api21.settingsTest('http'); const general = await api21.settingsTest('general'); const health = await api21.healthGet();
       document.querySelector('#stResult21').textContent = http.ok && general.ok ? `Settings gültig · Health ${health.overall}` : `Fehler: ${[...(http.errors || []), ...(general.errors || [])].map((x) => x.message).join(' | ')}`;
     };
     document.querySelector('#stApply21').onclick = async () => {
       const nextModules = { ...modules }; document.querySelectorAll('[data-sync21]').forEach((x) => { nextModules[x.dataset.sync21] = x.checked; });
-      const patch = { appearance: { ...S.config.appearance, programBackground: document.querySelector('#stBg21').checked, backgroundDarkness: Number(document.querySelector('#stBgDark21').value) }, sync: { ...sync, enabled: document.querySelector('#syncEnabled21').checked, modules: nextModules } };
+      const patch = { appearance: { ...S.config.appearance, programBackground: document.querySelector('#stBg21').checked, programBackgroundId:document.querySelector('#stProgramArtwork')?.value||S.config.appearance?.programBackgroundId||'gaming-room', backgroundDarkness: Number(document.querySelector('#stBgDark21').value) }, sync: { ...sync, enabled: document.querySelector('#syncEnabled21').checked, modules: nextModules } };
       const r = await api21.settingsDraft(patch); if (!r.validation.ok) return toast(r.validation.errors.map((x) => x.message).join(' | '), true);
       const applied = await api21.settingsApply(); if (!applied.ok) return toast('Einstellungen konnten nicht angewendet werden.', true);
       S.config = applied.config; apply21Appearance(); await refresh(); renderSettingsModule(); toast('2.1 Einstellungen angewendet.');

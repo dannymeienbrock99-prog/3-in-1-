@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
 const {JarvisEvents,eventSettings,DEFAULT_EVENTS}=require('./jarvis-events.cjs');
+const {resolveCommand,commandExamples,normalizeCommand}=require('./jarvis-commands.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
 const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,speechVolume:100,speechMuted:false,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
  chatEnabled:true,chatMode:'moderators',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
@@ -55,15 +56,18 @@ class AlertEngine{
  }
 }
 class JarvisCore extends EventEmitter{
- constructor({directory,getSensors=()=>[],getFans=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi}){
-  super();this.directory=directory;this.getSensors=getSensors;this.getFans=getFans;this.obs=obs;this.speak=speak;this.stopSpeech=stopSpeech;this.clock=clock;this.askAi=askAi;
+ constructor({directory,getSensors=()=>[],getFans=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi,control,getCommandCatalog,controlAudio,moderation}){
+  super();Object.assign(this,{directory,getSensors,getFans,obs,speak,stopSpeech,clock,askAi,control,getCommandCatalog,controlAudio,moderation});
   this.settings=cleanSettings(this.read('jarvis-settings.json',{}));this.memory=this.read('jarvis-memory.json',[]);if(!Array.isArray(this.memory))this.memory=[];
-  this.history=[];this.events=new JarvisEvents();this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;
+  this.history=[];this.events=new JarvisEvents();this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;this.pendingRevision=0;
  }
  read(name,fallback){try{return JSON.parse(fs.readFileSync(path.join(this.directory,name),'utf8'));}catch{return fallback;}}
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
  update(settings){const previous=this.settings;this.settings=cleanSettings({...this.settings,...settings});if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.save('jarvis-settings.json',this.settings);this.emit('settings',this.settings);return this.settings;}
  say(text,kind='answer',speech=true){const entry={id:crypto.randomUUID(),time:this.clock(),kind,text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);if(speech&&this.settings.voiceEnabled)this.speak(text,{priority:kind==='alert'?2:kind==='chat'?0:1});return {ok:true,text,kind};}
+ input(text,source){const entry={id:crypto.randomUUID(),time:this.clock(),kind:'user',source:['voice','typed','streamdeck'].includes(source)?source:'typed',text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);}
+ unavailable(text,kind='unrecognized'){return {...this.say(text,kind),ok:false};}
+ cancelPendingModeration(){this.pendingRevision++;this.pendingModeration=null;}
  remember(command,intent){if(!this.settings.learn)return;const key=normalize(command).slice(0,200);const old=this.memory.find(m=>m.command===key);if(old){old.count++;old.last=this.clock();}else this.memory.push({command:key,intent,count:1,last:this.clock()});this.memory=this.memory.sort((a,b)=>b.last-a.last).slice(0,200);this.save('jarvis-memory.json',this.memory);}
  onChat(batch){for(const m of batch){if(!allowedChat(m,this.settings))continue;const key=m.platform+':'+(m.id||crypto.createHash('sha256').update(m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));if(this.chatSeen.has(key))continue;this.chatSeen.set(key,this.clock());
   if(this.clock()-this.lastChat<this.settings.chatCooldown*1000)continue;this.lastChat=this.clock();
@@ -113,27 +117,64 @@ class JarvisCore extends EventEmitter{
  }
  async execute(input,{source='typed'}={}){
   if(typeof input!=='string'||input.length>1500)throw Error('Befehl zu lang.');
-  const text=input.trim().replace(/^(?:hey\s+)?jarvis[,!:.\s]*/i,'');const q=normalize(text);const prefix=this.settings.address?this.settings.address+', ':'';
+  const original=input.trim();const text=original.replace(/^(?:hey\s+)?(?:jarvis|javis|dschavis)[,!:.\s]*/i,'');const q=normalizeCommand(text);const prefix=this.settings.address?this.settings.address+', ':'';
+  if(original)this.input(original,source);
   if(!q)return this.say(prefix+'ich höre. Frage zum Beispiel nach der GPU-Temperatur.');
-  if(/^(stopp|stop|ruhe|sei still|schweigen)$/.test(q)){this.stopSpeech();return this.say('Sprachausgabe gestoppt.','status',false);}
-  if(this.commandBusy)return {ok:false,text:'Ein Befehl wird gerade verarbeitet.'};this.commandBusy=true;
+  if(/^(stopp|stop|ruhe|sei still|schweigen|sei ruhig|hor auf zu sprechen|sprich nicht weiter)$/.test(q)){this.cancelPendingModeration();this.stopSpeech();return this.say('Sprachausgabe gestoppt.','status',false);}
+  if(/^(abbrechen|nicht bestatigen|nein abbrechen)$/.test(q)){this.cancelPendingModeration();return this.say('Abgebrochen. Es wird keine vorgemerkte Moderation ausgeführt.','status');}
+  if(this.commandBusy)return this.unavailable('Ein Befehl wird gerade verarbeitet.','status');this.commandBusy=true;
   try{
-   const alias=/^(pause|spiel|weiter|start|ende)(?: szene)?$/.exec(q)?.[1];
-   const explicit=/^(?:szene|wechsle (?:zu|zur szene)|schalte auf)\s+(.+)$/.exec(q)?.[1];
-   if(alias||explicit){const key=alias==='weiter'?'spiel':alias;const list=await this.obs.scenes();let name=key?this.settings.sceneAliases[key]:'';
-    if(!name){const wanted=explicit||key;name=list.find(s=>normalize(s)===wanted)|| (key==='pause'?list.find(s=>/pause|bin gleich|zuruck/.test(normalize(s))):'');}
-    if(!name||!list.includes(name))return this.say(prefix+'für diesen Befehl ist noch keine vorhandene Szene zugeordnet. Wähle sie in den Jarvis-Einstellungen.');
-    await this.obs.setScene(name);this.remember(text,'scene:'+name);return this.say(prefix+`Die Szene ${name} ist ausgewählt.`);
+   const revision=this.pendingRevision;
+   let catalog=this.getCommandCatalog?.(),aliases={...this.settings.sceneAliases};
+   if(!catalog){let scenes=[];try{scenes=await this.obs?.scenes()||[];}catch{}catalog={actions:[{id:'scene',choices:scenes.map(id=>({id,name:id}))}]};if(!aliases.pause)aliases.pause=scenes.find(s=>/pause|bin gleich|zuruck/.test(normalize(s)))||'';}
+   const intent=resolveCommand(original,{catalog,sceneAliases:aliases});
+   const pending=this.pendingModeration;this.pendingModeration=null;
+   if(intent?.kind==='cancel-confirmation')return this.say('Abgebrochen. Es wird keine vorgemerkte Moderation ausgeführt.','status');
+   if(intent?.kind==='confirmation'){
+    if(!pending||pending.expiresAt<this.clock())return this.unavailable('Es gibt keine aktuelle Moderation zum Bestätigen. Nenne den Auftrag erneut.','clarification');
+    const result=await this.moderation.executePrepared(pending);
+    if(!result.ok)return this.unavailable(result.text,result.kind||'error');
+    return this.say(result.text,'status');
    }
-   if(/^(befehle|hilfe|was kannst du)$/.test(q))return this.say(prefix+'ich kann gewünschte Messwerte nennen, Grenzwerte und Stream-Ereignisse melden und Szenen wechseln. Zum Beispiel: GPU-Temperatur, CPU-Auslastung oder Pause.');
-   if(this.control){let action;const sw=/^(mikrofon|kamera|pc ton|chat einblendung) (an|ein|aus|stumm|einblenden|ausblenden)$/.exec(q);if(sw)action={action:sw[1]==='chat einblendung'?'overlay':'source',target:{mikrofon:'microphone',kamera:'camera','pc ton':'desktop','chat einblendung':'chat'}[sw[1]],op:['an','ein','einblenden'].includes(sw[2])?'on':'off'};if(/^(beide streams|streams) stoppen$/.test(q))action={action:'stop',target:'both'};if(/^(beide streams|streams) starten$/.test(q))action={action:'start',target:'both'};if(action){await this.control(action);return this.say(prefix+'ausgeführt.');}}
+   if(intent?.kind==='moderation'){
+    if(!this.moderation)throw Error('Moderation ist gerade nicht verbunden.');
+    const result=await this.moderation.prepareModeration(intent);
+    if(revision!==this.pendingRevision)return {ok:false,text:'Der Moderationsauftrag wurde abgebrochen.'};
+    if(!result.ok)return this.unavailable(result.text,result.kind||'clarification');
+    this.pendingModeration=result.prepared;
+    return this.say(`${result.description} Sage „Bestätigen“, um das auszuführen, oder „Abbrechen“. Die Bestätigung gilt 45 Sekunden.`,'clarification');
+   }
+   if(intent?.kind==='filter'){
+    if(!this.moderation)throw Error('Die Chat-Filter sind gerade nicht verfügbar.');
+    const result=await this.moderation.filter(intent);
+    if(!result.ok)return this.unavailable(result.text,result.kind||'error');
+    return this.say(result.text,'status');
+   }
+   if(intent?.kind==='help')return this.say(prefix+intent.text);
+   if(intent?.kind==='ambiguous')return this.unavailable(prefix+intent.text,'clarification');
+   if(intent?.kind==='action'){
+    const action=intent.action;let result;
+    if(this.control)result=await this.control(action);
+    else if(action.action==='scene'&&this.obs)result=await this.obs.setScene(action.target);
+    else throw Error('Diese Steuerfunktion ist gerade nicht verfügbar. Öffne Batto erneut.');
+    if(result?.ok===false)throw Error(result.message||result.error||result.text||'Der Befehl konnte nicht ausgeführt werden.');
+    this.remember(text,action.action==='scene'?'scene:'+action.target:'control:'+action.action+(action.target?':'+action.target:''));
+    return this.say(prefix+(result?.text||intent.reply),'answer',!['speech-stop','listen'].includes(action.action));
+   }
+   if(intent?.kind==='audio'){
+    if(!this.controlAudio)throw Error('Die Lautstärkesteuerung ist gerade nicht verfügbar.');const result=await this.controlAudio(intent);
+    if(result?.ok===false)return this.unavailable(prefix+result.text,'clarification');
+    this.remember(text,'audio:'+intent.targetQuery);return this.say(prefix+result.text);
+   }
    const selected=this.resolveSensors(text);
    if(selected.length){const available=selected.filter(s=>fresh(s,this.clock()));this.remember(text,'sensors:'+selected.map(s=>s.id).join(','));return this.say(prefix+(available.length?available.map(s=>spoken(s,this.settings.sensorRules[s.id])).join('. ')+'.'+(available.length<selected.length?' Weitere passende Sensoren liefern gerade keine aktuellen Werte.':''):'dafür liegen gerade keine aktuellen Messwerte vor.'));}
    if(/temperatur|spannung|strom|volt|ampere|watt|\bpin|gpu|cpu|arbeitsspeicher|\bram\b|lufter|messwert|pc werte/.test(q))return this.say(prefix+'dafür finde ich keinen passenden verfügbaren Sensor. Wähle die Messquelle oder gib dem Sensor einen Sprachnamen.');
-   if(this.settings.localAi&&this.askAi){const answer=await this.askAi(text,this.settings,this.memory.slice(0,20));this.remember(text,'conversation');return this.say(prefix+answer);}
-   return this.say(prefix+'diesen Befehl kenne ich noch nicht. Allgemeine Fragen kannst du mit dem optionalen lokalen KI-Modell beantworten lassen.');
+   // Unknown control requests must not be answered by a model as if an action happened.
+   const actionRequest=/\b(offne|offnen|schliesse|schliessen|schalte|schalten|einschalten|ausschalten|starte|starten|stoppe|stoppen|beende|beenden|mach|mache|wechsle|wechsel|wechseln|aktiviere|deaktiviere|aktivieren|deaktivieren|setze|stelle|sende|senden|spiele|spielen|losche|loschen|kopiere|kopieren|blockiere|blockieren|blocke|banne|bannen|entblocke|entblocken|entblockiere|sperre|sperren|entsperre|entsperren|timeout|mute|unmute|filterwort|filter|hinzufugen|entfernen|verbinde|verbinden|trenne|trennen|fuhre|drucke|druck|spiel|send|schick|schicke|offnen|zeige|zeig|gehe|geh|schalt|starte|setz|stell|regle|hebe|heb|lose|liest|lese|lies|hor|hore|brich)\b/.test(q);
+   if(!actionRequest&&this.settings.localAi&&this.askAi){const answer=await this.askAi(text,this.settings,this.memory.slice(0,20));this.remember(text,'conversation');return this.say(prefix+answer);}
+   return this.unavailable(prefix+'Ich konnte diesen Auftrag keiner Funktion zuordnen. Es wurde nichts ausgeführt. Sage zum Beispiel: Öffne das Touch Deck, wechsle zur Pause oder schalte Auto-Broadcast ein. Mit „Welche Befehle kannst du?“ erhältst du Hilfe.');
   }catch(e){this.say(prefix+String(e.message||'Die Aktion ist fehlgeschlagen.'),'error');return {ok:false,text:String(e.message)};}finally{this.commandBusy=false;}
  }
- snapshot(){return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length};}
+ snapshot(){let examples=[];try{examples=commandExamples(this.getCommandCatalog?.()||{});}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples};}
 }
 module.exports={JarvisCore,AlertEngine,allowedChat,isModerator,cleanSettings,DEFAULTS,normalize,fresh,spoken};

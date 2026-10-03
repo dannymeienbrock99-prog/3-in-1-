@@ -1066,12 +1066,19 @@ module.exports.getMainWindow=()=>mainWindow;
 module.exports.getGamingMode=()=>gamingMode;
 
 module.exports.getSuiteHost=()=>({
+ chatMessages:()=>chatCore.getMessages(),
+ moderationState:()=>community.moderation.snapshot(),
+ moderationResolve:payload=>community.resolveIdentity(payload),
+ moderationPerform:payload=>community.perform(payload),
+ filters:()=>structuredClone(chatCore.config.filters),
+ filterAdd:payload=>{const result=chatCore.addFilter(payload);if(result.ok)configStore.merge({filters:chatCore.config.filters});return result;},
+ filterRemove:id=>{const result=chatCore.removeFilter(id);if(result.ok)configStore.merge({filters:chatCore.config.filters});return result;},
  overlayStatus:()=>overlayServer?.getStatus(),
  catalog:()=>({...navigation?.controls?.snapshot(),items:[...(navigation?.catalog?.()||[]),...(currentConfig().media||[]).map(x=>({id:x.id,name:x.name||x.id,kind:'media'}))]}),
  control:value=>navigation.controls.control(value),
  run:(kind,id)=>kind==='media'?actionEngine.executeRule({id:'deck-media:'+id,cooldownSeconds:0,onlyWhenLive:false,actions:[{type:'media',mediaId:id}]},{platform:'internal',source:'stream-deck'},'deck-media'):navigation.test(kind,id),
  cancel:()=>{actionEngine.cancelAll();return {ok:true};},
- connect:async(name,op)=>{const a=adapters[name];if(!a)throw Error('Chat-Verbindung fehlt.');const on=op==='on'||op==='toggle'&&!a.getStatus().connected;await (on?a.connect():a.disconnect());return {ok:true};},
+ connect:(name,op)=>require('../src/services/suite-controls.cjs').connectAdapter(adapters[name],name,op),
  navigate:view=>{if(!require('../src/services/suite-controls.cjs').VIEWS[view])throw Error('Unbekannter Bereich.');return navigation.navigate(view,true);},
  show:async()=>{await showMainWindow();return {ok:true};},
  gaming:enterGaming,

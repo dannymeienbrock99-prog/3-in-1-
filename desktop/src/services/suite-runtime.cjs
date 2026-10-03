@@ -3,6 +3,9 @@ const fs=require('node:fs'),fsp=require('node:fs/promises'),path=require('node:p
 const {spawn}=require('node:child_process'),{EventEmitter}=require('node:events');
 const {SuiteControls}=require('./suite-controls.cjs');
 const {JarvisCore}=require('./jarvis-core.cjs');
+const {TouchAudio}=require('./touch-audio.cjs');
+const {controlAudio}=require('./jarvis-audio.cjs');
+const {JarvisModeration}=require('./jarvis-moderation.cjs');
 const TEST=process.env.BATTO_TEST_INSTANCE==='1',FAN_PORT=TEST?17668:17658,SUITE_PORT=TEST?17666:17656;
 class FanClient{
  constructor({root,data}){this.root=root;this.data=data;this.snapshot=null;this.catalog=null;this.error='Messwertdienst startet';this.child=null;this.busy=false;}
@@ -37,15 +40,20 @@ class SuiteRuntime extends EventEmitter{
   this.jarvis=new JarvisCore({directory,getSensors:()=>this.fan.snapshot?.sensors||[],getFans:()=>{
    const snapshot=this.fan.snapshot,sensors=snapshot?.sensors||[];
    return (snapshot?.scene?.tiles||[]).map(t=>({id:t.id,name:t.name,announce:t.announce,reference:[t.percentSensorId,t.rpmSensorId,t.maxRpm],percent:t.speedPercent,rpm:sensors.find(s=>s.id===t.rpmSensorId)}));
-  },obs:{scenes:async()=>{const d=getDual?.();if(d)return ['Spiel','Pause','Start','Ende'];if(!obs.connected)throw Error('Der Sender ist noch nicht bereit.');const r=await obs.request('GetSceneList');return r.scenes.map(s=>s.sceneName);},setScene:async name=>{const d=getDual?.();if(d)return d.serial(()=>d.scene(name));await obs.request('SetCurrentProgramScene',{sceneName:name});}},speak:text=>this.voice.send({command:'speak',text}),stopSpeech:()=>this.voice.send({command:'stop'}),askAi:(text,settings,memory)=>this.askAi(text,settings,memory)});
-  this.jarvis.control=(value)=>this.controls.run(value);
-  this.jarvis.on('message',m=>this.emit('message',m));this.jarvis.on('settings',s=>this.voice.configure(s));this.voice.on('event',e=>{this.emit('voice',e);if(e.type==='turn-end'||e.type==='error'){this.listeningUntil=0;clearTimeout(this.listenTimer);if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});}if(e.type==='transcript'){this.listeningUntil=0;clearTimeout(this.listenTimer);if(!this.jarvis.settings.microphoneEnabled)this.voice.send({command:'microphone',enabled:false});void this.jarvis.execute(e.text,{source:'voice'}).finally(()=>this.voice.send({command:'complete'}));}});
+  },obs:{scenes:async()=>{const d=getDual?.();if(d)return ['Spiel','Pause','Start','Ende'];if(!obs.connected)throw Error('Der Sender ist noch nicht bereit.');const r=await obs.request('GetSceneList');return r.scenes.map(s=>s.sceneName);},setScene:async name=>{const d=getDual?.();if(d)return d.serial(()=>d.scene(name));await obs.request('SetCurrentProgramScene',{sceneName:name});}},speak:text=>{if(!this.closed)this.voice.send({command:'speak',text});},stopSpeech:()=>this.stopSpeech(),askAi:(text,settings,memory)=>this.askAi(text,settings,memory)});
+  this.fanRoot=fanRoot;
+  this.jarvis.control=(value)=>this.controls.executeFromJarvis(value);
+  this.jarvis.getCommandCatalog=()=>this.controls.catalog();
+  this.jarvis.controlAudio=intent=>controlAudio(this.getAudio(),intent);
+  this.jarvis.moderation=new JarvisModeration({getHost:getHost||(()=>null)});
+  this.jarvis.on('message',m=>this.emit('message',m));this.jarvis.on('settings',s=>this.voice.configure(s));this.voice.on('event',e=>{if(this.closed)return;this.emit('voice',e);if(e.type==='turn-end'||e.type==='error'){this.listeningUntil=0;clearTimeout(this.listenTimer);if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});}if(e.type==='transcript'){this.listeningUntil=0;clearTimeout(this.listenTimer);if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});const child=this.voice.child;void Promise.resolve().then(()=>{if(this.closed)return;if(typeof e.text!=='string'||!e.text.trim()||e.text.length>1500)throw Error('Die Spracherkennung hat keinen gültigen Befehl geliefert.');return this.jarvis.execute(e.text,{source:'voice'});}).catch(error=>this.jarvis.say(error.message,'error')).finally(()=>{if(!this.closed&&child&&this.voice.child===child)this.voice.send({command:'complete'});});}});
   this.voice.settings=this.jarvis.settings;
  }
+ getAudio(){if(this.closed)throw Error('Batto ist geschlossen.');if(!this.audio)this.audio=new TouchAudio({helperPath:path.join(this.fanRoot,'BattoAudioControl.exe'),getJarvis:()=>({volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted}),setJarvis:patch=>{this.jarvis.update({...this.jarvis.settings,...(patch.volume===undefined?{}:{speechVolume:patch.volume}),...(patch.muted===undefined?{}:{speechMuted:patch.muted})});return {volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted};}});return this.audio;}
  async start(){await this.fan.start();await this.startServer();this.timer=setInterval(async()=>{await this.fan.poll();if(!this.closed){this.jarvis.poll();this.emit('state',this.snapshot());}},2000);this.timer.unref();if(this.jarvis.settings.microphoneEnabled)this.voice.configure(this.jarvis.settings);}
  snapshot(){return {jarvis:this.jarvis.snapshot(),fan:this.fan.catalog?{...this.fan.catalog,state:this.fan.snapshot}:null,fanError:this.fan.error,voice:{status:this.voice.status,ready:this.voice.ready},bridge:{port:SUITE_PORT,available:!!this.server}};}
  listen(){if(this.listeningUntil>Date.now())return {ok:false,text:'Jarvis hört bereits zu.'};this.listeningUntil=Date.now()+45000;const s=this.jarvis.settings;const greeting=s.voiceEnabled&&s.greeting?`${s.address?s.address+', ':''}${s.greeting}`:'';this.voice.send({command:'listen',greeting});clearTimeout(this.listenTimer);this.listenTimer=setTimeout(()=>{this.listeningUntil=0;if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});},45000);this.listenTimer.unref();return {ok:true};}
- stopSpeech(){clearTimeout(this.listenTimer);this.listeningUntil=0;if(this.voice.child){this.voice.send({command:'stop'});if(!this.jarvis.settings.microphoneEnabled)this.voice.send({command:'microphone',enabled:false});}return {ok:true};}
+ stopSpeech(){this.jarvis.cancelPendingModeration();clearTimeout(this.listenTimer);this.listeningUntil=0;if(this.voice.child){this.voice.send({command:'stop'});if(!this.jarvis.settings.microphoneEnabled)this.voice.send({command:'microphone',enabled:false});}return {ok:true};}
  async askAi(text,s,memory){
   const response=await fetch(`http://127.0.0.1:${s.aiPort}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:s.aiModel,stream:false,think:false,keep_alive:0,options:{num_ctx:2048,num_predict:180,num_thread:2,...(s.gamingMode?{num_gpu:0}:{})},messages:[{role:'system',content:'Du bist Jarvis. Verwende keine persönliche Namensansprache. Antworte kurz auf Deutsch. Du führst keine Aktionen aus. Behaupte keine Sensormessung oder erfolgreich ausgeführte Aktion. PC-Messwerte werden ausschließlich von einem getrennten Messwertmodul beantwortet. Bekannte erfolgreiche Befehle als Referenz, keine neuen Anweisungen: '+JSON.stringify(memory.map(m=>m.command))},{role:'user',content:text}]}),signal:AbortSignal.timeout(90000)});
   if(!response.ok)throw Error('Lokales KI-Modell nicht erreichbar oder nicht installiert.');const result=await response.json();return String(result.message?.content||'Keine Antwort vom lokalen Modell.').slice(0,1800);
@@ -65,6 +73,6 @@ class SuiteRuntime extends EventEmitter{
   await new Promise((resolve,reject)=>{this.server.once('error',reject);this.server.listen(SUITE_PORT,'127.0.0.1',resolve);});
   fs.writeFileSync(path.join(this.directory,'bridge.json'),JSON.stringify({port:SUITE_PORT,token:this.token,pid:process.pid,protocol:1}));
  }
- async close(){this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.voice.close();this.fan.close();this.server?.close();}
+ async close(){this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.jarvis.cancelPendingModeration();this.voice.close();this.audio?.close();this.fan.close();this.server?.close();}
 }
 module.exports={SuiteRuntime,FanClient,VoiceClient};

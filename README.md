@@ -1,6 +1,10 @@
-# Batto 3-in-1 · 1.8.0
+# Batto 3-in-1 · 1.8.1
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
+
+## Programmhintergrund wählen
+
+Unter **Einstellungen → Allgemein → Programmhintergrund** stehen **Gaming-Zimmer**, **TikTok-Banner**, **Studio ohne Schrift** und **Original – Marmor** zur Wahl. Gaming-Zimmer ist voreingestellt. Die Auswahl wirkt sofort als Vorschau; **Alles speichern & synchronisieren** oder **Anwenden** speichert sie für den nächsten Start. Die Abdunklung lässt sich daneben einstellen. Die Startseite behält ihr bisheriges Bild. Es sind ruhige Standbilder ohne zusätzliche Animation oder laufenden Bildprozess.
 
 ## Batto Touch Deck
 
@@ -49,6 +53,14 @@ Web-Widgets starten standardmäßig nur auf Wunsch und werden beim Verlassen der
 
 ## Jarvis, Szenen und Stream Deck
 
+Die Batto-Steuerung ist direkt eingebaut und benötigt kein KI-Modell: „Mach bitte Pause“, „Öffne das Touch Deck“, „Kamera aus“, „Auto-Broadcast an“, „Chat vorlesen aus“ oder „Mach Jarvis leiser“. Auch vorhandene Medien, Hotkeys, Broadcasts und Aktionsketten lassen sich mit eindeutigem Namen aufrufen. **Das kannst du sagen** zeigt Beispiele aus der aktuellen Einrichtung. Anklicken füllt die Eingabe; **Ausführen** startet den Befehl. Unbekannte und mehrdeutige Anweisungen führen keine erratene Aktion aus.
+
+**Moderation per Sprache:** „Blockiere NAME auf Twitch“, „Entblocke NAME auf Twitch“ oder „Sperre NAME auf Twitch für 10 Minuten“. Dafür müssen der genaue Benutzer aus dem verbundenen Chat und eine passende Moderationsanmeldung verfügbar sein. Jarvis nennt die geplante Aktion und führt sie erst nach **„Bestätigen“ innerhalb von 45 Sekunden** aus. **„Abbrechen“** oder ein anderer Befehl verwirft die Rückfrage. Ein neuer Versuch braucht wieder eine Bestätigung. TikTok-Sperren werden über die aktuelle TikFinity-Verbindung nicht unterstützt; Jarvis meldet das ausdrücklich.
+
+**Lokaler Chat-Filter:** „Filterwort BEGRIFF hinzufügen“, „Filterwort BEGRIFF entfernen“ und „Chat Filter an / aus“ ändern die lokale Filterliste bzw. deren Aktivierung. Das blendet passende Nachrichten in Batto aus und sperrt keinen Nutzer auf der Plattform.
+
+**Sprechen:** **Jetzt zuhören** oder die Jarvis-Taste im Stream Deck drücken, auf die Sprechbereitschaft warten und einen Befehl sagen. **ERKANNT** zeigt den aufgenommenen Wortlaut, die folgende Antwort das Ergebnis. Das Mikrofon ist standardmäßig nur nach Tastendruck aktiv; für Befehle jederzeit optional unter **Jarvis-Einstellungen → Stimme & Mikrofon** das dauerhafte Mikrofon und **Auf „Jarvis“ warten** einschalten. Getippte Befehle funktionieren auch mit ausgeschaltetem Mikrofon. Sprach- und Texteingabe verwenden denselben Befehlsweg.
+
 Jarvis spricht standardmäßig **keinen Namen** aus; die frühere voreingestellte Ansprache wird beim Laden entfernt. Begrüßung „Wie kann ich helfen?“ und optionale Ansprache stehen in **Jarvis → Jarvis-Einstellungen**. Taste **Jarvis zuhören** begrüßt dich, hört einen Befehl ab und beendet das einmalige Zuhören nach Antwort oder Stille.
 
 Moderator-Chat, Geschenke, Follower und Like-Meilensteine bleiben einzeln einstellbar. Geschenke nennen Namen, Geschenk, Anzahl und übermittelte Coins nach Abschluss einer Serie; kein erfundener Euro-Wert. Likes zählen je Zuschauer, Standard 10.000. PC-Werte auf gezielte Nachfrage; Lüfterwarnungen standardmäßig beim Überschreiten von 80 %, mit Rücksetzabstand und Mindestpause.
@@ -91,7 +103,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.8.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.8.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

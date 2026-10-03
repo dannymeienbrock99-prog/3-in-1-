@@ -1,6 +1,6 @@
 'use strict';
 const SCENES=['Spiel','Pause','Start','Ende'];
-const VIEWS={dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschliste',widgets:'Widgets',livecenter:'Live-Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Filter',hologram:'Hologramm',platforms:'Plattformen',commands:'Bot-Befehle',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys',events:'Ereignisse',media:'Medien',pools:'Medien-Pools',tts:'Chat-Stimme',discord:'Discord',streamerbot:'Streamer.bot',backups:'Sicherungen',settings:'Einstellungen',diagnostics:'Diagnose'};
+const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschliste',widgets:'Widgets',livecenter:'Live-Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Filter',hologram:'Hologramm',platforms:'Plattformen',commands:'Bot-Befehle',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys',events:'Ereignisse',media:'Medien',pools:'Medien-Pools',tts:'Chat-Stimme',discord:'Discord',streamerbot:'Streamer.bot',backups:'Sicherungen',settings:'Einstellungen',diagnostics:'Diagnose'};
 class SuiteControls{
  constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;}
  catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{};return {actions:[

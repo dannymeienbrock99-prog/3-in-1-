@@ -25,6 +25,7 @@ python scripts/prepare-obs-piper.py; Check-Exit
 Push-Location desktop
 npm ci; Check-Exit
 npm run test:jarvis; Check-Exit
+npm run test:touch; Check-Exit
 node --test test/dual-stream.test.cjs; Check-Exit
 npm run test:core; Check-Exit
 node scripts/audio-playback-regression.cjs; Check-Exit
@@ -40,4 +41,4 @@ Pop-Location
 if (-not $InnoCompiler) { $InnoCompiler = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source }
 if (-not $InnoCompiler) { throw 'Inno Setup 7.1 oder neuer: -InnoCompiler mit Pfad zu ISCC.exe angeben.' }
 & $InnoCompiler installer/BattoSuite.iss; Check-Exit
-Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.5.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+Write-Output 'Fertig: dist/Batto-3-in-1-Setup-1.6.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'

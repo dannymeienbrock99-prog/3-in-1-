@@ -1,6 +1,14 @@
-# Batto 3-in-1 · 1.5.2
+# Batto 3-in-1 · 1.6.0
 
 Windows-Programm mit der Gold-/Marmor-Oberfläche von Batto OBS Tool 2.4.7, Multi-Chat, lokalem Jarvis, PC-Messwerten und Lüfterbühne. Das Originalprojekt Multi-Chat bleibt unverändert.
+
+## Batto Touch Deck
+
+Unter **Touch Deck** sind große Tasten direkt in Batto eingebaut. **Bearbeiten** öffnet Profile, Ordner und Tastenbelegungen. Du kannst Bilder wählen, Tasten verschieben und bis zu acht vorhandene Batto-Aktionen kombinieren: Jarvis, Szenen/Übergänge, Kameras, Bot, Auto-Broadcast, Medien und gespeicherte Hotkeys. Messwert-Tasten zeigen aktuelle PC-Werte oder zugeordnete Lüfter-Prozentwerte; fehlende Werte bleiben leer. Änderungen vor dem Bedienen speichern. Import und Export sichern die Deck-Belegung separat von Chat-/Bot-Einstellungen.
+
+Für Handy oder Tablet **Handy-Verbindung einschalten**, die angezeigte Netzwerkadresse im Browser des Geräts öffnen und mit der sechsstelligen PIN koppeln. Beide Geräte müssen im gleichen privaten Netzwerk sein. Falls Windows nachfragt, den Netzwerkzugriff nur für das private Netz zulassen. Die Freigabe beginnt erst auf Wunsch und startet nach Programmneustart nicht automatisch. Eine neue PIN trennt alle bisher gekoppelten Geräte. Im Gaming-Modus funktionieren die Tasten weiter, während die PC-Oberfläche geschlossen ist.
+
+Die Integration verwendet keinen zweiten Electron-Prozess und keinen zusätzlichen Chat-/OBS-Gästebereich. Nur sichtbare Messwert-Tasten am PC werden alle drei Sekunden aktualisiert. Die Handy-Seite fragt kleine Zustandsdaten ab, pausiert im Hintergrund und lädt Tastenbilder nur bei geänderter Belegung. Externe Plugins werden weiterhin über Elgato Stream Deck betrieben; die mitgelieferte alte Android-App ist für diese neue Browser-Verbindung nicht erforderlich.
 
 ## Virtuelle Kameras ohne Streamkey
 
@@ -65,7 +73,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.5.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.6.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 1. Links in der Seitenleiste bis **BATTO 3-IN-1** scrollen. App starten, unter **PC-Messwerte** aktuelle Quellen prüfen. Weitere Sensoren per HWiNFO-Sensorfreigabe oder laufendem CSV-Protokoll verbinden.
 2. Unter **Jarvis** Stimme/Mikrofon konfigurieren. Für Chat die Plattformen im Multi-Chat verbinden.

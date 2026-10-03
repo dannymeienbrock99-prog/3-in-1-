@@ -34,3 +34,5 @@ obs-import-stage-*/
 obs-before-import-*/
 jarvis-fan-alert-state.json
 dual-stream-secrets.json
+touch-deck.json
+touch-deck.before-import.json

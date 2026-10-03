@@ -1,4 +1,12 @@
-# Batto 3-in-1 · Schnellstart 1.8.8
+# Batto 3-in-1 · Schnellstart 1.8.9
+
+## Drei Kameras · 1.8.9
+
+Unter **Dual Stream** stehen jetzt **Kamera 1, Kamera 2 und Kamera 3** bereit. Für jeden gewünschten Platz ein anderes Gerät auswählen und den Schalter einschalten. Zusätzliche Kameras sind zunächst aus. **Vorschau → Kamera & Spiel prüfen → Bildquelle** wählen, um jede Kamera getrennt zu verschieben, zu skalieren oder auf einer Leinwand auszublenden. TikTok und Twitch speichern getrennte Positionen. Die Vorlage **Kamera oben, Spiel darunter** erhält die Positionen von Kamera 2 und 3.
+
+Jedes aktivierte Kameragerät wird einmal aufgenommen und für beide Ausgaben verwendet. Nicht aktivierte Plätze starten keine Aufnahme. Mehrere aktive Kameras benötigen entsprechend zusätzliche Ressourcen. In importierten OBS-Szenen bleiben die Ebenen erhalten: Ein gespeichertes Kameragerät, das zu einer eingeschalteten Kamera 2 oder 3 passt, nutzt diesen Platz; sonst bleibt Kamera 1 die Ersatzquelle. Zusätzliche Kameras werden nicht ungefragt über eine importierte Szene gelegt.
+
+Jarvis versteht **„Kamera zwei an“**, **„Dritte Kamera ausschalten“** und **„Kamera 1 umschalten“**. Geräte dafür zuvor auswählen, einschalten und vorbereiten. **„Kamera an/aus“** steuert weiterhin Kamera 1. Touch Deck und Stream Deck bieten alle drei Kameras unter **Bildquelle an/aus** an. Diese Befehle blenden das vorbereitete Bild ein oder aus; der obere Geräteschalter beziehungsweise **Video-Dienst ausschalten** beendet die Aufnahme.
 
 ## TikTok- und Twitch-Szenen · 1.8.8
 
@@ -21,7 +29,7 @@ Nur die Kameraeinrichtung benötigt Administratorrechte. Batto und seine Vorscha
 
 Unter **Vorschau → Kamera & Spiel prüfen** lassen sich die gemeinsamen Quellen auch während Start, Pause oder Ende ansehen, ohne die Ausgabe umzuschalten. **Spiel-Szene auswählen** übernimmt die Kamera ins Programmbild. Die Vorschau bleibt auf ein Bild pro Sekunde begrenzt. Verschobene Installationen reparieren eigene ungültige Kameraeinträge beim Start des Videodienstes; LIVE Studio anschließend neu öffnen.
 
-**OBS-Szenensammlung importieren** übernimmt alle Szenen mit ihren Namen und geordneten Ebenen. Nach Auswahl der JSON-Datei kannst du zusätzlich Spiel, Start, Pause und Ende als Kurzbefehle zuordnen. In **Szene** stehen anschließend auch Chat, Offline und weitere importierte Szenen zur Wahl. Verknüpfte Hoch- und Querformatszenen werden gemeinsam umgeschaltet. Bilder, lokale Videos, Texte sowie Position, Größe, Drehung und Zuschnitt bleiben erhalten. Kameraebenen nutzen die gewählte gemeinsame Kamera; unterschiedliche Fenster- und Spielquellen bleiben getrennt. Leere Quellen bleiben inaktiv. Browserquellen, OBS-Plugins und Filter werden mit Hinweisen ausgelassen. Die bisherigen Einstellungen werden vor dem Import gesichert; die Ausgaben bleiben danach aus.
+**OBS-Szenensammlung importieren** übernimmt alle Szenen mit ihren Namen und geordneten Ebenen. Nach Auswahl der JSON-Datei kannst du zusätzlich Spiel, Start, Pause und Ende als Kurzbefehle zuordnen. In **Szene** stehen anschließend auch Chat, Offline und weitere importierte Szenen zur Wahl. Verknüpfte Hoch- und Querformatszenen werden gemeinsam umgeschaltet. Bilder, lokale Videos, Texte sowie Position, Größe, Drehung und Zuschnitt bleiben erhalten. Kameraebenen nutzen ein passendes eingeschaltetes Gerät aus Kamera 1, 2 oder 3, sonst Kamera 1; unterschiedliche Fenster- und Spielquellen bleiben getrennt. Leere Quellen bleiben inaktiv. Browserquellen, OBS-Plugins und Filter werden mit Hinweisen ausgelassen. Die bisherigen Einstellungen werden vor dem Import gesichert; die Ausgaben bleiben danach aus.
 
 **Hintergrund löschen** entfernt den Hintergrund aus der ausgewählten Standardszene und Leinwand; die Originaldatei bleibt erhalten. Bei einer OBS-Zuordnung löst dies das entsprechende Standardkürzel von der importierten Szene. Die komplette importierte Szene bleibt weiterhin in der Szenenliste verfügbar. Einzelne Ebenen einer importierten Szene bearbeitest du zunächst in OBS und importierst die Sammlung erneut. Identische Hintergrundvideos werden gemeinsam dekodiert; inaktive Videos werden geschlossen.
 

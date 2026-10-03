@@ -56,7 +56,7 @@ function validateObsCollection(input){
  if(input.sources.length>1024||input.scenes.length>256)throw Error('Die OBS-Sammlung darf höchstens 256 Szenen und 1024 Quellen enthalten.');
  const ids=new Set(),register=id=>{string(id,200);if(!id||ids.has(id))throw Error('Doppelte oder leere OBS-Quellen-ID.');ids.add(id);return id;};
  const sources=input.sources.map(s=>{if(!object(s)||!SOURCE_TYPES.has(s.type))throw Error('Nicht unterstützter OBS-Quellentyp.');const result={id:register(s.id),name:string(s.name),type:s.type,settings:sourceSettings(s.type,s.settings)};
-  if(s.shared!==undefined){if(s.shared==='camera'&&s.type==='dshow_input'||s.shared==='game'&&['game_capture','window_capture','monitor_capture','display_capture'].includes(s.type))result.shared=s.shared;else throw Error('Ungültige gemeinsame OBS-Bildquelle.');}return result;});
+  if(s.shared!==undefined){if(['camera','camera2','camera3'].includes(s.shared)&&s.type==='dshow_input'||s.shared==='game'&&['game_capture','window_capture','monitor_capture','display_capture'].includes(s.type))result.shared=s.shared;else throw Error('Ungültige gemeinsame OBS-Bildquelle.');}return result;});
  let total=0;
  const scenes=input.scenes.map(s=>{
   if(!object(s)||!PLATFORMS.includes(s.platform)||!Array.isArray(s.items)||(total+=s.items.length)>10000)throw Error('Ungültige OBS-Szene oder zu viele Ebenen.');

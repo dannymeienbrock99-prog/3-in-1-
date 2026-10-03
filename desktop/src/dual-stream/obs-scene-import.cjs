@@ -107,7 +107,7 @@ function createObsCollection(data,{mapping={},sharedGameId='',fileExists=fs.exis
  for(const warning of m.warnings)warn(warning);
  const order=(Array.isArray(data.scene_order)?data.scene_order:[]).map(s=>text(s?.name));
  scenes.sort((a,b)=>{const rank=s=>{const direct=order.indexOf(s.name);if(direct>=0)return direct*2+(s.platform==='tiktok'?1:0);const partner=byId.get(s.partnerId),index=partner?order.indexOf(partner.name):-1;return index>=0?index*2+1:10000;};return rank(a)-rank(b);});
- if(sources.some(s=>s.type==='dshow_input'))warn('Kameraebenen verwenden die aktuell ausgewählte gemeinsame Kamera. Historische OBS-Kameras werden nicht zusätzlich geöffnet.');
+ if(sources.some(s=>s.type==='dshow_input'))warn('Kameraebenen mit passendem Gerät nutzen die eingeschaltete Kamera 1, 2 oder 3. Sonstige Kameraebenen nutzen Kamera 1. Historische OBS-Kameras werden nicht zusätzlich geöffnet.');
  if(sources.some(s=>['game_capture','window_capture','monitor_capture','display_capture'].includes(s.type)))warn('Weitere Spiel- und Fensterquellen behalten ihre OBS-Zuordnung. Geschlossene Programme liefern kein Bild, bis sie wieder geöffnet werden.');
  if(sources.some(s=>s.type==='ffmpeg_source'))warn('OBS-Ton und Medienlautstärke werden nicht übernommen; die virtuelle Kamera überträgt das Bild.');
  return validateObsCollection({version:1,name:text(data.name)||'OBS-Szenensammlung',sources,scenes,aliases:mapping,warnings});
@@ -141,6 +141,7 @@ function applyCollection(data,{config=defaults(),mapping,sources:selection,devic
   if(explicit&&id){candidate=all.find(x=>x.id===id);if(!candidate)throw Error('Die gewählte gemeinsame Quelle gehört nicht zu dieser OBS-Sammlung.');}
   else if(!explicit){const eligible=candidates.filter(x=>kind==='camera'?x.kind==='camera':x.kind!=='camera'),current=next.sources[kind];candidate=eligible.find(x=>x.target===current.target&&(kind==='camera'||x.kind===current.kind));if(!candidate){const unique=new Map(eligible.map(x=>[`${x.kind}:${x.target}`,x]));if(unique.size===1)candidate=[...unique.values()][0];else if(unique.size>1)warn(`Mehrere ${kind==='camera'?'Kameras':'Spiel-/Fensterquellen'} sind vorhanden. Die aktuelle gemeinsame Quelle bleibt erhalten; bitte die gewünschte Quelle ausdrücklich auswählen.`);}}
   if(candidate){const devicesForKind=devices?.[candidate.kind];if(Array.isArray(devicesForKind)&&!devicesForKind.some(d=>d.id===candidate.target)){warn(`„${candidate.name}“ ist aktuell nicht unter den erkannten Geräten/Fenstern. Die bisherige gemeinsame Quelle bleibt erhalten.`);candidate=null;}}
+  if(kind==='camera'&&candidate){const assigned=['camera2','camera3'].find(id=>next.sources[id].enabled&&next.sources[id].target.trim().toLowerCase()===candidate.target.trim().toLowerCase());if(assigned){warn(`Kameragerät „${candidate.name}“ ist bereits Kamera ${assigned.slice(-1)} zugeordnet. Kamera 1 bleibt unverändert; passende OBS-Ebenen verwenden das zugeordnete Gerät.`);candidate=null;}}
   if(candidate){next.sources[kind]={enabled:true,target:candidate.target,name:candidate.name,...(kind==='game'?{kind:candidate.kind}:{})};chosen[kind]=candidate;}
   else {const current=next.sources[kind];chosen[kind]=all.find(x=>x.target===current.target&&(kind==='camera'||x.kind===current.kind));}
  }
@@ -157,7 +158,7 @@ function applyCollection(data,{config=defaults(),mapping,sources:selection,devic
  // The simplified layouts/backgrounds above remain useful when the collection
  // is removed. Actual imported scenes always render their complete saved layers.
  next.obsCollection=createObsCollection(data,{mapping:map,sharedGameId:chosen.game?.id||'',fileExists});
- for(const message of warnings.filter(w=>/^Mehrere (?:Kameras|Spiel-)|^„.+“ ist aktuell nicht/.test(w)))if(!next.obsCollection.warnings.includes(message))next.obsCollection.warnings.push(message);
+ for(const message of warnings.filter(w=>/^Mehrere (?:Kameras|Spiel-)|^„.+“ ist aktuell nicht|^Kameragerät .+ bereits Kamera/.test(w)))if(!next.obsCollection.warnings.includes(message))next.obsCollection.warnings.push(message);
  if(next.program.scene.startsWith('obs:')&&!next.obsCollection.scenes.some(s=>s.key===next.program.scene))next.program.scene='Spiel';
  next.layoutRevision=2;return {config:validate(next),warnings:next.obsCollection.warnings,summary:`${next.obsCollection.scenes.filter(s=>!s.internal).length} OBS-Szenen mit ihren Ebenen übernommen; ${imported} Schnellwahltasten zugeordnet. Die Ausgabe wurde nicht gestartet.`};
 }

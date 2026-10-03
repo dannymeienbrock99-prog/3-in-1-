@@ -52,6 +52,14 @@ const CONTROLS = {
   'overlay.snow': ['schnee'], 'overlay.likeBar': ['like balken'], 'battleBar.enabled': ['battle bar', 'match anzeige'],
   'chatWindow.detached': ['chatfenster entkoppeln','chatfenster entkopplung']
 };
+// The original camera ID and unnumbered voice commands continue to mean slot 1.
+// Number aliases only apply to source switches, never to scene names or outputs.
+const SOURCE_ALIASES = {
+  camera: ['kamera','cam','webcam','kamerabild','hauptkamera',...['kamera','cam','webcam'].flatMap(noun => [`${noun} 1`,`${noun} eins`,`erste ${noun}`])],
+  camera2: ['kamera','cam','webcam'].flatMap(noun => [`${noun} 2`,`${noun} zwei`,`zweite ${noun}`]),
+  camera3: ['kamera','cam','webcam'].flatMap(noun => [`${noun} 3`,`${noun} drei`,`dritte ${noun}`]),
+  game: ['spielbild','spielquelle','bildschirm','spiel aufnahme']
+};
 const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleich zuruck'],
   spiel: ['spiel', 'spielszene', 'spiel szene', 'gaming', 'weiter', 'zuruck zum spiel'],
   start: ['start', 'startszene', 'start szene', 'stream startet'], ende: ['ende', 'endszene', 'ende szene', 'stream ende']};
@@ -401,12 +409,12 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}} = {}) {
   if (sw) {
     const {query, op} = sw;
     const qualified=/^(bildquelle|einblendung|funktion|jarvis schalter|schalter) (.+)$/.exec(query);
-    if(qualified){const id={bildquelle:'source',einblendung:'overlay',funktion:'control','jarvis schalter':'jarvis',schalter:'jarvis'}[qualified[1]];return select(catalog,id,qualified[2],{},{op});}
+    if(qualified){const id={bildquelle:'source',einblendung:'overlay',funktion:'control','jarvis schalter':'jarvis',schalter:'jarvis'}[qualified[1]];return select(catalog,id,qualified[2],id==='source'?SOURCE_ALIASES:{},{op});}
     if (/^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.test(query)) {
       const name = /^(?:auto broadcast|autobroadcast|broadcast) (?:profil )?(.+)$/.exec(query)[1];
       return select(catalog, 'broadcast-profile', name, {}, {op});
     }
-    for (const [id, aliases] of [['source', {camera: ['kamera', 'cam', 'webcam', 'kamerabild'], game: ['spielbild', 'spielquelle', 'bildschirm', 'spiel aufnahme']}],
+    for (const [id, aliases] of [['source', SOURCE_ALIASES],
       ['overlay', {chat: ['chat einblendung', 'chat einblenden', 'chat overlay'], events: ['ereignis einblendung', 'ereignisse einblenden', 'ereignis overlay']}],
       ['jarvis', JARVIS], ['control', CONTROLS]]) {
       if (choices(catalog, id).some(item => choiceMatches(item, query, aliases))) return select(catalog, id, query, aliases, {op});
@@ -434,7 +442,7 @@ function commandExamples(catalog = {}, {limit} = {}) {
   if(present('scene','Pause'))action('Mach bitte Pause','Pausenszene auswählen','scene','Pause');
   for(const [id,name]of [['touchdeck','Touch Deck'],['dualstream','Dual Stream'],['settings','Einstellungen']])if(present('navigate',id))action(`Öffne ${name}`,`${name} anzeigen`,'navigate',id);
   if(present('scene','Spiel'))action('Wechsel zur Spielszene','Spielszene auswählen','scene','Spiel');
-  if(present('source','camera'))action('Kamera an','Kamerabild einschalten','source','camera',{op:'on'});
+  if(present('source','camera'))action('Kamera an','Kamera 1 einblenden; Gerät zuerst in Dual Stream auswählen, einschalten und vorbereiten.','source','camera',{op:'on'});
   if(present('control','broadcast.master'))action('Auto-Broadcast aus','Automatische Broadcasts abschalten','control','broadcast.master',{op:'off'});
   if(present('jarvis','chatEnabled'))action('Chat vorlesen aus','Keine weiteren Chatnachrichten vorlesen','jarvis','chatEnabled',{op:'off'});
   if(present('connect','twitch'))action('Verbinde Twitch','Twitch-Chat verbinden','connect','twitch',{op:'on'});
@@ -454,9 +462,10 @@ function commandExamples(catalog = {}, {limit} = {}) {
   };
   const switchExample=(id,item,noun)=>{for(const [op,last]of [['on','einschalten'],['off','ausschalten'],['toggle','umschalten']]){
     const ending=op==='toggle'?'um':op==='on'?'ein':'aus',name=spokenChoiceName(item,id);
-    const natural=id==='source'?{camera:'Kamera',game:'Spielbild'}[item.id]||name:id==='overlay'?{chat:'Chat-Einblendung',events:'Ereignis-Einblendung'}[item.id]||name:id==='broadcast-profile'?`Auto-Broadcast Profil ${name}`:item.id==='chatWindow.detached'?'Chatfenster Entkopplung':name;
+    const natural=id==='source'?{camera:'Kamera',camera2:'Kamera 2',camera3:'Kamera 3',game:'Spielbild'}[item.id]||name:id==='overlay'?{chat:'Chat-Einblendung',events:'Ereignis-Einblendung'}[item.id]||name:id==='broadcast-profile'?`Auto-Broadcast Profil ${name}`:item.id==='chatWindow.detached'?'Chatfenster Entkopplung':name;
     const expected={action:id,target:item.id,op},phrase=choose([`Schalte ${natural} ${ending}`,`Schalte ${noun} ${name} ${ending}`,`Schalte ${noun} ${literal(id,item)} ${ending}`],expected),typedOnly=phrase.includes('"');
-    action(phrase,`${item.name}: ${last}`+(typedOnly?'. Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{op},{...(typedOnly?{typedOnly:true}:{})});
+    const cameraNote=id==='source'&&['camera','camera2','camera3'].includes(item.id)?' Gerät zuerst in Dual Stream auswählen, einschalten und vorbereiten; schaltet das Bild für beide Ausgaben.':'';
+    action(phrase,`${item.id==='camera'&&id==='source'?'Kamera 1':item.name}: ${last}.`+cameraNote+(typedOnly?' Eindeutige Textvariante; für Sprache bei Bedarf einen einfachen, eindeutigen Namen vergeben.':''),id,item.id,{op},{...(typedOnly?{typedOnly:true}:{})});
   }};
   for(const definition of catalog.actions||[]){
     const id=definition.id;

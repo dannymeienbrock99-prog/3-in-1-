@@ -10,6 +10,8 @@ internal sealed class Engine : IDisposable {
  readonly Dictionary<string,nint> backgroundSources=new(StringComparer.OrdinalIgnoreCase);
  readonly HashSet<nint> ownedScenes=new();
  readonly Dictionary<string,List<(nint Item,bool Visible)>> captureItems=new();
+ readonly Dictionary<string,string> cameraTargets=new(StringComparer.OrdinalIgnoreCase);
+ static readonly string[] CameraIds={"camera","camera2","camera3"};
  readonly List<string> importWarnings=new();
  readonly HashSet<nint> videoSources=new();
  readonly Dictionary<string,Destination> destinations=new();
@@ -81,6 +83,23 @@ internal sealed class Engine : IDisposable {
  nint SceneCreate(string name,int width,int height){var scene=Need(Obs.obs_scene_create_private(name),"Szene konnte nicht erstellt werden.");ownedScenes.Add(scene);var source=Obs.obs_scene_get_source(scene);var settings=Obs.obs_source_get_settings(source);var patch=Settings(new{custom_size=true,cx=width,cy=height});try{Obs.obs_data_apply(settings,patch);Obs.obs_source_load(source);}finally{Obs.obs_data_release(patch);Obs.obs_data_release(settings);}return scene;}
  void CaptureItem(string source,nint item,bool visible=true){if(!captureItems.TryGetValue(source,out var items))captureItems[source]=items=new();items.Add((item,visible));}
  static string CaptureKind(string type)=>type switch{"camera" or "dshow_input"=>"camera","game" or "window" or "screen" or "game_capture" or "window_capture" or "monitor_capture" or "display_capture"=>"game",_=>""};
+ static bool OwnCamera(string target)=>Enumerable.Range(1,2).Any(slot=>target.Contains(CameraRegistration.Id(slot),StringComparison.OrdinalIgnoreCase)||target.Contains(slot==1?"Batto TikTok":"Batto Twitch",StringComparison.OrdinalIgnoreCase));
+ void ValidateCameras(JsonNode selected){
+  // Validate every slot before creating a capture: an incomplete or duplicate
+  // selection must not briefly open the first camera and then fail on the next.
+  foreach(string id in CameraIds){var source=selected[id];if(!B(source,"enabled"))continue;string target=S(source,"target").Trim();
+   if(target.Length==0)throw new InvalidOperationException("Bitte für jede eingeschaltete Kamera ein Gerät auswählen.");
+   if(OwnCamera(target))throw new InvalidOperationException("Die eigenen virtuellen Batto-Kameras können nicht als Kameraquelle verwendet werden.");
+   if(!cameraTargets.TryAdd(target,id))throw new InvalidOperationException("Jede eingeschaltete Kamera braucht ein anderes Gerät.");
+  }
+ }
+ string ImportedCamera(JsonNode source){
+  string shared=S(source,"shared");if(shared is "camera2" or "camera3")return shared;
+  string target=S(source["settings"],"video_device_id").Trim();
+  // Match only cameras the user explicitly enabled. Old shared:camera exports
+  // retain their primary-camera fallback; imported devices never open themselves.
+  return target.Length>0&&cameraTargets.TryGetValue(target,out var slot)?slot:"camera";
+ }
  void ImportCollection(JsonNode? collection){
   if(collection is not JsonObject)return;
   var definitions=new Dictionary<string,JsonNode>();var inputs=new Dictionary<string,JsonNode>();
@@ -92,16 +111,13 @@ internal sealed class Engine : IDisposable {
   var depths=new Dictionary<string,int>();var visiting=new HashSet<string>();
   int Validate(string id){if(depths.TryGetValue(id,out int done))return done;if(!visiting.Add(id))throw new InvalidOperationException("Die OBS-Sammlung enthält einen Szenenkreis.");int depth=0;foreach(var item in definitions[id]["items"]?.AsArray()??new JsonArray()){string child=S(item,"source");if(definitions.ContainsKey(child))depth=Math.Max(depth,1+Validate(child));}visiting.Remove(id);if(depth>8)throw new InvalidOperationException("Die OBS-Sammlung enthält zu tief verschachtelte Szenen.");return depths[id]=depth;}
   foreach(var id in definitions.Keys)Validate(id);
-  var built=new Dictionary<string,nint>();var builtInputs=new Dictionary<string,nint>();var sharedMedia=new Dictionary<string,nint>(StringComparer.OrdinalIgnoreCase);
+  var built=new Dictionary<string,nint>();var builtInputs=new Dictionary<string,nint>();var captureAliases=new Dictionary<string,string>();var sharedMedia=new Dictionary<string,nint>(StringComparer.OrdinalIgnoreCase);
   void Warn(string message){if(!importWarnings.Contains(message))importWarnings.Add(message);}
   nint Input(string id){
    if(builtInputs.TryGetValue(id,out var cached))return cached;
    if(!inputs.TryGetValue(id,out var node)){Warn("Eine referenzierte OBS-Quelle fehlt.");return 0;}
    string type=S(node,"type"),name=S(node,"name","OBS-Quelle"),capture=CaptureKind(type),sharedKind=S(node,"shared");
-   // A configured camera always follows the camera explicitly selected in Batto;
-   // old stored collections without the new shared marker must not open a second
-   // physical camera, nor bypass the user's disabled camera setting.
-   if(capture=="camera"||capture.Length>0&&sharedKind==capture){var shared=sources.GetValueOrDefault(capture);if(shared==0)Warn("„"+name+"“ benötigt eine ausgewählte gemeinsame "+(capture=="camera"?"Kamera.":"Spiel-/Bildschirmquelle."));builtInputs[id]=shared;return shared;}
+   if(capture=="camera"||capture.Length>0&&sharedKind==capture){string slot=capture=="camera"?ImportedCamera(node):capture;captureAliases[id]=slot;var shared=sources.GetValueOrDefault(slot);if(shared==0)Warn("„"+name+"“ benötigt eine eingeschaltete gemeinsame "+(capture=="camera"?(slot=="camera"?"Kamera 1.":"Kamera "+slot[^1]+"."):"Spiel-/Bildschirmquelle."));builtInputs[id]=shared;return shared;}
    var settings=(node["settings"]?.DeepClone() as JsonObject)??new JsonObject();string nativeType;string cacheKey="";
    if(capture.Length>0){
     nativeType=type switch{"camera"=>"dshow_input","game"=>"game_capture","window"=>"window_capture","screen" or "display_capture"=>"monitor_capture",_=>type};
@@ -143,7 +159,7 @@ internal sealed class Engine : IDisposable {
     // media dimensions, including files whose first decoded frame arrives later.
     Obs.obs_sceneitem_set_bounds_type(item,(int)Math.Clamp(N(layer,"bounds_type"),0,6));Obs.obs_sceneitem_set_bounds_alignment(item,(uint)N(layer,"bounds_align"));Obs.obs_sceneitem_set_bounds_crop(item,B(layer,"bounds_crop"));Obs.obs_sceneitem_set_bounds(item,ref bounds);
     bool visible=B(layer,"visible",true);Obs.obs_sceneitem_set_visible(item,visible);
-    if(inputs.TryGetValue(sourceId,out var source)){string capture=CaptureKind(S(source,"type"));if(capture.Length>0)CaptureItem(capture,item,visible);}
+    if(inputs.TryGetValue(sourceId,out var source)){string capture=captureAliases.GetValueOrDefault(sourceId,CaptureKind(S(source,"type")));if(capture.Length>0)CaptureItem(capture,item,visible);}
    }
    return scene;
   }
@@ -163,9 +179,10 @@ internal sealed class Engine : IDisposable {
   Reset();
   try{
    var selected=config["sources"]!;
-   if(test){sources["game"]=Source("color_source","Gemeinsames Testbild",new{color=0xFF603CB0,width=1280,height=720});sources["camera"]=Source("color_source","Kameraplatzhalter für Test",new{color=0xFF35C5EE,width=640,height=480});}
+   ValidateCameras(selected);
+   if(test){sources["game"]=Source("color_source","Gemeinsames Testbild",new{color=0xFF603CB0,width=1280,height=720});sources["camera"]=Source("color_source","Kameraplatzhalter für Test",new{color=0xFF35C5EE,width=640,height=480});foreach(string id in CameraIds.Skip(1))if(B(selected[id],"enabled"))sources[id]=Source("color_source","Kameraplatzhalter "+id,new{color=id=="camera2"?0xFF41C828u:0xFFF04949u,width=640,height=480});}
    else {
-    foreach(string name in new[]{"game","camera","microphone","desktop"}){
+    foreach(string name in new[]{"game","camera","camera2","camera3","microphone","desktop"}){
      var s=selected[name];if(!B(s,"enabled"))continue;string target=S(s,"target");
      if(name=="game"){
       var kind=S(s,"kind","game");
@@ -173,7 +190,7 @@ internal sealed class Engine : IDisposable {
        "screen"=>Source("monitor_capture","Gemeinsamer Bildschirm",new{monitor_id=target,capture_cursor=true}),
        "window"=>Source("window_capture","Gemeinsames Fenster",new{window=target,priority=0,cursor=true}),
        _=>Source("game_capture","Gemeinsames Spiel",new{capture_mode="window",window=target,priority=0,limit_framerate=true,capture_cursor=true})};
-     }else if(name=="camera")sources[name]=Source("dshow_input","Gemeinsame Kamera",new{video_device_id=target,res_type=0});
+     }else if(CameraIds.Contains(name))sources[name]=Source("dshow_input","Gemeinsame Kamera "+(name=="camera"?"1":name[^1].ToString()),new{video_device_id=target,res_type=0,deactivate_when_not_showing=true,use_custom_audio_device=false,audio_device_id=""});
      else{sources[name]=Source(name=="microphone"?"wasapi_input_capture":"wasapi_output_capture",name=="microphone"?"Gemeinsames Mikrofon":"Gemeinsamer PC-Ton",new{device_id=target});Obs.obs_source_set_audio_mixers(sources[name],3);Obs.obs_set_output_source(name=="microphone"?1u:2u,sources[name]);}
     }
    }
@@ -232,7 +249,7 @@ internal sealed class Engine : IDisposable {
  }
  public object SourceControl(string source,bool enabled){
   if(source is "microphone" or "desktop"){if(sources.TryGetValue(source,out var input))Obs.obs_source_set_muted(input,!enabled);}
-  else if(source is "camera" or "game"){if(captureItems.TryGetValue(source,out var items))foreach(var item in items)Obs.obs_sceneitem_set_visible(item.Item,enabled&&item.Visible);}
+  else if(source is "camera" or "camera2" or "camera3" or "game"){if(captureItems.TryGetValue(source,out var items))foreach(var item in items)Obs.obs_sceneitem_set_visible(item.Item,enabled&&item.Visible);}
   else throw new InvalidOperationException("Unbekannte Quelle.");return Status();
  }
  void ClearMedia(){foreach(var item in mediaItems)Obs.obs_sceneitem_remove(item);mediaItems.Clear();if(media!=0)Obs.obs_source_release(media);media=0;}
@@ -315,7 +332,7 @@ internal sealed class Engine : IDisposable {
   renderedFrames=Obs.obs_get_total_frames(),laggedFrames=Obs.obs_get_lagged_frames(),
   outputs=destinations.ToDictionary(x=>x.Key,x=>{var d=x.Value;bool active=d.output!=0&&Obs.obs_output_active(d.output);ulong bytes=d.output==0?0:Obs.obs_output_get_total_bytes(d.output);if(d.requested&&!active)d.error="Ausgabe beendet oder Verbindung fehlgeschlagen. Sendezugang und Netzwerk prüfen.";return (object)new{cameraName=CameraRegistration.Name(x.Key=="tiktok"?1:2),scene=d.selected,sceneLabel=d.sceneLabels.GetValueOrDefault(d.selected,d.selected),d.width,d.height,d.bitrate,state=d.camera!=null?"camera":d.requested?(active?(bytes>0?(d.recording?"test":"live"):"connecting"):"error"):"stopped",bytes,frames=d.camera?.Frames??(d.output==0?0:Obs.obs_output_get_total_frames(d.output)),droppedFrames=d.output==0?0:Obs.obs_output_get_frames_dropped(d.output),error=d.error,muted=(mixers&(x.Key=="tiktok"?1:2))==0};})};
  static void ReleaseOutput(Destination d){StopOutput(d);if(d.output!=0)Obs.obs_output_release(d.output);if(d.service!=0)Obs.obs_service_release(d.service);if(d.videoEncoder!=0)Obs.obs_encoder_release(d.videoEncoder);if(d.audioEncoder!=0)Obs.obs_encoder_release(d.audioEncoder);d.output=d.service=d.videoEncoder=d.audioEncoder=0;}
- void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.transition!=0)Obs.obs_source_release(d.transition);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();foreach(var scene in ownedScenes)Obs.obs_scene_release(scene);ownedScenes.Clear();captureItems.Clear();importWarnings.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values.Distinct())Obs.obs_source_release(s);sources.Clear();backgroundSources.Clear();videoSources.Clear();mixers=3;}
+ void Reset(){ClearMedia();prepared=false;foreach(var d in destinations.Values){ReleaseOutput(d);if(d.view!=0){Obs.obs_view_remove(d.view);Obs.obs_view_set_source(d.view,0,0);Obs.obs_view_destroy(d.view);}if(d.transition!=0)Obs.obs_source_release(d.transition);if(d.chat!=0)Obs.obs_source_release(d.chat);if(d.events!=0)Obs.obs_source_release(d.events);}destinations.Clear();foreach(var scene in ownedScenes)Obs.obs_scene_release(scene);ownedScenes.Clear();captureItems.Clear();cameraTargets.Clear();importWarnings.Clear();Obs.obs_set_output_source(1,0);Obs.obs_set_output_source(2,0);foreach(var s in sources.Values.Distinct())Obs.obs_source_release(s);sources.Clear();backgroundSources.Clear();videoSources.Clear();mixers=3;}
  public void Dispose(){lock(Sync){if(disposed)return;disposed=true;previewTimer.Dispose();if(started){Reset();Obs.obs_shutdown();started=false;}if(graphics!=0){Marshal.FreeCoTaskMem(graphics);graphics=0;}}}
 }
 

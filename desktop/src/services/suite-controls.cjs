@@ -20,7 +20,7 @@ class SuiteControls{
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
   {id:'scene',name:'Szene und Übergang',choices:scenes,transition:true},
   {id:'start',name:'Virtuelle Kamera starten',choices:this.targets()}, {id:'stop',name:'Virtuelle Kamera stoppen',choices:this.targets()},
-  {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
+  {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['camera2','Kamera 2'],['camera3','Kamera 3'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
   {id:'overlay',name:'Einblendung an/aus',choices:[{id:'chat',name:'Chat'},{id:'events',name:'Ereignisse'}],switch:true},
   {id:'jarvis',name:'Jarvis-Einstellung an/aus',choices:[['voiceEnabled','Sprachausgabe'],['microphoneEnabled','Dauerhaft zuhören'],['wakeWord','Aktivierungswort'],['headphones','Kopfhörermodus'],['chatEnabled','Chat vorlesen'],['events.enabled','Stream-Ereignisse'],['events.gifts','Geschenke'],['events.follows','Follower'],['events.likes','Likes'],['events.subscriptions','Abo-Danksagungen'],['fanAlerts.enabled','Lüfterwarnungen'],['gamingMode','Gaming-Sparmodus']].map(([id,name])=>({id,name})),switch:true},
   {id:'microphones',name:'Mikrofone neu laden'},

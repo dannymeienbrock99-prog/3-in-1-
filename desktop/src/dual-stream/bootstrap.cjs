@@ -1,6 +1,14 @@
 'use strict';
 const {app,ipcMain,BrowserWindow,dialog,safeStorage,clipboard}=require('electron'),fs=require('node:fs'),path=require('node:path'),{fileURLToPath}=require('node:url'),{randomUUID}=require('node:crypto');
 const {DualStream}=require('./service.cjs'),windows=require('./windows.cjs');let service,closePromise;const pendingImports=new WeakMap();
+const obsFiles=require('./obs-import-files.cjs');
+function obsDirectory(){return path.join(app.getPath('appData'),'obs-studio','basic','scenes');}
+function previewCollection(sender,file){
+ pendingImports.delete(sender);const data=obsFiles.readCollectionFile(file);let preview;
+ try{preview=require('./obs-scene-import.cjs').inspectCollection(data);}catch(error){throw Error('„'+path.basename(file).replace(/[\x00-\x1f\x7f]/g,' ').slice(0,180)+'“: '+error.message);}
+ const token=randomUUID();pendingImports.set(sender,{data,token,revision:service.revision,expires:Date.now()+15*60*1000});
+ return {...preview,token,baseRevision:service.revision};
+}
 function snapshot(){return {...service.snapshot(),...windows.status()};}
 function publish(){if(!service)return;const value=snapshot();for(const win of BrowserWindow.getAllWindows())if(!win.isDestroyed()&&!win.webContents.isDestroyed()){try{win.webContents.send('dual:state',value);}catch{}}}
 function sender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}const main=require('../../electron/main21.cjs').getMainWindow(),detached=windows.existing(),source=path.resolve(file),allowed=(main?.webContents===e.sender&&source===path.resolve(__dirname,'../renderer/index.html'))||(detached?.webContents===e.sender&&source===path.resolve(__dirname,'../renderer/dual-window.html'));if(!allowed||e.senderFrame!==e.sender.mainFrame)throw Error('Diese Oberfläche ist nicht berechtigt.');if(!service)throw Error('Dual Stream startet noch.');return detached?.webContents===e.sender;}
@@ -30,14 +38,15 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{const detached=sender
   case 'snapshot':return service.image(value);
   case 'library':{const r=await dialog.showOpenDialog({title:'OBS-Ordner mit bin, data und obs-plugins wählen',properties:['openDirectory']});if(r.canceled)return null;const root=r.filePaths[0];if(!fs.existsSync(path.join(root,'bin/64bit/obs.dll')))throw Error('Dieser Ordner enthält keine OBS-Bibliotheken.');return service.save({...service.config,obsRoot:root});}
   case 'import':{const r=await dialog.showOpenDialog({title:'Dual-Stream-Projekt importieren',properties:['openFile'],filters:[{name:'Dual-Stream-Konfiguration',extensions:['json']}]});if(r.canceled)return null;if(fs.statSync(r.filePaths[0]).size>16*1024*1024)throw Error('Projektdatei ist zu groß (maximal 16 MB).');return service.import(JSON.parse(fs.readFileSync(r.filePaths[0],'utf8').replace(/^\uFEFF/,'')));}
-  case 'obs-import-preview':{
+  case 'obs-import-list':if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');return obsFiles.listCollections(obsDirectory());
+  case 'obs-import-local-preview':{
    if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');
-   const r=await dialog.showOpenDialog({title:'OBS-Szenensammlung importieren',properties:['openFile'],filters:[{name:'OBS-Szenensammlung',extensions:['json']}]});if(r.canceled)return null;
-   if(fs.statSync(r.filePaths[0]).size>4*1024*1024)throw Error('Die OBS-Szenensammlung ist zu groß (maximal 4 MB).');
-   let data;try{data=JSON.parse(fs.readFileSync(r.filePaths[0],'utf8').replace(/^\uFEFF/,''));}catch{throw Error('Die Datei enthält keine lesbare OBS-Szenensammlung.');}
-   const preview=require('./obs-scene-import.cjs').inspectCollection(data),token=randomUUID();
-   pendingImports.set(e.sender,{data,token,revision:service.revision,expires:Date.now()+15*60*1000});
-   return {...preview,token,baseRevision:service.revision};
+   pendingImports.delete(e.sender);return previewCollection(e.sender,obsFiles.localCollectionFile(obsDirectory(),value));
+  }
+  case 'obs-import-preview':{
+   if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');pendingImports.delete(e.sender);
+   const r=await dialog.showOpenDialog({title:'OBS-Szenensammlung importieren',defaultPath:obsDirectory(),properties:['openFile'],filters:[{name:'OBS-Szenensammlung',extensions:['json']}]});if(r.canceled)return null;
+   return previewCollection(e.sender,r.filePaths[0]);
   }
   case 'obs-import-apply':{
    const pending=pendingImports.get(e.sender);if(!pending||pending.token!==value?.token||pending.expires<Date.now())throw Error('Bitte die OBS-Datei erneut auswählen; die Importvorschau ist abgelaufen.');

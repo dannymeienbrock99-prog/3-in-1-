@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('batto', {
   onTouchState:cb=>on('touch:state',cb),onTouchEdit:cb=>on('touch:edit',cb),
   onTouchPresentation:cb=>on('touch:presentation',cb),
   onSuiteState:cb=>on('suite:state',cb),onJarvisMessage:cb=>on('suite:message',cb),onJarvisVoice:cb=>on('suite:voice',cb),
-  dual:(command,value)=>{if(!['register-cameras','program','scene','background','background-clear','obs-import-preview','obs-import-apply','state','save','probe','prepare','release','start','stop','mute','key','snapshot','library','import','export','detach','attach','always-on-top','companion','gaming','copy-overlay'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('dual:action',{command,value});},
+  dual:(command,value)=>{if(!['register-cameras','program','scene','background','background-clear','obs-import-preview','obs-import-list','obs-import-local-preview','obs-import-apply','state','save','probe','prepare','release','start','stop','mute','key','snapshot','library','import','export','detach','attach','always-on-top','companion','gaming','copy-overlay'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('dual:action',{command,value});},
   onDualState:cb=>on('dual:state',cb),onPresentationState:cb=>on('suite:presentation',cb),
   communityStatus:()=>ipcRenderer.invoke('community:status'),
   archiveSearch:payload=>ipcRenderer.invoke('archive:search',payload),

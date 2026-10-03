@@ -1,4 +1,10 @@
-# Batto 3-in-1 · 1.9.1
+# Batto 3-in-1 · 1.9.2
+
+## OBS-Sammlungen direkt auswählen · 1.9.2
+
+Unter **Dual Stream → Direkt aus OBS** eine auf diesem PC gespeicherte Sammlung auswählen, **Szenen prüfen** und anschließend **Sammlung übernehmen** drücken. Die Auswahl lädt nur die Vorschau; erst das Übernehmen ersetzt die importierten Szenen und erstellt eine Sicherung der bisherigen Dual-Stream-Einstellungen. Kameras und Ausgaben starten dabei nicht automatisch.
+
+Der Dateidialog öffnet den OBS-Szenenordner. Unpassende JSON-Dateien, Batto-Projekte und zu große Sammlungen erhalten getrennte Hinweise. Batto-Projekte werden weiterhin über **Projekt importieren** geöffnet. Der technische Fehlertext „Error invoking remote method“ wird ausgeblendet. Der neue Auswahlweg fragt OBS-Dateien nur beim Öffnen ab und benötigt keinen laufenden OBS-Prozess.
 
 ## Reparaturen und Stabilität · 1.9.1
 
@@ -177,7 +183,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.9.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.9.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

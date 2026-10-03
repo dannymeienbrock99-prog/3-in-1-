@@ -80,3 +80,10 @@ test('background removal survives roundtrip separately from automatic defaults',
 test('rejects malformed collection, mapping and source choice before changing config',()=>{const good=dualCollection();for(const data of [null,{},collection([]),collection([camera,camera,scene('s','Spiel',[])])])assert.throws(()=>inspectCollection(data));assert.throws(()=>applyCollection(good,{mapping:{twitch:{Spiel:'missing'}}}),/nicht in dieser/);assert.equal(applyCollection(good,{mapping:{}}).config.obsCollection.scenes.length,2);assert.throws(()=>applyCollection(good,{sources:{camera:'missing'}}),/gehört nicht/);assert.throws(()=>applyCollection(good,{sources:{camera:42}}),/Ungültige/);assert.throws(()=>inspectCollection(collection([scene('s','Spiel',new Array(10001).fill(null))])));});
 
 test('own virtual camera cannot be selected as an OBS import input',()=>{const data=collection([source('loop','Batto TikTok','dshow_input',{video_device_id:'Batto:{27b05c2d-93dc-474a-a5da-9bba34cb2a9c}'}),scene('s','Spiel',[item('loop','Batto TikTok')])]);assert.equal(inspectCollection(data).sources.camera.length,0);assert.equal(applyCollection(data).config.sources.camera.enabled,false);});
+
+test('format errors distinguish Batto projects, missing OBS sources and collection limits',()=>{
+ assert.throws(()=>inspectCollection(defaults()),/Batto-Dual-Stream-Projekt.*Projekt importieren/);
+ for(const value of [null,[],42])assert.throws(()=>inspectCollection(value),/keine OBS-Szenensammlung.*Exportieren/);
+ for(const value of [{}, {sources:{}}, {sources:'invalid'}])assert.throws(()=>inspectCollection(value),/keine OBS-Quellenliste.*Direkt aus OBS/);
+ assert.throws(()=>inspectCollection({sources:Array(2001).fill({})}),/mehr als 2000 Quellen/);
+});

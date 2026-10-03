@@ -51,5 +51,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.1.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

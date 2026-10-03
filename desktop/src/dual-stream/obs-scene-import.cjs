@@ -20,7 +20,12 @@ const cleanName=s=>text(s.name)||'Unbenannte Quelle';
 const localPath=value=>typeof value==='string'&&value.length<=2000&&!/[\x00-\x1f]/.test(value)&&!value.startsWith('\\\\')&&!value.startsWith('//')&&(/^[a-z]:[\\/]/i.test(value)||path.isAbsolute(value))?value:'';
 
 function model(data){
- if(!data||typeof data!=='object'||!Array.isArray(data.sources)||data.sources.length>2000)throw Error('Bitte eine gültige OBS-Szenensammlung auswählen (höchstens 2000 Quellen).');
+ if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Diese JSON-Datei ist keine OBS-Szenensammlung. Bitte in OBS „Szenensammlung → Exportieren“ verwenden oder „Direkt aus OBS“ wählen.');
+ if(!Array.isArray(data.sources)){
+  if(data.sources&&typeof data.sources==='object'&&data.layouts&&data.program)throw Error('Diese Datei ist ein Batto-Dual-Stream-Projekt. Bitte „Projekt importieren“ verwenden. Für OBS-Szenen kannst du „Direkt aus OBS“ wählen.');
+  throw Error('Diese JSON-Datei enthält keine OBS-Quellenliste. Bitte die exportierte OBS-Szenensammlung auswählen oder „Direkt aus OBS“ verwenden.');
+ }
+ if(data.sources.length>2000)throw Error('Die OBS-Szenensammlung enthält mehr als 2000 Quellen. Bitte eine kleinere Sammlung exportieren.');
  const records=[...data.sources,...(Array.isArray(data.groups)?data.groups:[])];
  if(records.length>2000||records.some(s=>!s||typeof s!=='object'||Array.isArray(s)))throw Error('Die OBS-Quellenliste ist ungültig oder zu groß.');
  const rows=records.map((source,i)=>({source,id:key(source,i)})),byId=new Map(),byName=new Map();let count=0;

@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 function loadPreload(file,invoke){let api;const electron={contextBridge:{exposeInMainWorld(name,value){if(name==='batto')api=value;}},ipcRenderer:{invoke,on(){},removeListener(){},send(){}}};vm.runInNewContext(fs.readFileSync(file,'utf8'),{require(name){assert.equal(name,'electron');return electron;}},{filename:file});assert.equal(typeof api?.dual,'function');return api;}
-const sharedCommands=['register-cameras','program','scene','background','background-clear','obs-import-preview','obs-import-apply','state','save','probe','prepare','release','start','stop','snapshot','library','import','export','detach','attach','always-on-top','companion','gaming','copy-overlay'];
+const sharedCommands=['register-cameras','program','scene','background','background-clear','obs-import-preview','obs-import-list','obs-import-local-preview','obs-import-apply','state','save','probe','prepare','release','start','stop','snapshot','library','import','export','detach','attach','always-on-top','companion','gaming','copy-overlay'];
 for(const name of ['preload.cjs','dual-preload.cjs']){
  test(name+' exposes actual import and background actions through the authorized channel',async()=>{
   const calls=[],answer={accepted:true},api=loadPreload(path.resolve(__dirname,'../electron',name),(channel,payload)=>{calls.push({channel,payload});return Promise.resolve(answer);});

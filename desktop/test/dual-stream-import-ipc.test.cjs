@@ -7,7 +7,8 @@ for(const preload of ['preload.cjs','dual-preload.cjs'])test(preload+': actual e
  const input=path.join(directory,'collection.json'),media=path.join(directory,'background.png');fs.writeFileSync(media,'synthetic path fixture');
  const item={source_uuid:'image',name:'Background',visible:true,align:5,scale_ref:{x:1920,y:1080},pos:{x:0,y:0},bounds_type:2,bounds:{x:1920,y:1080}};
  fs.writeFileSync(input,JSON.stringify({name:'Synthetic collection',sources:[{uuid:'image',name:'Background',id:'image_source',settings:{file:media}},{uuid:'pause',name:'Pause',id:'scene',settings:{items:[item]}}]}));
- const electron={app:{isPackaged:false,whenReady:()=>({then:fn=>{ready=fn;}}),getPath:()=>directory},ipcMain:{handle:(name,fn)=>handlers.set(name,fn)},ipcRenderer:{invoke(channel,payload){assert.equal(channel,'dual:action');return handlers.get(channel)(event,payload);}},contextBridge:{exposeInMainWorld(name,api){assert.equal(name,'batto');browserApi=api;}},dialog:{showOpenDialog:async()=>({filePaths:[input],canceled:false})},BrowserWindow:{getAllWindows:()=>[]},safeStorage:{},clipboard:{}};
+ let lastDialogOptions;const localDirectory=path.join(directory,'obs-studio','basic','scenes');fs.mkdirSync(localDirectory,{recursive:true});const localFile=path.join(localDirectory,'Local collection.json');fs.copyFileSync(input,localFile);
+ const electron={app:{isPackaged:false,whenReady:()=>({then:fn=>{ready=fn;}}),getPath:()=>directory},ipcMain:{handle:(name,fn)=>handlers.set(name,fn)},ipcRenderer:{invoke(channel,payload){assert.equal(channel,'dual:action');return handlers.get(channel)(event,payload);}},contextBridge:{exposeInMainWorld(name,api){assert.equal(name,'batto');browserApi=api;}},dialog:{showOpenDialog:async options=>{lastDialogOptions=options;return {filePaths:[input],canceled:false};}},BrowserWindow:{getAllWindows:()=>[]},safeStorage:{},clipboard:{}};
  const windows={initialize(){},existing:()=>detached?{webContents:sender}:null,status:()=>({detached,alwaysOnTop:false}),close(){}};
  process.env.BATTO_SUITE_DATA=directory;
  Module._load=function(request,parent,main){if(request==='electron')return electron;if(request==='../../electron/main21.cjs')return {getMainWindow:()=>detached?null:{webContents:sender}};if(request==='./windows.cjs'&&parent?.filename===bootstrapPath)return windows;return load.call(this,request,parent,main);};
@@ -17,7 +18,12 @@ for(const preload of ['preload.cjs','dual-preload.cjs'])test(preload+': actual e
   const preloadPath=path.resolve(__dirname,'../electron',preload);vm.runInNewContext(fs.readFileSync(preloadPath,'utf8'),{require(name){assert.equal(name,'electron');return electron;}},{filename:preloadPath});assert.equal(typeof browserApi?.dual,'function');
   const service=bootstrap.getService(),invoke=(command,value,e=event)=>e===event?browserApi.dual(command,value):handlers.get('dual:action')(e,{command,value});
   await service.save(service.config);const before=fs.readFileSync(service.file,'utf8'),revision=service.revision;
-  const preview=await invoke('obs-import-preview');assert.equal(preview.scenes.length,1);assert(preview.token);assert.equal(fs.readFileSync(service.file,'utf8'),before);assert.equal(preview.baseRevision,revision);
+  const filePreview=await invoke('obs-import-preview');assert.equal(filePreview.scenes.length,1);assert.equal(lastDialogOptions.defaultPath,localDirectory);
+  const listing=await invoke('obs-import-list');assert.equal(listing.collections.length,1);assert.deepEqual(Object.keys(listing.collections[0]),['id','name']);assert.equal(listing.collections[0].name,'Local collection');
+  await assert.rejects(invoke('obs-import-local-preview',{id:'../collection.json'}),/auswählen/);
+  await assert.rejects(invoke('obs-import-local-preview',{id:listing.collections[0].id},{...event,senderFrame:{url:frame.url}}),/nicht berechtigt/);
+  const preview=await invoke('obs-import-local-preview',{id:listing.collections[0].id});assert.equal(preview.scenes.length,1);assert(preview.token);assert.equal(fs.readFileSync(service.file,'utf8'),before);assert.equal(preview.baseRevision,revision);
+  await assert.rejects(invoke('obs-import-apply',{token:filePreview.token,baseRevision:revision}),/erneut auswählen/);
   const request={token:preview.token,baseRevision:revision,mapping:{twitch:{Pause:'pause'}},sources:{camera:'',game:''}};
   await assert.rejects(invoke('obs-import-apply',{...request,token:'wrong'}),/erneut auswählen/);
   await assert.rejects(invoke('obs-import-preview',null,{...event,senderFrame:{url:frame.url}}),/nicht berechtigt/);
@@ -27,13 +33,16 @@ for(const preload of ['preload.cjs','dual-preload.cjs'])test(preload+': actual e
   assert.equal(result.config.obsCollection.scenes.length,1);assert(result.sceneChoices.some(x=>x.value==='obs:pause'));assert.equal(result.config.obsCollection.sources[0].settings.file,media);
   const backup=fs.readdirSync(directory).find(n=>n.startsWith('dual-stream.before-obs-import-'));assert(backup);assert.equal(fs.readFileSync(path.join(directory,backup),'utf8'),preImport);
   await assert.rejects(invoke('obs-import-apply',{...request,token:fresh.token,baseRevision:result.revision}),/erneut auswählen/);
+  const retry=await invoke('obs-import-local-preview',{id:listing.collections[0].id});fs.writeFileSync(localFile,'{}');
+  await assert.rejects(invoke('obs-import-local-preview',{id:listing.collections[0].id}),error=>error.message.includes('Local collection.json')&&!error.message.includes(localDirectory));
+  await assert.rejects(invoke('obs-import-apply',{token:retry.token,baseRevision:retry.baseRevision}),/erneut auswählen/);assert.equal(fs.readFileSync(service.file,'utf8'),JSON.stringify(service.config,null,2));fs.copyFileSync(input,localFile);
   const transitionFile=path.join(directory,'stinger.webm');fs.writeFileSync(transitionFile,'synthetic path fixture');
   const withTransition=JSON.parse(fs.readFileSync(input,'utf8'));withTransition.transitions=[{name:'Stinger',id:'obs_stinger_transition',settings:{path:transitionFile}}];withTransition.current_transition='Stinger';fs.writeFileSync(input,JSON.stringify(withTransition));
   const beforeOnly=structuredClone(service.config),onlyPreview=await invoke('obs-import-preview');assert.equal(onlyPreview.transitions.length,1);
   const only=await invoke('obs-import-apply',{token:onlyPreview.token,baseRevision:onlyPreview.baseRevision,transitionsOnly:true});
   assert.deepEqual(only.config.obsCollection,beforeOnly.obsCollection);assert.deepEqual(only.config.sources,beforeOnly.sources);assert.deepEqual(only.config.layouts,beforeOnly.layouts);assert.equal(only.config.program.scene,beforeOnly.program.scene);assert.equal(only.config.program.transition,only.config.transitions[0].id);assert.equal(only.transitionChoices.length,3);
   await assert.rejects(invoke('obs-import-apply',{token:onlyPreview.token,baseRevision:only.revision,transitionsOnly:true}),/erneut auswählen/);
-  service.state.outputs={tiktok:{state:'camera'}};await assert.rejects(invoke('obs-import-preview'),/stoppen/);service.state.outputs={};
+  service.state.outputs={tiktok:{state:'camera'}};await assert.rejects(invoke('obs-import-preview'),/stoppen/);await assert.rejects(invoke('obs-import-list'),/stoppen/);await assert.rejects(invoke('obs-import-local-preview',{id:listing.collections[0].id}),/stoppen/);service.state.outputs={};
   await invoke('background-clear',{platform:'twitch',scene:'Pause',baseRevision:service.revision});assert.equal(service.config.program.platformBackgrounds.twitch.Pause,null);assert.equal(fs.existsSync(media),true);assert.equal(service.config.obsCollection.aliases.twitch.Pause,undefined);assert.equal(service.config.obsCollection.scenes.length,1);
   // Normalized OBS projects exceed the original tiny, layout-only file limit.
   const large=structuredClone(service.config);for(let i=0;i<20;i++)large.obsCollection.sources.push({id:'text-'+i,name:'Text '+i,type:'text_gdiplus',settings:{text:'A'.repeat(9000)}});

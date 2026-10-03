@@ -1,5 +1,6 @@
 'use strict';
 const {SETTING_SPECS,validateSetting,applySetting}=require('./jarvis-setting-actions.cjs');
+const {sceneChoices}=require('../dual-stream/config.cjs');
 const SCENES=['Spiel','Pause','Start','Ende'];
 const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'iCUE LINK Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschgeschenke',widgets:'TikFinity-Widgets',livecenter:'TikTok LIVE Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Chat-Filter',hologram:'Chatfarben',platforms:'Plattformen',commands:'Commands',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys / Multi-Action',events:'Events',media:'Medien',pools:'Medien-Pools',tts:'TTS',discord:'Discord',streamerbot:'Streamer.bot',backups:'Backups',settings:'Einstellungen',diagnostics:'Diagnose 2.1'};
 async function connectAdapter(adapter,name,op){
@@ -14,10 +15,10 @@ async function connectAdapter(adapter,name,op){
 }
 class SuiteControls{
  constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;this.jarvisDepth=0;}
- catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{};return {actions:[
+ catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{},dual=this.getDual(),scenes=sceneChoices(dual?.config).map(({value,label})=>({id:value,name:label}));return {actions:[
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
-  {id:'scene',name:'Szene und Übergang',choices:SCENES.map(id=>({id,name:id})),transition:true},
+  {id:'scene',name:'Szene und Übergang',choices:scenes,transition:true},
   {id:'start',name:'Virtuelle Kamera starten',choices:this.targets()}, {id:'stop',name:'Virtuelle Kamera stoppen',choices:this.targets()},
   {id:'source',name:'Bildquelle an/aus',choices:[['camera','Kamera'],['game','Spiel']].map(([id,name])=>({id,name})),switch:true},
   {id:'overlay',name:'Einblendung an/aus',choices:[{id:'chat',name:'Chat'},{id:'events',name:'Ereignisse'}],switch:true},
@@ -35,7 +36,7 @@ class SuiteControls{
   {id:'navigate',name:'Programmbereich öffnen',choices:Object.entries(VIEWS).map(([id,name])=>({id,name}))},
   {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'}, {id:'gaming',name:'Gaming-Modus: Oberfläche schließen, Dienste weiterführen'},
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
- ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],sceneMode:this.getDual()?'suite':'obs',scenes:SCENES,states:legacy.states||{},program:this.getDual()?.config.program||{},voice:this.runtime.voice.status};}
+ ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],sceneMode:dual?'suite':'obs',scenes:scenes.map(x=>x.name),states:legacy.states||{},program:dual?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
  validate(steps,{voice=false}={}){
   if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');

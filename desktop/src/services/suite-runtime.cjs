@@ -2,6 +2,7 @@
 const fs=require('node:fs'),fsp=require('node:fs/promises'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const {spawn}=require('node:child_process'),{EventEmitter}=require('node:events');
 const {SuiteControls}=require('./suite-controls.cjs');
+const {sceneChoices}=require('../dual-stream/config.cjs');
 const {JarvisCore,cleanSettings}=require('./jarvis-core.cjs');
 const {TouchAudio}=require('./touch-audio.cjs');
 const {controlAudio}=require('./jarvis-audio.cjs');
@@ -40,7 +41,7 @@ class SuiteRuntime extends EventEmitter{
   this.jarvis=new JarvisCore({directory,getSensors:()=>this.fan.snapshot?.sensors||[],getFans:()=>{
    const snapshot=this.fan.snapshot,sensors=snapshot?.sensors||[];
    return (snapshot?.scene?.tiles||[]).map(t=>({id:t.id,name:t.name,announce:t.announce,reference:[t.percentSensorId,t.rpmSensorId,t.maxRpm],percent:t.speedPercent,rpm:sensors.find(s=>s.id===t.rpmSensorId)}));
-  },obs:{scenes:async()=>{const d=getDual?.();if(d)return ['Spiel','Pause','Start','Ende'];if(!obs.connected)throw Error('Der Sender ist noch nicht bereit.');const r=await obs.request('GetSceneList');return r.scenes.map(s=>s.sceneName);},setScene:async name=>{const d=getDual?.();if(d)return d.serial(()=>d.scene(name));await obs.request('SetCurrentProgramScene',{sceneName:name});}},speak:text=>{if(!this.closed)this.voice.send({command:'speak',text});},stopSpeech:()=>this.stopSpeech(),askAi:(text,settings,memory)=>this.askAi(text,settings,memory)});
+  },obs:{scenes:async()=>{const d=getDual?.();if(d)return sceneChoices(d.config).map(x=>x.label);if(!obs.connected)throw Error('Der Sender ist noch nicht bereit.');const r=await obs.request('GetSceneList');return r.scenes.map(s=>s.sceneName);},setScene:async name=>{const d=getDual?.();if(d)return d.serial(()=>d.scene(name));await obs.request('SetCurrentProgramScene',{sceneName:name});}},speak:text=>{if(!this.closed)this.voice.send({command:'speak',text});},stopSpeech:()=>this.stopSpeech(),askAi:(text,settings,memory)=>this.askAi(text,settings,memory)});
   this.fanRoot=fanRoot;
   this.jarvis.control=(value)=>this.controls.executeFromJarvis(value);
   this.jarvis.getCommandCatalog=()=>this.controls.catalog();

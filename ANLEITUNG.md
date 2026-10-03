@@ -1,4 +1,8 @@
-# Batto 3-in-1 · Schnellstart 1.8.6
+# Batto 3-in-1 · Schnellstart 1.8.7
+
+## Vollständige Szenenliste aus OBS · 1.8.7
+
+Der Import speichert jetzt die gesamte Szenensammlung. Die importierten Szenen stehen in Dual Stream, Jarvis und den Deck-Aktionen zur Auswahl. Mehrere Video- und Bildebenen werden in der ursprünglichen Reihenfolge dargestellt. Es werden keine OBS-Zugangsdaten, Skripte oder Browseradressen übernommen.
 
 ## Virtuelle Kameras in LIVE Studio · 1.8.6
 
@@ -10,9 +14,9 @@ Nur die Kameraeinrichtung benötigt Administratorrechte. Batto und seine Vorscha
 
 Unter **Vorschau → Kamera & Spiel prüfen** lassen sich die gemeinsamen Quellen auch während Start, Pause oder Ende ansehen, ohne die Ausgabe umzuschalten. **Spiel-Szene auswählen** übernimmt die Kamera ins Programmbild. Die Vorschau bleibt auf ein Bild pro Sekunde begrenzt. Verschobene Installationen reparieren eigene ungültige Kameraeinträge beim Start des Videodienstes; LIVE Studio anschließend neu öffnen.
 
-**OBS-Szenensammlung importieren** liest eine lokal exportierte JSON-Datei. Vor dem Übernehmen ordnest du Spiel, Start, Pause und Ende für TikTok und Twitch getrennt zu und wählst die gemeinsame Kamera/Spielquelle. Die bisherigen Einstellungen werden gesichert. Übernommen werden geeignete lokale Bild-/Video-Hintergründe und die Anordnung der zwei gemeinsamen Bildquellen. Browserquellen, OBS-Plugins, Filter, zusätzliche Ebenen und nicht exakt übertragbare Beschnitte werden als Hinweise angezeigt. Die Ausgaben bleiben nach dem Import aus.
+**OBS-Szenensammlung importieren** übernimmt alle Szenen mit ihren Namen und geordneten Ebenen. Nach Auswahl der JSON-Datei kannst du zusätzlich Spiel, Start, Pause und Ende als Kurzbefehle zuordnen. In **Szene** stehen anschließend auch Chat, Offline und weitere importierte Szenen zur Wahl. Verknüpfte Hoch- und Querformatszenen werden gemeinsam umgeschaltet. Bilder, lokale Videos, Texte sowie Position, Größe, Drehung und Zuschnitt bleiben erhalten. Kameraebenen nutzen die gewählte gemeinsame Kamera; unterschiedliche Fenster- und Spielquellen bleiben getrennt. Leere Quellen bleiben inaktiv. Browserquellen, OBS-Plugins und Filter werden mit Hinweisen ausgelassen. Die bisherigen Einstellungen werden vor dem Import gesichert; die Ausgaben bleiben danach aus.
 
-**Hintergrund löschen** entfernt den Hintergrund aus der ausgewählten Szene und Leinwand; die Originaldatei bleibt erhalten. Die leere Szene bleibt auch nach Neustart schwarz. Identische Hintergrundvideos auf beiden Leinwänden werden gemeinsam dekodiert.
+**Hintergrund löschen** entfernt den Hintergrund aus der ausgewählten Standardszene und Leinwand; die Originaldatei bleibt erhalten. Bei einer OBS-Zuordnung löst dies das entsprechende Standardkürzel von der importierten Szene. Die komplette importierte Szene bleibt weiterhin in der Szenenliste verfügbar. Einzelne Ebenen einer importierten Szene bearbeitest du zunächst in OBS und importierst die Sammlung erneut. Identische Hintergrundvideos werden gemeinsam dekodiert; inaktive Videos werden geschlossen.
 
 
 Den Windows-Installer öffnen und den separat erhaltenen Installationsschlüssel eingeben. Der private Schlüssel wird nicht im Repository veröffentlicht. Die bisherigen Suite-Einstellungen bleiben bei einem Update erhalten.

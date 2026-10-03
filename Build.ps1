@@ -1,4 +1,4 @@
-param([string]$InnoCompiler = '',[switch]$PrepareVoice,[switch]$SkipInstaller,[string]$InstallerKeyFile = '')
+﻿param([string]$InnoCompiler = '',[switch]$PrepareVoice,[switch]$SkipInstaller,[string]$InstallerKeyFile = '')
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Build-Schritt fehlgeschlagen: $LASTEXITCODE" } }
@@ -32,7 +32,7 @@ npm ci; Check-Exit
 npm run test:jarvis; Check-Exit
 npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
-node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs; Check-Exit
+node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs test/obs-collection.test.cjs; Check-Exit
 npm run test:core; Check-Exit
 node scripts/audio-playback-regression.cjs; Check-Exit
 node scripts/ui-contract.cjs; Check-Exit
@@ -48,5 +48,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.6.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.8.7.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

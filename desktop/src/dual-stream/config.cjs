@@ -1,5 +1,6 @@
 'use strict';
 const spec=require('./project-specification.json');
+const {validateObsCollection,sceneChoices,resolveScene}=require('./obs-collection.cjs');
 const platforms=['tiktok','twitch'],sourceIds=['game','camera','microphone','desktop'];
 const copy=x=>JSON.parse(JSON.stringify(x));
 function defaults(){return {program:{scene:'Spiel',transition:'fade',durationMs:350,chat:false,events:true,backgrounds:{}},version:1,layoutRevision:2,profile:spec.active_profile,obsRoot:'',sources:{game:{enabled:false,kind:'game',target:'',name:''},camera:{enabled:false,target:'',name:''},microphone:{enabled:false,target:'default',name:'Windows-Standard'},desktop:{enabled:false,target:'default',name:'Windows-Standard'}},layouts:{tiktok:[{source:'game',x:0,y:0.48,width:1,height:0.52,fit:'contain',visible:true},{source:'camera',x:0,y:0,width:1,height:0.48,fit:'cover',visible:true}],twitch:[{source:'game',x:0,y:0,width:1,height:1,fit:'contain',visible:true},{source:'camera',x:0.73,y:0.61,width:0.25,height:0.36,fit:'contain',visible:true}]},destinations:{tiktok:{server:'',muted:false},twitch:{server:'rtmp://live.twitch.tv/app',muted:false}}};}
@@ -17,7 +18,9 @@ function validate(input){
  }
  // Upgrade only the old factory layout; preserve deliberately arranged layouts.
  if(!input.layoutRevision){const [g,camera]=['game','camera'].map(id=>c.layouts.tiktok.find(x=>x.source===id));if(g.x===0&&g.y===.22&&g.width===1&&g.height===.56&&camera.x===.53&&camera.y===.02&&camera.width===.44&&camera.height===.19)c.layouts.tiktok=defaults().layouts.tiktok;}
- const program=input.program||{};c.program={scene:['Spiel','Pause','Start','Ende'].includes(program.scene)?program.scene:'Spiel',transition:program.transition==='cut'?'cut':'fade',durationMs:Number.isInteger(program.durationMs)?Math.max(100,Math.min(2000,program.durationMs)):350,chat:program.chat===true,events:program.events!==false,backgrounds:{}};
+ const collection=validateObsCollection(input.obsCollection);if(collection)c.obsCollection=collection;
+ const program=input.program||{};let selectedScene='Spiel';if(typeof program.scene==='string'){try{selectedScene=resolveScene(c,program.scene);}catch{if(program.scene.startsWith('obs:'))throw Error('Die ausgewählte OBS-Szene ist nicht mehr vorhanden.');}}
+ c.program={scene:selectedScene,transition:program.transition==='cut'?'cut':'fade',durationMs:Number.isInteger(program.durationMs)?Math.max(100,Math.min(2000,program.durationMs)):350,chat:program.chat===true,events:program.events!==false,backgrounds:{}};
  // null means deliberately removed; empty/absent keeps the legacy factory background.
  for(const scene of ['Pause','Start','Ende'])c.program.backgrounds[scene]=program.backgrounds?.[scene]===null?null:str(program.backgrounds?.[scene]||'',2000);
  c.program.platformBackgrounds={tiktok:{},twitch:{}};
@@ -34,4 +37,4 @@ function importProject(data){
  }return validate(data);
 }
 function profile(config){const p=copy(spec.profiles[config.profile]);return {fps:p.fps,tiktok:p.outputs.tiktok_vertical,twitch:p.outputs.twitch_landscape,uploadMbps:(p.outputs.tiktok_vertical.video_bitrate_kbps+p.outputs.twitch_landscape.video_bitrate_kbps+256)/1000};}
-module.exports={defaults,validate,importProject,profile,platforms,server};
+module.exports={defaults,validate,importProject,profile,platforms,server,sceneChoices,resolveScene};

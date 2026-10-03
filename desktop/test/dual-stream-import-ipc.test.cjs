@@ -19,10 +19,11 @@ test('OBS import IPC previews without mutation, rejects stale/replayed changes, 
   await assert.rejects(invoke('obs-import-preview',null,{...event,senderFrame:{url:frame.url}}),/nicht berechtigt/);
   await service.scene('Start');await assert.rejects(invoke('obs-import-apply',request),/inzwischen/);
   const fresh=await invoke('obs-import-preview');const preImport=fs.readFileSync(service.file,'utf8');const result=await invoke('obs-import-apply',{...request,token:fresh.token,baseRevision:fresh.baseRevision});
-  assert.equal(result.config.program.platformBackgrounds.twitch.Pause,media);assert(result.importWarnings.length);assert.match(result.importSummary,/1 Szenenzuordnungen/);assert.equal(result.engineRunning,false);
+  assert.equal(result.config.program.platformBackgrounds.twitch.Pause,media);assert.deepEqual(result.importWarnings,[]);assert.match(result.importSummary,/1 OBS-Szenen/);assert.equal(result.engineRunning,false);
+  assert.equal(result.config.obsCollection.scenes.length,1);assert(result.sceneChoices.some(x=>x.value==='obs:pause'));assert.equal(result.config.obsCollection.sources[0].settings.file,media);
   const backup=fs.readdirSync(directory).find(n=>n.startsWith('dual-stream.before-obs-import-'));assert(backup);assert.equal(fs.readFileSync(path.join(directory,backup),'utf8'),preImport);
   await assert.rejects(invoke('obs-import-apply',{...request,token:fresh.token,baseRevision:result.revision}),/erneut auswählen/);
   service.state.outputs={tiktok:{state:'camera'}};await assert.rejects(invoke('obs-import-preview'),/stoppen/);service.state.outputs={};
-  await invoke('background-clear',{platform:'twitch',scene:'Pause',baseRevision:service.revision});assert.equal(service.config.program.platformBackgrounds.twitch.Pause,null);assert.equal(fs.existsSync(media),true);
+  await invoke('background-clear',{platform:'twitch',scene:'Pause',baseRevision:service.revision});assert.equal(service.config.program.platformBackgrounds.twitch.Pause,null);assert.equal(fs.existsSync(media),true);assert.equal(service.config.obsCollection.aliases.twitch.Pause,undefined);assert.equal(service.config.obsCollection.scenes.length,1);
  }finally{await bootstrap?.close();Module._load=load;if(previous===undefined)delete process.env.BATTO_SUITE_DATA;else process.env.BATTO_SUITE_DATA=previous;fs.rmSync(directory,{recursive:true,force:true});}
 });

@@ -12,6 +12,7 @@ internal static class Obs {
  [StructLayout(LayoutKind.Sequential)] public struct Video { public nint graphics; public uint fpsNum,fpsDen,width,height,outWidth,outHeight; public int format; public uint adapter; [MarshalAs(UnmanagedType.I1)] public bool gpu; public int colorspace,range,scale; }
  [StructLayout(LayoutKind.Sequential)] public struct Audio { public uint rate; public int speakers; }
  [StructLayout(LayoutKind.Sequential)] public struct Vec { public float x,y; public Vec(float x,float y){this.x=x;this.y=y;} }
+ [StructLayout(LayoutKind.Sequential)] public struct Crop { public int left,top,right,bottom; }
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void Log(int level,nint format,nint args,nint param);
  [DllImport("kernel32",CharSet=CharSet.Unicode)] public static extern bool SetDllDirectory(string path);
  [DllImport(D)] public static extern void base_set_log_handler(Log handler,nint data);
@@ -37,12 +38,16 @@ internal static class Obs {
  [DllImport(D)] public static extern void obs_source_set_audio_mixers(nint source,uint mixers);
  [DllImport(D)] public static extern uint obs_source_get_width(nint source);
  [DllImport(D)] public static extern uint obs_source_get_height(nint source);
+ [DllImport(D)] [return:MarshalAs(UnmanagedType.I1)] public static extern bool obs_source_active(nint source);
  [DllImport(D)] public static extern void obs_set_output_source(uint channel,nint source);
  [DllImport(D)] public static extern nint obs_scene_create_private([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
  [DllImport(D)] public static extern nint obs_scene_get_source(nint scene);
  [DllImport(D)] public static extern void obs_scene_release(nint scene);
  [DllImport(D)] public static extern nint obs_scene_add(nint scene,nint source);
  [DllImport(D)] public static extern void obs_sceneitem_set_pos(nint item,ref Vec pos);
+ [DllImport(D)] public static extern void obs_sceneitem_set_scale(nint item,ref Vec scale);
+ [DllImport(D)] public static extern void obs_sceneitem_set_rot(nint item,float rotation);
+ [DllImport(D)] public static extern void obs_sceneitem_set_crop(nint item,ref Crop crop);
  [DllImport(D)] public static extern void obs_sceneitem_set_alignment(nint item,uint value);
  [DllImport(D)] public static extern void obs_sceneitem_set_bounds_type(nint item,int value);
  [DllImport(D)] public static extern void obs_sceneitem_set_bounds_alignment(nint item,uint value);
@@ -121,5 +126,6 @@ internal static class Obs {
  [DllImport(D)] public static extern void obs_source_load(nint source);
  [DllImport(D)] public static extern void obs_sceneitem_remove(nint item);
  [DllImport(D)] public static extern int obs_source_media_get_state(nint source);
+ [DllImport(D)] public static extern long obs_source_media_get_time(nint source);
  [DllImport(D)] public static extern void obs_source_set_volume(nint source,float volume);
 }

@@ -4,6 +4,7 @@
 // filters, hotkeys, credentials and audio devices are never loaded or executed.
 const fs=require('node:fs'),path=require('node:path');
 const {defaults,validate}=require('./config.cjs');
+const {validateObsCollection,sourceSettings,SOURCE_TYPES}=require('./obs-collection.cjs');
 const PLATFORMS=['tiktok','twitch'],SLOTS=['Spiel','Start','Pause','Ende'];
 const CAMERA_TYPES=new Set(['dshow_input','av_capture_input','v4l2_input']);
 const GAME_TYPES={game_capture:'game',window_capture:'window',monitor_capture:'screen',display_capture:'screen'};
@@ -73,6 +74,44 @@ function mediaAsset(entry,fileExists,warn,scene){const s=entry.row.source,id=typ
  if(reason)warn(`${scene} · ${cleanName(s)}: ${reason}.`);
  return {source:entry.row.id,name:cleanName(s),path:file,exists,supported,reason};
 }
+function createObsCollection(data,{mapping={},sharedGameId='',fileExists=fs.existsSync}={}){
+ const m=model(data),warnings=[],warn=value=>{const message=text(value,1000).replace(/https?:\/\/\S+/gi,'[Adresse]');if(warnings.length<200&&!warnings.includes(message))warnings.push(message);};
+ const nodes=m.rows.filter(r=>sceneType(r.source)),sources=m.rows.filter(r=>!sceneType(r.source)).map(row=>{
+  const source=row.source,name=cleanName(source),original=type(source),stock=typeof original==='string'?original.replace(/_v\d+$/,''):'';
+  let sourceType=SOURCE_TYPES.has(stock)?stock:'unsupported',settings=sourceSettings(sourceType,source.settings);
+  if(sourceType==='unsupported')warn(`${name}: Quellentyp „${text(original)}“ bleibt als inaktive Ebene erhalten.`);
+  if(sourceType==='dshow_input'&&!settings.video_device_id){sourceType='unsupported';settings={};warn(`${name}: Kein verwendbares Kameragerät gespeichert; diese Ebene bleibt inaktiv.`);}
+  if(['game_capture','window_capture'].includes(sourceType)&&!settings.window&&settings.capture_mode!=='any_fullscreen'){sourceType='unsupported';settings={};warn(`${name}: Kein Aufnahmefenster gespeichert; diese Ebene bleibt inaktiv.`);}
+  if(['image_source','ffmpeg_source'].includes(sourceType)){
+   const file=settings.file||settings.local_file;
+   if(!file){sourceType='unsupported';settings={};warn(`${name}: Kein unterstützter lokaler Dateipfad gespeichert; diese Ebene bleibt inaktiv.`);}
+   else {let exists=false;try{exists=fileExists(file)===true;}catch{}if(!exists)warn(`${name}: Datei fehlt.`);}
+  }
+  if(Array.isArray(source.filters)&&source.filters.length)warn(`${name}: OBS-Filter werden nicht übernommen.`);
+  if(['text_gdiplus','text_ft2_source'].includes(sourceType)&&(source.settings?.read_from_file||source.settings?.from_file))warn(`${name}: Text aus einer externen Datei wird nicht geladen; bitte einen festen Text verwenden.`);
+  return {id:row.id,name,type:sourceType,settings,...(sourceType==='dshow_input'?{shared:'camera'}:row.id===sharedGameId&&['game_capture','window_capture','monitor_capture','display_capture'].includes(sourceType)?{shared:'game'}:{})};
+ });
+ const labels=new Map(),scenes=nodes.map(row=>{
+  const source=row.source,canvas=dimensions(source,data),platform=canvas.height>canvas.width?'tiktok':'twitch',name=cleanName(source),base=`${name} · ${platform==='tiktok'?'TikTok':'Twitch'}`,count=(labels.get(base)||0)+1;labels.set(base,count);
+  const items=[];for(const entry of source.settings?.items||[]){if(!entry||entry.group_item_backup===true)continue;const found=m.resolve(entry);if(!found)continue;
+   // Keep OBS transforms untouched. Native source dimensions become available
+   // after decoding; bounded and unbounded items must not be collapsed to boxes.
+   items.push({source:found.id,visible:entry.visible!==false,pos:entry.pos,scale:entry.scale,rot:entry.rot,align:entry.align,bounds_type:entry.bounds_type,bounds_align:entry.bounds_align,bounds_crop:entry.bounds_crop,bounds:entry.bounds,crop_left:entry.crop_left,crop_right:entry.crop_right,crop_top:entry.crop_top,crop_bottom:entry.crop_bottom,scale_ref:entry.scale_ref});
+  }
+  return {id:row.id,key:'obs:'+row.id,name,label:base+(count>1?` (${count})`:''),platform,...canvas,partnerId:'',internal:type(source)==='group',items};
+ });
+ const byId=new Map(scenes.map(s=>[s.id,s]));
+ for(const row of nodes){const scene=byId.get(row.id);for(const link of Array.isArray(row.source.settings?.canvas)?row.source.settings.canvas:[]){const matches=scenes.filter(s=>!s.internal&&s.platform!==scene.platform&&s.name===text(link.scene));if(matches.length===1){scene.partnerId=matches[0].id;if(!matches[0].partnerId)matches[0].partnerId=scene.id;break;}}}
+ let visits=0;function prune(scene,parents,depth){const next=new Set(parents).add(scene.id);scene.items=scene.items.filter(i=>{if(++visits>40000)throw Error('Die OBS-Sammlung ist zu stark verschachtelt.');const child=byId.get(i.source);if(!child)return true;if(next.has(child.id)||depth>=8){warn(`${scene.name}: Eine Szenenverknüpfung enthält einen Kreis oder ist zu tief und bleibt inaktiv.`);return false;}prune(child,next,depth+1);return true;});}
+ for(const scene of scenes)prune(scene,new Set(),0);
+ for(const warning of m.warnings)warn(warning);
+ const order=(Array.isArray(data.scene_order)?data.scene_order:[]).map(s=>text(s?.name));
+ scenes.sort((a,b)=>{const rank=s=>{const direct=order.indexOf(s.name);if(direct>=0)return direct*2+(s.platform==='tiktok'?1:0);const partner=byId.get(s.partnerId),index=partner?order.indexOf(partner.name):-1;return index>=0?index*2+1:10000;};return rank(a)-rank(b);});
+ if(sources.some(s=>s.type==='dshow_input'))warn('Kameraebenen verwenden die aktuell ausgewählte gemeinsame Kamera. Historische OBS-Kameras werden nicht zusätzlich geöffnet.');
+ if(sources.some(s=>['game_capture','window_capture','monitor_capture','display_capture'].includes(s.type)))warn('Weitere Spiel- und Fensterquellen behalten ihre OBS-Zuordnung. Geschlossene Programme liefern kein Bild, bis sie wieder geöffnet werden.');
+ if(sources.some(s=>s.type==='ffmpeg_source'))warn('OBS-Ton und Medienlautstärke werden nicht übernommen; die virtuelle Kamera überträgt das Bild.');
+ return validateObsCollection({version:1,name:text(data.name)||'OBS-Szenensammlung',sources,scenes,aliases:mapping,warnings});
+}
 function inspectCollection(data,{fileExists=fs.existsSync}={}){
  const m=model(data),scenes=m.scenes.map(row=>{const start=m.warnings.length,flattened=flatten(m,row),sources=flattened.items.map(e=>sourceCandidate(e.row)).filter(Boolean),assets=flattened.items.map(e=>mediaAsset(e,fileExists,m.warn,cleanName(row.source))).filter(Boolean),unsupported=flattened.items.filter(e=>!sourceCandidate(e.row)&&!['image_source','ffmpeg_source'].includes(type(e.row.source)));
   for(const e of unsupported)m.warn(`${cleanName(row.source)} · ${cleanName(e.row.source)}: Quellentyp „${text(type(e.row.source))}“ wird nicht übernommen.`);
@@ -82,8 +121,9 @@ function inspectCollection(data,{fileExists=fs.existsSync}={}){
  for(const p of PLATFORMS)for(const slot of SLOTS){const exact=scenes.filter(s=>s.platform===p&&s.name.toLowerCase()===slot.toLowerCase()),names=slot==='Spiel'?/^(?:spiel|game|gaming)$/i:slot==='Ende'?/^(?:ende|end|offline)$/i:new RegExp(`^${slot}$`,'i'),matching=exact.length?exact:scenes.filter(s=>s.platform===p&&names.test(s.name));suggestedMapping[p][slot]=matching.length===1?matching[0].id:'';}
  const all=m.rows.map(sourceCandidate).filter(Boolean),sources={camera:all.filter(x=>x.kind==='camera'),game:all.filter(x=>x.kind!=='camera')},suggestedSources={camera:'',game:''};
  for(const kind of ['camera','game']){const used=new Set(PLATFORMS.flatMap(p=>scenes.find(s=>s.id===suggestedMapping[p].Spiel)?.sources||[])),candidates=sources[kind].filter(x=>used.has(x.id)),targets=new Set(candidates.map(x=>`${x.kind}:${x.target}`));if(targets.size===1)suggestedSources[kind]=candidates[0].id;}
- m.warn('OBS-Browserquellen, Filter, Übergangsdateien, Ton und zusätzliche Ebenen werden nicht übernommen. Start/Pause/Ende verwenden je ein lokales Hintergrundmedium; die gemeinsamen Bildquellen gehören zu Spiel.');
- return {name:text(data.name)||'OBS-Szenensammlung',scenes,sources,suggestedSources,suggestedMapping,warnings:m.warnings};
+ const saved=createObsCollection(data,{mapping:suggestedMapping,fileExists});
+ for(const scene of scenes){const original=saved.scenes.find(s=>s.id===scene.id);scene.key=original.key;scene.label=original.label;scene.partnerId=original.partnerId;scene.warnings=saved.warnings.filter(w=>w.startsWith(scene.name+' · '));}
+ return {name:text(data.name)||'OBS-Szenensammlung',scenes,sources,suggestedSources,suggestedMapping,warnings:saved.warnings};
 }
 function normalizeBox(box,canvas,fallback,warn,label){if(!box)return {...fallback,visible:true};const left=Math.max(0,box.x),top=Math.max(0,box.y),right=Math.min(canvas.width,box.x+box.width),bottom=Math.min(canvas.height,box.y+box.height);
  if(right<=left||bottom<=top){warn(`${label}: Quelle liegt vollständig außerhalb der Leinwand und bleibt ausgeblendet.`);return {...fallback,visible:false};}
@@ -114,7 +154,11 @@ function applyCollection(data,{config=defaults(),mapping,sources:selection,devic
    if(flat.items.some(e=>sourceCandidate(e.row)))warn(`${label}: Kamera-/Fensterebenen dieser Szene werden nicht übernommen. Gemeinsame Bildquellen können in Spiel angeordnet werden.`);
   }
  }
- for(const warning of m.warnings)warn(warning);if(!imported)throw Error('Bitte mindestens eine OBS-Szene zuordnen.');
- next.layoutRevision=2;return {config:validate(next),warnings,summary:`${imported} Szenenzuordnungen übernommen. Die Ausgabe wurde nicht gestartet.`};
+ // The simplified layouts/backgrounds above remain useful when the collection
+ // is removed. Actual imported scenes always render their complete saved layers.
+ next.obsCollection=createObsCollection(data,{mapping:map,sharedGameId:chosen.game?.id||'',fileExists});
+ for(const message of warnings.filter(w=>/^Mehrere (?:Kameras|Spiel-)|^„.+“ ist aktuell nicht/.test(w)))if(!next.obsCollection.warnings.includes(message))next.obsCollection.warnings.push(message);
+ if(next.program.scene.startsWith('obs:')&&!next.obsCollection.scenes.some(s=>s.key===next.program.scene))next.program.scene='Spiel';
+ next.layoutRevision=2;return {config:validate(next),warnings:next.obsCollection.warnings,summary:`${next.obsCollection.scenes.filter(s=>!s.internal).length} OBS-Szenen mit ihren Ebenen übernommen; ${imported} Schnellwahltasten zugeordnet. Die Ausgabe wurde nicht gestartet.`};
 }
-module.exports={inspectCollection,applyCollection};
+module.exports={inspectCollection,applyCollection,createObsCollection};

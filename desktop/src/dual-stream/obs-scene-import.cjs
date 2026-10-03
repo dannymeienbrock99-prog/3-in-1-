@@ -40,7 +40,7 @@ function dimensions(scene,data){
  return {width:finite(data.resolution?.x,1920)||1920,height:finite(data.resolution?.y,1080)||1080};
 }
 function sourceCandidate(row){const s=row.source,settings=s.settings||{},id=type(s),name=cleanName(s);
- if(CAMERA_TYPES.has(id)){const target=text(settings.video_device_id||settings.device||'',2000);if(target&&!/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]/i.test(target))return {id:row.id,name,target,kind:'camera'};}
+ if(CAMERA_TYPES.has(id)){const target=text(settings.video_device_id||settings.device||'',2000);if(target&&!/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]|Batto (?:TikTok|Twitch)/i.test(target))return {id:row.id,name,target,kind:'camera'};}
  if(GAME_TYPES[id]){const kind=GAME_TYPES[id],raw=kind==='screen'?(settings.monitor_id??settings.monitor):settings.window,target=typeof raw==='number'?String(raw):text(raw,2000);if(target)return {id:row.id,name,target,kind};}
  return null;
 }

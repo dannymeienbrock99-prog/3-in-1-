@@ -30,7 +30,7 @@ test('duplicate enabled camera devices and malformed additional source/layout da
 
 test('invalid camera requests are rejected before launching the video service',async t=>{
  const dual=fixture(t);let starts=0;dual.client=async()=>{starts++;throw Error('Must not launch');};
- for(const id of cameraIds){dual.config=defaults();dual.config.sources[id]={enabled:true,target:'Batto:{27b05c2d-93dc-474a-a5da-9bba34cb2a9c}',name:''};await assert.rejects(dual.prepare(),/echte Kamera/);}
+ for(const id of cameraIds)for(const target of ['Batto:{27b05c2d-93dc-474a-a5da-9bba34cb2a9c}','Batto TikTok','Batto Twitch:output']){dual.config=defaults();dual.config.sources[id]={enabled:true,target,name:''};await assert.rejects(dual.prepare(),/echte Kamera/);}
  dual.config=defaults();dual.config.sources.camera2={enabled:true,target:'Same',name:''};dual.config.sources.camera3={enabled:true,target:'same',name:''};await assert.rejects(dual.prepare(),/nur einmal/);assert.equal(starts,0);
 });
 
@@ -46,4 +46,11 @@ test('OBS import keeps extra camera device/layout choices and does not duplicate
  const data={name:'Synthetic camera collection',sources:[{uuid:'cam',name:'Second camera',id:'dshow_input',settings:{video_device_id:'Second:id'}},{uuid:'scene',name:'Spiel',id:'scene',settings:{items:[{source_uuid:'cam',name:'Second camera',visible:true,pos:{x:0,y:0},scale:{x:1,y:1}}]}}],scene_order:[{name:'Spiel'}]};
  const result=applyCollection(data,{config,sources:{camera:'cam'}});assert.deepEqual(result.config.sources.camera2,config.sources.camera2);assert.equal(result.config.sources.camera.enabled,false);assert.deepEqual(result.config.layouts.twitch.find(x=>x.source==='camera2'),config.layouts.twitch.find(x=>x.source==='camera2'));assert(result.warnings.some(x=>x.includes('bereits Kamera 2')));
  const raw=result.config.obsCollection.sources.find(x=>x.type==='dshow_input');assert.equal(raw.settings.video_device_id,'Second:id');raw.shared='camera2';assert.equal(validate(result.config).obsCollection.sources.find(x=>x.type==='dshow_input').shared,'camera2');
+});
+
+test('OBS imports ignore own virtual cameras identified by their friendly name',()=>{
+ for(const name of ['Batto TikTok','Batto Twitch']){
+  const data={name:'Synthetic output collection',sources:[{uuid:'output',name,id:'dshow_input',settings:{video_device_id:name}},{uuid:'scene',name:'Spiel',id:'scene',settings:{items:[{source_uuid:'output',name,visible:true}]}}],scene_order:[{name:'Spiel'}]};
+  const result=applyCollection(data);assert.equal(result.config.sources.camera.enabled,false);assert(!result.config.obsCollection.sources.some(source=>source.type==='dshow_input'));
+ }
 });

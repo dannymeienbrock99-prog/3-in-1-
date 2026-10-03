@@ -24,7 +24,7 @@ function sourceSettings(type,input){
  }
  if(type==='dshow_input'){
   strings(['video_device_id','resolution']);numbers(['res_type','video_format','frame_interval','color_space','color_range','buffering']);numbers(['width','height'],1,16384);
-  if(/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]/i.test(out.video_device_id||''))delete out.video_device_id;
+  if(/27b05c2d-93dc-474a-a5da-9bba34cb2a9[cd]|Batto (?:TikTok|Twitch)/i.test(out.video_device_id||''))delete out.video_device_id;
  }
  if(['game_capture','window_capture','monitor_capture','display_capture'].includes(type)){
   strings(['window','capture_mode','monitor_id']);numbers(['monitor','method','priority']);booleans(['capture_cursor','cursor','client_area','capture_overlays','limit_framerate','anti_cheat_hook','compatibility']);

@@ -67,7 +67,7 @@
       "!src/adapters/axelchat.cjs",
       "!scripts/axelchat-regression.cjs",
       "!electron/qa*.cjs",
-      "!electron/normal-fan-renderer-test.cjs",
+      "!electron/*-test.cjs",
       "!scripts/**",
       "!test/**"
     ],

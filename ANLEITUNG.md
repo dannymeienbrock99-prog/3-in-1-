@@ -9,7 +9,7 @@ Die MSI-Vorschau nutzt das bereitgestellte Mainboard-Bild und zeigt die tatsäch
 
 ## RGB direkt in Batto einstellen
 
-In der Seitenleiste **RGB-Steuerung** öffnen. Die eingebaute PRISM-Ansicht bietet Farben, Helligkeit, 14 Effekte und speicherbare Lichtprofile. Für echte Beleuchtung zuerst die unterstützten Geräte verbinden. Windows-LampArray-Geräte sowie Geräte der optional eingerichteten Corsair-iCUE-Schnittstelle können gesteuert werden; die Ansicht nennt fehlende Voraussetzungen. Ein erkannter Komponentenname bestätigt noch keine steuerbare RGB-Verbindung. Stream Deck und Elgato-Geräte werden von der RGB-Geräteansprache ausgeschlossen.
+In der Seitenleiste **RGB-Steuerung** öffnen. Die eingebaute PRISM-Ansicht bietet Farben, Helligkeit, 30 PRISM-Effekte und speicherbare Lichtprofile. Die 14 bisherigen Effekte und Profile bleiben erhalten. Für echte Beleuchtung zuerst die unterstützten Geräte verbinden. Windows LampArray, Corsair iCUE, MSI Mystic Light, der offizielle Kingston-FURY-CTRL-Dienst und unterstützte Lian-Li-HID-Controller stellen die jeweilige Lichtverbindung bereit. Die Ansicht nennt fehlende Voraussetzungen und bietet passende Herstellereffekte unter **Effekte deiner Geräte**. Ein erkannter Komponentenname bestätigt noch keine steuerbare RGB-Verbindung. Stream Deck und Elgato-Geräte werden von der RGB-Geräteansprache ausgeschlossen.
 
 Die PC-Übersicht zeigt die erkannten Namen. Für MSI erscheint die MSI-Vorschau, für ASUS der White Build mit weißen Lüftern, RAM, Grafikkarte und Kühlung. Bei anderen Herstellern erscheint die allgemeine Vorschau. Die Bilder dienen als Beispielaufbau.
 

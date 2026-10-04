@@ -145,8 +145,8 @@
           "native/licenses/**",
           "licenses/**",
           "package.json",
-          "native-kingston/bin/**",
-          "native-lianli/bin/**"
+          "native-kingston/bin/PRISM-KingstonCodec.exe",
+          "native-lianli/bin/PRISM-LianLi.exe"
         ],
         "to": "PRISM",
         "from": "../PRISM"

@@ -16,10 +16,11 @@ function normalizeMessage(input={}){
       message:String(input.message?.text||''),
       timestamp:input.timestamp||new Date().toISOString(),
       badges:Array.isArray(input.user?.badges)?input.user.badges:[],
-      moderator:Boolean(input.user?.isModerator),
+      moderator:input.user?.isModerator===true,
       identityVerified:input.user?.identityVerified===true||input.identityVerified===true,
       moderatorConfirmedAt:String(input.user?.moderatorConfirmedAt||input.moderatorConfirmedAt||''),
       isBroadcaster:input.user?.isBroadcaster===true||input.isBroadcaster===true,
+      roleConfirmedAt:String(input.user?.roleConfirmedAt||input.roleConfirmedAt||''),
       subscriber:Boolean(input.user?.isSubscriber),
       vip:Boolean(input.user?.isVip),
       raw:input
@@ -36,14 +37,27 @@ function normalizeMessage(input={}){
     message:String(input.message||input.text||input.comment||''),
     timestamp:input.timestamp||new Date().toISOString(),
     badges:Array.isArray(input.badges)?input.badges:[],
-    moderator:Boolean(input.moderator||input.isModerator||input.mod),
+    moderator:[input.moderator,input.isModerator,input.mod].some(value=>value===true),
     identityVerified:input.identityVerified===true,
     moderatorConfirmedAt:String(input.moderatorConfirmedAt||''),
     isBroadcaster:input.isBroadcaster===true,
+    roleConfirmedAt:String(input.roleConfirmedAt||''),
     subscriber:Boolean(input.subscriber||input.isSubscriber),
     vip:Boolean(input.vip||input.isVip),
     raw:input.raw||input
   };
+}
+
+// Upgrade a transport's incomplete identity only for the same platform message.
+// Display names and repeated message text alone never establish an identity.
+function identityPatch(existing,candidate){
+  if(!existing||!candidate||candidate.identityVerified!==true||existing.id!==candidate.id||existing.platform!==candidate.platform||existing.message!==candidate.message)return null;
+  const valid=candidate.platform==='twitch'?/^\d{1,30}$/.test(candidate.userId):candidate.platform==='youtube'?/^UC[\w-]{20,30}$/.test(candidate.userId):false;
+  if(!valid||existing.identityVerified===true&&existing.userId!==candidate.userId)return null;
+  if(existing.channelId&&candidate.channelId&&existing.channelId!==candidate.channelId&&!existing.channelId.startsWith('login:'))return null;
+  const moderator=existing.moderator===true||candidate.moderator===true,isBroadcaster=existing.isBroadcaster===true||candidate.isBroadcaster===true;
+  const badges=[...new Map([...existing.badges,...candidate.badges].map(badge=>[JSON.stringify(badge),badge])).values()];
+  return {userId:candidate.userId,channelId:candidate.channelId||existing.channelId,username:candidate.username,displayName:candidate.displayName,identityVerified:true,moderator,isBroadcaster,badges,moderatorConfirmedAt:candidate.moderatorConfirmedAt||existing.moderatorConfirmedAt,roleConfirmedAt:candidate.roleConfirmedAt||existing.roleConfirmedAt};
 }
 
 class ChatCore extends EventEmitter{
@@ -56,6 +70,15 @@ class ChatCore extends EventEmitter{
   log(level,category,message,meta={}){ const e={id:crypto.randomUUID(),timestamp:new Date().toISOString(),level,category,message,meta}; this.logs.push(e); if(this.logs.length>2000)this.logs.splice(0,this.logs.length-2000); this.emit('log',e); return e; }
   getLogs(){return this.logs.slice();} clearLogs(){this.logs=[];}
   getMessages(){return this.messages.slice();} clearMessages(){this.messages=[];}
+  enrichIdentity(input){
+    if(!input||typeof input!=='object'||Array.isArray(input))return null;
+    const candidate=normalizeMessage(input),existing=this.messages.find(message=>message.id===candidate.id&&message.platform===candidate.platform),patch=identityPatch(existing,candidate);
+    if(!patch||Object.entries(patch).every(([key,value])=>JSON.stringify(existing[key])===JSON.stringify(value)))return null;
+    const raw=existing.raw;
+    Object.assign(existing,patch);
+    if(raw?.schemaVersion)existing.raw={...raw,channelId:existing.channelId,user:{...raw.user,id:existing.userId,username:existing.username,displayName:existing.displayName,identityVerified:true,isModerator:existing.moderator,isBroadcaster:existing.isBroadcaster,badges:existing.badges,moderatorConfirmedAt:existing.moderatorConfirmedAt,roleConfirmedAt:existing.roleConfirmedAt}};
+    this.emit('identity',existing);return existing;
+  }
   getMultiChatMessages(){const seen=new Set();return this.messages.filter(message=>{if(this.config.autoBroadcast?.showInMultiChat===false&&isAutoBroadcast(message))return false;const run=broadcastRun(message);if(run&&seen.has(run))return false;if(run)seen.add(run);return true;});}
   isMultiChatVisible(message){if(this.config.autoBroadcast?.showInMultiChat===false&&isAutoBroadcast(message))return false;const run=broadcastRun(message);return !run||this.messages.find(item=>broadcastRun(item)===run)===message;}
   getModerationState(){return structuredClone(this.moderation);}
@@ -120,4 +143,4 @@ class ChatCore extends EventEmitter{
   addFilter(payload={}){const term=String(payload.term||'').trim();if(!term)return{ok:false,error:'Begriff fehlt.'};const rule={id:crypto.randomUUID(),term,platform:payload.platform||'all',action:payload.action||'hide',wholeWord:Boolean(payload.wholeWord),caseSensitive:Boolean(payload.caseSensitive),enabled:payload.enabled!==false};this.config.filters.rules=[...(this.config.filters.rules||[]),rule];this.emit('config-dirty',this.config);return{ok:true,rule};}
   removeFilter(id){const before=this.config.filters.rules.length;this.config.filters.rules=this.config.filters.rules.filter(r=>r.id!==id);this.emit('config-dirty',this.config);return{ok:this.config.filters.rules.length!==before};}
 }
-module.exports={ChatCore,normalizeMessage};
+module.exports={ChatCore,normalizeMessage,identityPatch};

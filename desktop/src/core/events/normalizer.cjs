@@ -47,7 +47,9 @@ function normalizeUser(input = {}) {
     avatar: safeString(user.avatar || user.avatarUrl || user.profilePictureUrl || ''),
     badges: Array.isArray(user.badges) ? user.badges : Array.isArray(input.badges) ? input.badges : [],
     isModerator: [user.isModerator,user.moderator,user.mod,input.isModerator,input.moderator,input.mod].some(x=>x===true),
-    isBroadcaster: user.isBroadcaster===true||input.isBroadcaster===true
+    isBroadcaster: user.isBroadcaster===true||input.isBroadcaster===true,
+    moderatorConfirmedAt:safeString(user.moderatorConfirmedAt||input.moderatorConfirmedAt||''),
+    roleConfirmedAt:safeString(user.roleConfirmedAt||input.roleConfirmedAt||'')
   };
 }
 

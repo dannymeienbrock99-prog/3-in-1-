@@ -16,8 +16,8 @@ function simulatedHost(t,{registerDelay=0}={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'batto-plugin-race-')),children=[],messages=[],converted=[];
  const definitions=new Map(['good','old'].map(id=>[id,{id,directory:dir,runtime:'exe',code:path.join(dir,'fixture.exe'),supported:true,manifest:{Version:'1.0'},actions:[{id:id+'.action',supported:true,states:[]}]}]));
  const packages={directory:dir,getPlugin(id){if(!definitions.has(id))throw Error('Plugin nicht installiert.');return definitions.get(id);},actionIcon:async()=>PNG,pluginImage:async(_id,value)=>{converted.push(value);return PNG;}};
- const host=new TouchPluginHost({packages,readyTimeout:2000,launchProcess(_exe,args){
-  const child=new EventEmitter();children.push(child);child.killed=false;child.exitCode=null;let timer;
+ const host=new TouchPluginHost({packages,readyTimeout:2000,launchProcess(_exe,args,options){
+  const child=new EventEmitter();children.push(child);child.launch={exe:_exe,args,env:options.env};child.killed=false;child.exitCode=null;let timer;
   const port=args[args.indexOf('-port')+1],uuid=args[args.indexOf('-pluginUUID')+1],socket=child.socket=new WebSocket('ws://127.0.0.1:'+port);
   socket.on('error',()=>{});socket.on('message',bytes=>messages.push(JSON.parse(bytes)));socket.on('open',()=>{if(!child.killed)timer=setTimeout(()=>{if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({event:'registerPlugin',uuid}));},registerDelay);});
   child.kill=()=>{if(child.killed)return;child.killed=true;child.exitCode=0;clearTimeout(timer);socket.terminate();child.emit('exit',0);};return child;
@@ -75,6 +75,17 @@ test('Standard-Plugin: Registrierung, Taste, Anzeige, Inspector, private Einstel
 test('Nicht registrierte Verbindungen können weder Einstellungen ändern noch Programme öffnen',async t=>{
  const dir=temporary(t),packages=new TouchPackages({directory:path.join(dir,'installed')}),host=new TouchPluginHost({packages,openExternal(){throw Error('must not open');}});t.after(()=>host.close());await host.startServer();
  const socket=new WebSocket('ws://127.0.0.1:'+host.port);await new Promise(resolve=>socket.once('open',resolve));socket.send(JSON.stringify({event:'setGlobalSettings',payload:{token:'should-not-save'}}));await new Promise(resolve=>socket.once('close',resolve));assert.deepEqual(host.stored.globals,{});
+});
+test('Imported private settings reach the first plugin appearance before any key execution and survive moves',async t=>{
+ const {host,messages}=simulatedHost(t);host.importSettingsByButton({'imported-key':{pluginId:'good',actionId:'good.action',settings:{token:'PRIVATE_IMPORTED_TOKEN',mode:'prepared'}}});
+ assert.equal(host.server,null);await host.sync([{id:'imported-key',pluginId:'good',actionId:'good.action',coordinates:{column:2,row:1}}]);await until(()=>messages.some(e=>e.event==='willAppear'));
+ const first=messages.find(e=>e.event==='willAppear');assert.equal(first.payload.settings.token,'PRIVATE_IMPORTED_TOKEN');assert.equal(first.payload.settings.mode,'prepared');assert.deepEqual(first.payload.coordinates,{column:2,row:1});assert(!messages.some(e=>e.event==='keyDown'));assert(!JSON.stringify(host.visuals()).includes('PRIVATE_IMPORTED_TOKEN'));
+ await host.sync([{id:'imported-key',pluginId:'good',actionId:'good.action',coordinates:{column:0,row:0}}]);const appearances=messages.filter(e=>e.event==='willAppear');await until(()=>messages.filter(e=>e.event==='willAppear').length>=2);assert.equal(messages.filter(e=>e.event==='willAppear').at(-1).payload.settings.token,'PRIVATE_IMPORTED_TOKEN');assert.deepEqual(host.buttons.get('imported-key').coordinates,{column:0,row:0});
+});
+test('Declared Node20 plugin uses its matching standard Node runtime without Electron environment hints',async t=>{
+ const {host,children,definitions}=simulatedHost(t),runtime=path.join(host.packages.directory,'runtimes');fs.mkdirSync(path.join(runtime,'20.20.0'),{recursive:true});const executable=path.join(runtime,'20.20.0','node.exe');fs.writeFileSync(executable,'fixture only');
+ const plugin=definitions.get('good');plugin.runtime='node';plugin.manifest.Nodejs={Version:'20'};host.nodeRuntimeDirectory=runtime;host.nodeVersion='24.19.0';
+ await host.sync([{id:'node-key',pluginId:'good',actionId:'good.action'}]);assert.equal(children[0].launch.exe,executable);assert.equal(children[0].launch.args[0],plugin.code);assert.equal(children[0].launch.env.ELECTRON_RUN_AS_NODE,undefined);assert.equal(host.plugins.get('good').status,'running');
 });
 test('Die angehängten Batto- und LS25-Pakete sind tatsächlich importierbar', {skip:process.env.BATTO_REAL_PACKAGES!=='1'},async t=>{
  const dir=temporary(t),packages=new TouchPackages({directory:path.join(dir,'installed')});await packages.importFile('C:/Users/Batto/Downloads/de.crazybatto.suite (1).streamDeckPlugin');await packages.importFile('C:/Users/Batto/Downloads/LS25-Buttons-1.1.10.streamDeckIconPack');

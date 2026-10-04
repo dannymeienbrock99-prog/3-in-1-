@@ -57,6 +57,12 @@ ipcMain.handle('dual:action',async(e,{command,value}={})=>{const detached=sender
    if(fs.existsSync(service.file))fs.copyFileSync(service.file,path.join(service.directory,'dual-stream.before-obs-import-'+Date.now()+'.json'));
    await service.save(imported.config);pendingImports.delete(e.sender);return {...snapshot(),importWarnings:imported.warnings,importSummary:imported.summary};
   }
+  case 'obs-import-remove':{
+   service.assertRevision(value);if(service.running())throw Error('Bitte zuerst die virtuellen Kameras stoppen.');
+   const next=require('./obs-collection.cjs').removeObsImport(service.config,value);
+   if(fs.existsSync(service.file))fs.copyFileSync(service.file,path.join(service.directory,'dual-stream.before-obs-remove-'+Date.now()+'.json'));
+   await service.save(next);pendingImports.delete(e.sender);return snapshot();
+  }
   case 'export':{const r=await dialog.showSaveDialog({defaultPath:'Batto-Dual-Stream.json',filters:[{name:'Dual-Stream-Projekt ohne Schlüssel',extensions:['json']}]});if(!r.canceled)fs.writeFileSync(r.filePath,JSON.stringify(service.config,null,2));return {saved:!r.canceled};}
   default:throw Error('Unbekannte Dual-Stream-Aktion.');
  }

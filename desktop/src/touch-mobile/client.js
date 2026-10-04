@@ -19,6 +19,8 @@
  }
  function active(){return state?.profiles.find(p=>p.id===profileId)||state?.profiles[0];}
  function page(){let p=active(),buttons=p?.buttons||[],titles=[];const valid=[];for(const index of path){const folder=buttons[index];if(folder?.type!=='folder')break;buttons=folder.buttons||[];titles.push(folder.title);valid.push(index);}path=valid;return {buttons,titles};}
+ function rememberFolders(){let buttons=active()?.buttons||[];const ids=[];for(const index of path){if(buttons[index]?.type!=='folder')break;ids.push(buttons[index].id);buttons=buttons[index].buttons||[];}return ids;}
+ function restoreFolders(ids){let buttons=active()?.buttons||[];path=[];for(const id of ids){const index=buttons.findIndex(button=>button?.type==='folder'&&button.id===id);if(index<0)break;path.push(index);buttons=buttons[index].buttons||[];}}
  function size(){const profile=active();if(!profile)return;const inherited=Number(profile.keySize),selected=localSize||(inherited>=80&&inherited<=220?inherited:null),grid=$('keys');grid.classList.toggle('fixed-size',!!selected);if(selected)grid.style.setProperty('--key-size',selected+'px');else grid.style.removeProperty('--key-size');$('key-size').value=selected||120;$('key-size-value').textContent=localSize?localSize+' px':selected?'Vom PC · '+selected+' px':'Vom PC · automatisch';}
  const png=value=>typeof value==='string'&&value.startsWith('data:image/png;base64,')?value:'';
  const volumeControls=new Map();
@@ -58,7 +60,8 @@
   const select=$('profiles');select.replaceChildren(...state.profiles.map(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=p.name;return option;}));select.value=profileId;
   const {buttons,titles}=page();$('breadcrumb').textContent=[profile.name,...titles].join(' / ');$('back').hidden=!path.length;
   const grid=$('keys');grid.style.setProperty('--cols',profile.columns);size();releaseVolumeControls();grid.replaceChildren();
-  for(let index=0;index<profile.columns*profile.rows;index++){
+  // Keep internal slot coordinates; unused trailing rows need no blank tiles.
+  for(let index=0;index<=buttons.findLastIndex(Boolean);index++){
    const value=buttons[index],button=document.createElement(value?.type==='volume'?'div':'button');button.className='key';if(value?.type!=='volume')button.type='button';button.dataset.index=index;
    if(!value){button.disabled=true;button.classList.add('empty');button.setAttribute('aria-label','Unbelegte Taste');grid.append(button);continue;}
    button.setAttribute('aria-label',value.title);button.classList.toggle('folder',value.type==='folder');
@@ -75,12 +78,13 @@
    };
    grid.append(button);
   }
+  if(!grid.children.length){const note=document.createElement('p');note.className='empty-note';note.textContent='Dieses Deck ist leer. Lege am PC im Touch Deck eine Taste an.';grid.append(note);}
  }
  function readings(values){state.readings=values||{};document.querySelectorAll('[data-reading]').forEach(node=>{const text=fmt(state.readings[node.dataset.reading]);if(node.textContent!==text)node.textContent=text;});}
  function schedule(){clearTimeout(timer);if(token&&!document.hidden&&!suspended)timer=setTimeout(refresh,volumeControls.size?2500:3000);}
  async function refresh(){
   if(!token||document.hidden||suspended||inFlight)return;inFlight=true;const generation=epoch;
-  try{const next=await request('/api/readings');if(generation!==epoch)return;if(!state||next.revision!==state.revision){const updated=await request('/api/state');if(generation!==epoch)return;state=updated;render();}else{readings(next.readings);visuals(next);volumes(next.volumes);}if(offline){offline=false;status('Wieder verbunden · Tasten bereit');}}catch(error){if(generation===epoch){offline=true;status(error.message,true);}}finally{inFlight=false;schedule();}
+  try{const next=await request('/api/readings');if(generation!==epoch)return;if(!state||next.revision!==state.revision){const updated=await request('/api/state');if(generation!==epoch)return;const folders=rememberFolders();state=updated;restoreFolders(folders);render();}else{readings(next.readings);visuals(next);volumes(next.volumes);}if(offline){offline=false;status('Wieder verbunden · Tasten bereit');}}catch(error){if(generation===epoch){offline=true;status(error.message,true);}}finally{inFlight=false;schedule();}
  }
  function disconnect(message='Verbindung getrennt.'){
   ++epoch;clearTimeout(timer);releaseVolumeControls();token='';state=null;offline=false;storage.set('sessionStorage','batto-touch-session',null);document.body.classList.add('pairing-screen');$('pairing').hidden=false;$('deck').hidden=true;$('disconnect').hidden=true;$('keys').replaceChildren();status(message);

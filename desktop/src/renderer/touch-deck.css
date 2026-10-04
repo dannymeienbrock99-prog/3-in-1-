@@ -48,6 +48,8 @@
 #view-touchdeck button.td-selected{outline:2px solid var(--gold);outline-offset:2px;border-color:var(--gold)}
 #view-touchdeck .td-editing .td-key[draggable=true]{cursor:grab}
 #view-touchdeck .td-dragging{opacity:.45}
+#view-touchdeck .td-grid{align-content:start;align-self:start}
+#view-touchdeck .td-empty-note{grid-column:1 / -1;margin:8px;align-self:center}
 #view-touchdeck .td-grid-dense{gap:7px;padding:10px}
 #view-touchdeck .td-grid-dense .td-key{min-height:93px;padding:14px 4px 6px;border-radius:8px}
 #view-touchdeck .td-grid-dense .td-symbol{font-size:27px}

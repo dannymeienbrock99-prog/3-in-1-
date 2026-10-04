@@ -2,6 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const {TouchDeck,defaultConfig,LIMITS}=require('../src/services/touch-deck.cjs');
 const {SESSION_MS}=require('../src/services/touch-mobile.cjs');
+const {moveButton,removeButton,visibleKeyCount,rememberPosition,restorePosition}=require('../src/renderer/touch-deck.js');
 const actions=[{id:'listen'},{id:'speech-stop'},{id:'command',text:true},{id:'scene',choices:[{id:'Spiel'},{id:'Pause'},{id:'Start'},{id:'Ende'}],transition:true},{id:'start',choices:[{id:'both'}]},{id:'stop',choices:[{id:'both'}]},{id:'source',choices:[{id:'camera'},{id:'game'}],switch:true},{id:'gaming'},{id:'show'},{id:'jarvis',choices:[{id:'voiceEnabled'}],switch:true},{id:'prepare'},{id:'release'}];
 function fixture(t,options={}){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'batto-touch-')),webRoot=path.join(directory,'web');fs.mkdirSync(webRoot);for(const [file,content]of Object.entries({'index.html':'<title>Batto Touch Deck</title>','client.js':'console.log("touch");','style.css':'body{color:gold}'}))fs.writeFileSync(path.join(webRoot,file),content);
@@ -152,4 +153,41 @@ test('real mobile manifest and icon are public local assets with strict MIME and
  const icon=await fetch('http://127.0.0.1:'+deck.mobile.port+'/icon.png');assert.equal(icon.status,200);assert.equal(icon.headers.get('content-type'),'image/png');assert.equal(icon.headers.get('x-content-type-options'),'nosniff');const data=Buffer.from(await icon.arrayBuffer());assert.equal(data.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert(data.equals(fs.readFileSync(path.join(webRoot,'icon.png'))));
  const index=await request(deck,'/');assert.match(index.value,/apple-mobile-web-app-capable/);assert.match(index.value,/rel="apple-touch-icon"/);
  for(const route of ['/manifest.webmanifest?secret=true','/AndroidManifest.xml','/touch-plugin-settings.json','/password.dpapi'])assert.equal((await request(deck,route)).status,404);
+});
+
+test('moving onto occupied keys inserts in either direction while swapping stays explicit',()=>{
+ const a={id:'a',type:'action',steps:[{action:'scene',target:'Pause',transition:'cut'}]},b={id:'b',type:'plugin',pluginId:'plugin',actionId:'plugin.action'},c={id:'c',type:'folder',buttons:[{id:'nested',type:'volume',volumeTarget:'master'}]},d={id:'d',type:'sensor',sensorId:'cpu'};
+ const keys=[a,b,c,d,null];
+ assert.equal(moveButton(keys,0,2),true);assert.deepEqual(keys,[b,c,a,d,null]);assert.equal(keys[2],a);assert.equal(keys[1].buttons[0].volumeTarget,'master');
+ assert.equal(moveButton(keys,3,0),true);assert.deepEqual(keys,[d,b,c,a,null]);
+ assert.equal(moveButton(keys,0,2,true),true);assert.deepEqual(keys,[c,b,d,a,null]);
+ assert.equal(moveButton(keys,2,4),true);assert.deepEqual(keys,[c,b,null,a,d]);assert.equal(keys[4].sensorId,'cpu');
+ const before=keys.slice();for(const [from,to]of [[-1,0],[0,99],[2,0],[0,0],['0',1],[1,NaN]])assert.equal(moveButton(keys,from,to),false);assert.deepEqual(keys,before);
+});
+
+test('deleting a key closes gaps only on its page, keeps capacity and preserves complete remaining bindings',async t=>{
+ const calls=[],{deck}=fixture(t,{pressPlugin:async(button,position)=>{calls.push({id:button.id,position});return {ok:true};}}),config=defaultConfig();
+ const folder={id:'arrange-folder',type:'folder',title:'Unterwegs',buttons:[{id:'arrange-nested',type:'volume',title:'Windows',volumeTarget:'master'}]};
+ config.profiles[0].buttons=[{id:'arrange-action',type:'action',title:'Pause',steps:[{action:'scene',target:'Pause',transition:'cut'}]},null,folder,{id:'arrange-plugin',type:'plugin',title:'Bot',pluginId:'de.example.bot',actionId:'de.example.bot.action'},null,{id:'arrange-volume',type:'volume',title:'Jarvis',volumeTarget:'jarvis'},{id:'arrange-sensor',type:'sensor',title:'CPU',sensorId:'private/cpu'},...Array(8).fill(null)];
+ deck.save(config);const stale=guardedPosition(deck,{profileId:'main',index:3}),draft=deck.snapshot(),keys=draft.profiles[0].buttons,nestedBefore=JSON.stringify(keys[2].buttons),otherBefore=JSON.stringify(draft.profiles[1]);
+ assert.equal(removeButton(keys,0),true);assert.deepEqual(keys.filter(Boolean).map(button=>button.id),['arrange-folder','arrange-plugin','arrange-volume','arrange-sensor']);assert.equal(keys.length,15);assert.equal(JSON.stringify(keys[0].buttons),nestedBefore);assert.equal(JSON.stringify(draft.profiles[1]),otherBefore);
+ deck.save({...draft,baseRevision:draft.revision});const saved=deck.snapshot();assert.equal(saved.profiles[0].columns,5);assert.equal(saved.profiles[0].rows,3);assert.equal(saved.profiles[0].buttons[2].volumeTarget,'jarvis');assert.equal(saved.profiles[0].buttons[3].sensorId,'private/cpu');assert.equal(saved.profiles[0].buttons[0].buttons[0].volumeTarget,'master');
+ await assert.rejects(deck.press(stale),/geändert|nicht belegt/);assert.equal(calls.length,0);await deck.press(guardedPosition(deck,{profileId:'main',index:1}));assert.equal(calls[0].id,'arrange-plugin');assert.equal(calls[0].position.index,1);
+ assert.equal(deck.remoteState().profiles[0].buttons.length,15);assert.equal(deck.remoteState().profiles[0].buttons[1].id,'arrange-plugin');
+ const before=JSON.stringify(keys);for(const index of [-1,15,14,'0',NaN])assert.equal(removeButton(keys,index),false);assert.equal(JSON.stringify(keys),before);
+});
+
+test('compact rendering hides trailing slots while retaining internal coordinates and editable capacity',()=>{
+ const keys=[{id:'a'},null,{id:'b'},null,null,null];assert.equal(visibleKeyCount(keys),3);assert.equal(visibleKeyCount(keys,true),4);assert.equal(visibleKeyCount(keys,true,true),6);
+ removeButton(keys,0);assert.equal(visibleKeyCount(keys),1);assert.equal(visibleKeyCount(keys,true),2);assert.equal(keys[0].id,'b');assert.equal(keys.length,6);
+ assert.equal(visibleKeyCount(Array(6).fill(null)),0);assert.equal(visibleKeyCount(Array(6).fill(null),true),1);assert.equal(visibleKeyCount(Array(6).fill({id:'a'}),true),6);
+});
+
+test('open profile, nested folder and selected key follow their IDs after a second window moves or compacts keys',()=>{
+ const config=defaultConfig();config.profiles[0].buttons[2]={id:'location-folder',type:'folder',title:'Bot',buttons:[null,{id:'location-inner',type:'folder',buttons:[null,{id:'location-selected',type:'plugin',pluginId:'bot',actionId:'bot.action'}]}]};
+ const bookmark=rememberPosition(config,[2,1],1),next=structuredClone(config);next.activeProfile='sound';moveButton(next.profiles[0].buttons,2,4);next.profiles[0].buttons[4].buttons.unshift(null);
+ const restored=restorePosition(next,bookmark);assert.equal(next.activeProfile,'main');assert.deepEqual(restored,{path:[4,2],selected:1});
+ const inner=next.profiles[0].buttons[4].buttons[2].buttons;inner.unshift({id:'new-key'});assert.deepEqual(restorePosition(next,bookmark),{path:[4,2],selected:2});
+ next.profiles[0].buttons[4].buttons[2]=null;assert.deepEqual(restorePosition(next,bookmark),{path:[4],selected:-1});
+ next.profiles.splice(0,1);assert.deepEqual(restorePosition(next,bookmark),{path:[],selected:-1});assert.equal(next.activeProfile,'main');
 });

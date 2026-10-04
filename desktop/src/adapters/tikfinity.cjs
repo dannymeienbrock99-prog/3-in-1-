@@ -53,7 +53,7 @@ function firstValue(...values) {
 
 function asBoolean(value) {
   if (typeof value === 'string') return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-  return Boolean(value);
+  return value===true||value===1;
 }
 
 function timestamp(value) {
@@ -103,12 +103,16 @@ function normalizeTikFinityPacket(packet) {
   if (CHAT_EVENTS.has(event)) {
     const message = firstText(data.comment, data.message, data.text, data.msg);
     if (!message) return null;
+    const stableUserId=firstText(pickText(userObject, ['userId', 'userIdString', 'user_id', 'id']), pickText(data, ['userId', 'userIdString', 'user_id']));
+    const identityVerified=/^\d+$/.test(stableUserId);
     return {
       kind:'message',
       value:{
         id:firstText(pickText(packet, ['eventId', 'msgId', 'messageId', 'id']), pickText(data, ['eventId', 'msgId', 'messageId', 'id'])) || undefined,
         platform:'tiktok',
-        userId:firstText(pickText(userObject, ['userId', 'userIdString', 'user_id', 'id']), pickText(data, ['userId', 'userIdString', 'user_id', 'id']), username),
+        userId:stableUserId||username,
+        channelId:firstText(pickText(data, ['channelId', 'roomId', 'room_id']), pickText(packet, ['channelId', 'roomId', 'room_id'])),
+        identityVerified,
         username,
         displayName,
         message,
@@ -116,6 +120,7 @@ function normalizeTikFinityPacket(packet) {
         badges:Array.isArray(userObject.badges) ? userObject.badges : Array.isArray(data.badges) ? data.badges : [],
         timestamp:occurredAt,
         moderator:asBoolean(firstValue(pick(userObject, ['isModerator', 'moderator', 'mod']), pick(data, ['isModerator', 'moderator', 'mod']))),
+        isBroadcaster:identityVerified&&asBoolean(firstValue(userObject.isBroadcaster, data.isBroadcaster)),
         subscriber:asBoolean(firstValue(pick(userObject, ['isSubscriber', 'subscriber', 'isSub']), pick(data, ['isSubscriber', 'subscriber', 'isSub']))),
         raw:packet
       }

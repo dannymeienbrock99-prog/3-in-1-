@@ -48,7 +48,7 @@ const DEFAULT_CONFIG = {
   },
   welcome: { enabled:false, trigger:'first-chat', message:'Willkommen im Stream, {username}!', platforms:['twitch','tiktok','youtube'], cooldownSeconds:15, ignoreUsers:[] },
   actionChains: [],
-  streamerbot: {url:'ws://127.0.0.1:8080/',autoConnect:false,tipProvider:'none',tiktokEvents:'direct',tiktokActionId:''},
+  streamerbot: {url:'ws://127.0.0.1:8080/',autoConnect:false,tipProvider:'none',tiktokEvents:'direct',tiktokActionId:'',executablePath:''},
   community: {
     archive:{enabled:false,moderationEnabled:true,excerptsEnabled:false,directory:'',retentionDays:0},
     viewers:{enabled:true,tiktok:true,twitch:true},

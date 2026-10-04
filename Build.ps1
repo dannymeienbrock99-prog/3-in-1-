@@ -35,7 +35,8 @@ npm ci; Check-Exit
 npm run test:jarvis; Check-Exit
 npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
-node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs test/obs-collection.test.cjs test/scene-groups.test.cjs; Check-Exit
+npm run test:streamerbot; Check-Exit
+node --test test/dual-stream*.test.cjs test/obs-*.test.cjs test/scene-groups.test.cjs; Check-Exit
 npm run test:core; Check-Exit
 node --test test/fan-*.test.cjs test/normal-fan-overlay.test.cjs; Check-Exit
 node --test test/rgb-service.test.cjs; Check-Exit
@@ -56,5 +57,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.12.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.13.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

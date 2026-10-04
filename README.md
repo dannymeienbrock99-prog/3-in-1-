@@ -1,4 +1,18 @@
-# Batto 3-in-1 · 1.12.0
+# Batto 3-in-1 · 1.13.0
+
+## Streamer.bot, Touch Deck und OBS-Importe · 1.13.0
+
+**Streamer.bot → Automatisch einrichten** findet eine vorhandene lokale Installation und übernimmt ihren gültigen lokalen WebSocket-Endpunkt. Alternativ **Streamer.bot.exe auswählen**. **Streamer.bot starten** öffnet die gewählte Installation; eine bereits laufende Instanz wird weiterverwendet. Anschließend **Speichern & verbinden** und **Aktionen laden**. Benötigt der Server ein Passwort, dieses im Verbindungsbereich eingeben. Falls noch kein Server eingerichtet ist, den WebSocket-Server zuerst in Streamer.bot einschalten. Die Einrichtung übernimmt keine Zugangsdaten aus dessen Dateien. **Nur Vorschau** zeigt Aktions-ID und Nachrichtentext; erst **Jetzt wirklich ausführen** sendet die Aktion.
+
+**Touch Deck → Tasten bearbeiten**: Tasten ziehen, mit **Alt + Pfeiltaste** verschieben oder im Editor **Neue Position → Taste verschieben** wählen. Bei einem belegten Ziel rücken die Tasten weiter; **Tasten tauschen** wechselt nur zwei Positionen. **Taste löschen & Lücke schließen** ordnet die übrigen Tasten neu. Im Bedienmodus endet die Fläche an der letzten belegten Taste; der Editor bietet zusätzlich einen freien Platz. **Alle freien Plätze zeigen** öffnet das vollständige Raster. Vor dem Bedienen Änderungen speichern.
+
+**Stream-Deck-Profil hinzufügen** nimmt unterstützte `.streamDeckProfile`-Dateien und Profil-ZIPs als zusätzliche Profile auf. Belegte Seiten, Ordner, Tastenbilder und Plugin-Zuordnungen werden übernommen; Hinweise nennen fehlende oder nicht ausführbare Aktionen. Vorhandene Profile bleiben erhalten, die bisherige Belegung wird gesichert. **Plugins & Icons → Mit Elgato öffnen** übergibt ein Plugin, Icon-Paket oder Profil an die installierte Elgato-Software. Die Installation dort abschließen. Geschützte Pakete, integrierte Elgato-Aktionen und bestimmte Herstellerfunktionen benötigen die originale Laufzeit. Der Import allein bestätigt keine vollständige Plugin-Kompatibilität.
+
+**Dual Stream → OBS-Szenensammlung** bietet **Szene entfernen** sowie **Importierte Medien und Übergänge verwalten**. Eine Medienquelle lässt sich aus allen Szenen entfernen, die diese Quelle verwenden; weiterhin benötigte gemeinsame Quellen bleiben erhalten. **Alle OBS-Importe entfernen** entfernt die importierten Szenen und Videoübergänge aus Batto. Die ursprüngliche OBS-Sammlung und die Video-/Bilddateien bleiben auf dem PC. Vor dem Entfernen virtuelle Kameras stoppen. Fällt die gewählte importierte Szene weg, wird **Spiel** ausgewählt; ein entfernter aktiver Videoübergang wird durch **Überblendung** ersetzt. Die Bildaufnahme startet dadurch nicht.
+
+**Jarvis → Nachrichten aus dem Chat vorlesen → Moderatoren & Kanalinhaber** verwendet die bestätigten Rollen und Benutzer-IDs aus den verbundenen Plattformen, auch für deine eigenen Kanalnachrichten. **Nachrichten aus dem Multi-Chat-Fenster** berücksichtigt die dort vorgesehenen Nachrichten, auch wenn das Fenster gerade geschlossen ist. Kurze Nachrichtenfolgen werden mit dem eingestellten Abstand in einer begrenzten Warteschlange vorgelesen. Filtertreffer und doppelte Nachrichten bleiben stumm; Chattexte lösen keine Jarvis-Steuerbefehle aus.
+
+Die integrierte RGB-Oberfläche bleibt **PRISM 1.7.0**. Zum Streamen in **Dual Stream** die gewünschte Bildschirm-/Spielquelle und Kamera wählen, **Kamera & Spiel prüfen** öffnen und danach **Batto TikTok** bzw. **Batto Twitch** in der Sendesoftware auswählen. Für beide Formate eignet sich **Überblendung**. Mikrofon und PC-Ton werden in der Sendesoftware eingestellt; die virtuellen Kameras übertragen nur Bild. Ein funktionierender lokaler Vorschautest bestätigt keine Verbindung zu Twitch oder TikTok.
 
 ## Strimer Wireless und eigener Effekt · 1.12.0
 
@@ -217,7 +231,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.12.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.13.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

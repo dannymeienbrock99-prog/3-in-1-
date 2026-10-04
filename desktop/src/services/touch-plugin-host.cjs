@@ -7,14 +7,31 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const DEVICE='batto-touch-deck';
 function settings(value){if(!object(value)||Buffer.byteLength(JSON.stringify(value))>131072)throw Error('Plugin-Einstellungen sind ungültig oder zu groß.');return clone(value);}
+function resolveNodeExecutable(plugin,{nodeExecutable=process.execPath,nodeRuntimeDirectory=process.env.APPDATA?path.join(process.env.APPDATA,'Elgato','StreamDeck','NodeJS'):null,nodeVersion=process.versions.node}={}){
+ const required=plugin.manifest?.Nodejs?.Version;if(required===undefined)return nodeExecutable;
+ if(typeof required!=='string'||!/^\d{1,3}$/.test(required))throw Error('Dieses Plugin fordert eine unbekannte Node.js-Laufzeit.');
+ if(nodeVersion?.split('.')[0]===required)return nodeExecutable;
+ if(nodeRuntimeDirectory)try{const root=fs.realpathSync(nodeRuntimeDirectory),versions=fs.readdirSync(root,{withFileTypes:true}).filter(entry=>entry.isDirectory()&&new RegExp('^'+required+'\\.\\d+\\.\\d+$').test(entry.name)).sort((a,b)=>{const av=a.name.split('.').map(Number),bv=b.name.split('.').map(Number);return bv[1]-av[1]||bv[2]-av[2];});for(const version of versions){const executable=path.join(root,version.name,'node.exe');try{if(fs.statSync(executable).isFile()&&fs.realpathSync(executable).startsWith(root+path.sep))return executable;}catch{}}}catch{}
+ throw Error('Dieses Plugin benötigt Node.js '+required+'. Installiere diese Laufzeit über Elgato Stream Deck oder nutze das Plugin dort.');
+}
 class TouchPluginHost{
- constructor({packages,onVisual=()=>{},onSettings=()=>{},launchHtml,nodeExecutable=process.execPath,launchProcess=spawn,openExternal,readyTimeout=10000}={}){
-  if(!packages)throw Error('Paketverwaltung fehlt.');Object.assign(this,{packages,onVisual,onSettings,launchHtml,nodeExecutable,launchProcess,openExternal,readyTimeout});
+ constructor({packages,onVisual=()=>{},onSettings=()=>{},launchHtml,nodeExecutable=process.execPath,nodeRuntimeDirectory=process.env.APPDATA?path.join(process.env.APPDATA,'Elgato','StreamDeck','NodeJS'):null,nodeVersion=process.versions.node,launchProcess=spawn,openExternal,readyTimeout=10000}={}){
+  if(!packages)throw Error('Paketverwaltung fehlt.');Object.assign(this,{packages,onVisual,onSettings,launchHtml,nodeExecutable,nodeRuntimeDirectory,nodeVersion,launchProcess,openExternal,readyTimeout});
   this.file=path.join(packages.directory,'touch-plugin-settings.json');this.stored={buttons:{},globals:{}};this.buttons=new Map();this.plugins=new Map();this.starts=new Map();this.inspectors=new Map();this.server=null;this.port=0;this.closed=false;this.queue=Promise.resolve();this.saving=null;this.closePromise=null;
   try{if(fs.statSync(this.file).size<=4*1024*1024){const saved=JSON.parse(fs.readFileSync(this.file,'utf8'));if(object(saved.buttons)&&object(saved.globals))this.stored=saved;}}catch{}
  }
  save(){if(this.saving||this.closed)return;this.saving=setTimeout(()=>{this.saving=null;try{saveJson(this.file,this.stored);}catch(error){for(const button of this.buttons.values())this.visual(button,{error:'Plugin-Einstellungen konnten nicht gespeichert werden: '+error.message});}},250);this.saving.unref?.();}
  store(group,key,value){const next={...this.stored,[group]:{...this.stored[group],[key]:value}};if(Buffer.byteLength(JSON.stringify(next))>4*1024*1024)throw Error('Der Speicher für Plugin-Einstellungen ist voll.');this.stored=next;this.save();}
+ importSettingsByButton(value){
+  if(this.closed)throw Error('Plugin-Steuerung ist geschlossen.');if(!object(value)||Object.keys(value).length>600)throw Error('Ungültige importierte Plugin-Einstellungen.');
+  const next={...this.stored,buttons:{...this.stored.buttons}};let count=0;
+  for(const [id,entry]of Object.entries(value)){
+   if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id)||['__proto__','constructor','prototype'].includes(id)||!object(entry)||typeof entry.pluginId!=='string'||!/^[a-zA-Z0-9_.-]{1,150}$/.test(entry.pluginId)||typeof entry.actionId!=='string'||!/^[a-zA-Z0-9_.-]{1,200}$/.test(entry.actionId))throw Error('Ungültige importierte Plugin-Zuordnung.');
+   if(Object.hasOwn(next.buttons,id)||this.buttons.has(id))throw Error('Importierte Plugin-Tasten müssen neue Kennungen verwenden.');
+   next.buttons[id]={pluginId:entry.pluginId,actionId:entry.actionId,settings:settings(entry.settings)};count++;
+  }
+  if(Buffer.byteLength(JSON.stringify(next))>4*1024*1024)throw Error('Der Speicher für Plugin-Einstellungen ist voll.');this.stored=next;this.save();return {count};
+ }
  info(plugin){return {application:{font:'Segoe UI',language:'de',platform:'windows',platformVersion:'10.0',version:'6.9.0'},plugin:{uuid:plugin.id,version:plugin.manifest.Version||'1.0.0.0'},devicePixelRatio:1,colors:{buttonMouseOverBackgroundColor:'#C5A862',buttonPressedBackgroundColor:'#A88748',buttonPressedBorderColor:'#C5A862',buttonPressedTextColor:'#FFFFFF',highlightColor:'#C5A862'},devices:[{id:DEVICE,name:'Batto Touch Deck',type:0,size:{columns:8,rows:6}}]};}
  async startServer(){
   if(this.closed)throw Error('Plugin-Steuerung ist geschlossen.');if(this.server){if(this.serverStarting)await this.serverStarting;return;}
@@ -119,8 +136,9 @@ class TouchPluginHost{
   try{
    if(plugin.runtime==='html'){if(!this.launchHtml)throw Error('HTML-Plugins benötigen die Batto-Desktop-App.');const launch=Promise.resolve(this.launchHtml({file:plugin.code,args,kind:'plugin',port:this.port,uuid:record.token,registerEvent:'registerPlugin',info,pluginDirectory:plugin.directory})).then(window=>{if(this.closed||this.plugins.get(id)!==record){window?.close?.();throw Error('Plugin-Start wurde beendet.');}record.window=window;});await Promise.race([launch,ready]);}
    else{
-    const executable=plugin.runtime==='node'?this.nodeExecutable:plugin.code,arguments_=plugin.runtime==='node'?[plugin.code,...args]:args;
-    record.child=this.launchProcess(executable,arguments_,{cwd:plugin.directory,windowsHide:true,shell:false,stdio:'ignore',env:{...process.env,...(plugin.runtime==='node'?{ELECTRON_RUN_AS_NODE:'1'}:{})}});
+    const executable=plugin.runtime==='node'?resolveNodeExecutable(plugin,this):plugin.code,arguments_=plugin.runtime==='node'?[plugin.code,...args]:args;
+    const environment={...process.env};if(plugin.runtime==='node'){if(process.versions.electron&&executable===this.nodeExecutable)environment.ELECTRON_RUN_AS_NODE='1';else delete environment.ELECTRON_RUN_AS_NODE;}
+    record.child=this.launchProcess(executable,arguments_,{cwd:plugin.directory,windowsHide:true,shell:false,stdio:'ignore',env:environment});
     record.child.on('error',error=>record.reject?.(Error(plugin.name+': '+error.message)));record.child.on('exit',()=>{record.status='stopped';record.reject?.(Error(plugin.name+' wurde beendet.'));if(this.plugins.get(id)===record)for(const button of this.buttons.values())if(button.pluginId===id)this.visual(button,{error:'Plugin wurde beendet. Taste erneut drücken, um es zu starten.'});});
    }
    await ready;record.reject=null;
@@ -146,4 +164,4 @@ class TouchPluginHost{
   this.closePromise=(async()=>{await this.queue.catch(()=>{});await Promise.allSettled([...this.starts.values()]);for(const button of this.buttons.values()){this.event(button,'willDisappear');clearTimeout(button.imageTimer);}for(const id of [...this.plugins.keys()])await this.stopPlugin(id);this.buttons.clear();clearTimeout(this.saving);this.saving=null;saveJson(this.file,this.stored);if(this.server){for(const socket of this.server.clients)socket.terminate();await new Promise(resolve=>this.server.close(resolve));this.server=null;this.port=0;}})();return this.closePromise;
  }
 }
-module.exports={TouchPluginHost};
+module.exports={TouchPluginHost,resolveNodeExecutable};

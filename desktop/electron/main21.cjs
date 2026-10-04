@@ -32,6 +32,7 @@ const { TikTokMatchService } = require('../src/core/tiktok-match.cjs');
 const { OBSController } = require('../src/core/obs-controller.cjs');
 const { StatusMonitor } = require('../src/core/status-monitor.cjs');
 const { StreamerBotAdapter } = require('../src/adapters/streamerbot.cjs');
+const { StreamerBotLocal } = require('../src/services/streamerbot-local.cjs');
 const { ChainService } = require('../src/core/chain-service.cjs');
 const { InputHotkeys } = require('../src/core/input-hotkeys.cjs');
 const { PhysicalInputBackend } = require('../src/core/physical-input.cjs');
@@ -219,6 +220,7 @@ function normalizedToChat(event) {
     identityVerified: event.user?.identityVerified===true,
     moderatorConfirmedAt: event.user?.moderatorConfirmedAt||null,
     isBroadcaster: event.user?.isBroadcaster===true,
+    roleConfirmedAt: event.user?.roleConfirmedAt||null,
     raw: event
   };
 }
@@ -634,7 +636,7 @@ function initCore() {
   });
 
   supportEvents=new SupportEvents({getProvider:()=>currentConfig().streamerbot.tipProvider,onEvent:(event,source)=>eventCore.ingestEvent(event,source),onLog:message=>bridgeLog('warn','Support-Events','EVENT_IGNORED',{message})});
-  streamerbot=new StreamerBotAdapter({getConfig:()=>currentConfig().streamerbot,getPassword:()=>secretsService.get('streamerbot-password'),onStatus:status=>send('streamerbot:status',status),onEvent:event=>{if(event.bridge&&event.platform==='tiktok'&&currentConfig().streamerbot.tiktokEvents!=='bridge')return;supportEvents.ingest(event);}});
+  streamerbot=new StreamerBotAdapter({getConfig:()=>currentConfig().streamerbot,getPassword:()=>secretsService.get('streamerbot-password'),onChat:(message,source)=>{broadcastEchoes.ingest(message,source,(input,connector)=>require('../src/services/streamerbot-chat.cjs').ingestStreamerBotChat(eventCore,chatCore,input,connector)).catch(()=>bridgeLog('warn','Streamer.bot','CHAT_INGEST_FAILED',{message:'Chatnachricht konnte nicht verarbeitet werden.'}));},onStatus:status=>send('streamerbot:status',status),onEvent:event=>{if(event.bridge&&event.platform==='tiktok'&&currentConfig().streamerbot.tiktokEvents!=='bridge')return;supportEvents.ingest(event);}});
   chainService=new ChainService({getConfig:currentConfig,engine:actionEngine,onStatus:status=>send('chains:status',status)});
   actionEngine.runChain=(id,ctx)=>chainService.trigger(id,ctx);
   actionEngine.onStreamerBot=(id,ctx,signal,timeout,options)=>streamerbot.execute(id,ctx,signal,timeout,options);
@@ -654,6 +656,7 @@ function initCore() {
     require('../src/suite-bootstrap.cjs').onChat([{...require('../src/services/suite-host.cjs').chatForJarvis(message),windowVisible:chatCore.isMultiChatVisible(message)}]);
     if (chatCore.isMultiChatVisible(message)) send('chat:message', message);
   });
+  chatCore.on('identity',message=>{require('../src/suite-bootstrap.cjs').getRuntime()?.jarvis.onChat([{...require('../src/services/suite-host.cjs').chatForJarvis(message),windowVisible:chatCore.isMultiChatVisible(message)}]);send('chat:history',chatCore.getMultiChatMessages());});
   chatCore.on('moderation', (entry) => { auditStore?.writeModeration(entry); send('moderation:event', entry); });
   chatCore.on('filter-hit', (entry) => send('filter:hit', entry));
   chatCore.on('log', (entry) => {
@@ -716,6 +719,12 @@ function registerIpc() {
   });
   registerBroadcastIpc();
   const result=fn=>async(_event,...args)=>{try{return {ok:true,result:await fn(...args)};}catch(e){return {ok:false,error:e.message};}};
+  const localBot=new StreamerBotLocal({getConfig:()=>currentConfig().streamerbot,saveConfig:saveCommunityConfig,adapter:streamerbot});
+  const botLocal=fn=>async(event,...args)=>{try{if(event.sender!==mainWindow?.webContents||event.senderFrame!==event.sender.mainFrame)throw Error('Diese Oberfläche ist nicht berechtigt.');return {ok:true,result:await fn(...args)};}catch(e){return {ok:false,error:e.message};}};
+  ipcMain.handle('streamerbot:local',botLocal(()=>localBot.discover()));
+  ipcMain.handle('streamerbot:setup',botLocal(()=>localBot.setup()));
+  ipcMain.handle('streamerbot:choose',botLocal(async()=>{const picked=await dialog.showOpenDialog(mainWindow,{title:'Streamer.bot auswählen',properties:['openFile'],filters:[{name:'Streamer.bot.exe',extensions:['exe']}]});return picked.canceled?{canceled:true}:localBot.setup(picked.filePaths[0]);}));
+  ipcMain.handle('streamerbot:start',botLocal(()=>localBot.start()));
   ipcMain.handle('streamerbot:connect',result(()=>streamerbot.connect()));
   ipcMain.handle('streamerbot:disconnect',()=>{streamerbot.disconnect();return {ok:true};});
   ipcMain.handle('streamerbot:status',()=>streamerbot.status());
@@ -1067,6 +1076,7 @@ module.exports.getMainWindow=()=>mainWindow;
 module.exports.getGamingMode=()=>gamingMode;
 
 module.exports.getSuiteHost=()=>({
+ botStatus:()=>({connected:streamerbot?.state.connected===true,state:streamerbot?.state.state,version:streamerbot?.state.version,actions:streamerbot?.actions.length||0}),
  chatMessages:()=>chatCore.getMessages(),
  moderationState:()=>community.moderation.snapshot(),
  moderationResolve:payload=>community.resolveIdentity(payload),

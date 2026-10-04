@@ -35,9 +35,16 @@ function cleanSettings(input={}){
  s.aiPort=Math.round(finite(input.aiPort,1024,65535,11435));s.aiModel=/^[\w.:/-]{1,80}$/.test(input.aiModel||'')?input.aiModel:'qwen3:8b';s.voiceRuntime=String(input.voiceRuntime||'').slice(0,1000);s.microphone=microphoneIdentity(input.microphone);
  return s;
 }
-function isModerator(m){return ['moderator','mod','broadcaster','owner'].includes(String(m.role).toLowerCase())||(m.badges||[]).some(b=>['moderator','broadcaster'].includes(String(b).toLowerCase()));}
+function isModerator(m){
+ if(!m||typeof m!=='object')return false;
+ if(m.moderator===true||m.isModerator===true||m.isBroadcaster===true||['moderator','mod','broadcaster','owner'].includes(String(m.role||'').toLowerCase()))return true;
+ return Array.isArray(m.badges)&&m.badges.some(b=>{
+  const name=typeof b==='string'?b:b&&typeof b==='object'?b.set_id||b.name||b.type||b.id:'';
+  return ['moderator','broadcaster'].includes(String(name||'').toLowerCase().split('/')[0]);
+ });
+}
 function allowedChat(m,s){
- if(!s.chatEnabled||!s.chatPlatforms.includes(m.platform)||typeof m.message!=='string'||!m.message.trim())return false;
+ if(!m||!s.chatEnabled||!s.chatPlatforms.includes(m.platform)||typeof m.message!=='string'||!m.message.trim())return false;
  if(s.chatSource==='window'&&m.windowVisible===false)return false;
  if(s.chatMode==='all')return true;
  if(s.chatMode==='moderators')return isModerator(m);
@@ -68,23 +75,47 @@ class JarvisCore extends EventEmitter{
  constructor({directory,getSensors=()=>[],getFans=()=>[],obs,speak=()=>{},stopSpeech=()=>{},clock=Date.now,askAi,control,getCommandCatalog,controlAudio,moderation}){
   super();Object.assign(this,{directory,getSensors,getFans,obs,speak,stopSpeech,clock,askAi,control,getCommandCatalog,controlAudio,moderation});
   this.settings=cleanSettings(this.read('jarvis-settings.json',{}));this.memory=this.read('jarvis-memory.json',[]);if(!Array.isArray(this.memory))this.memory=[];
-  this.history=[];this.events=new JarvisEvents();this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.lastChat=-Infinity;this.commandBusy=false;this.pendingRevision=0;
+  this.history=[];this.events=new JarvisEvents();this.alerts=new AlertEngine();this.fanAlerts=new FanAlertEngine(this.read('jarvis-fan-alert-state.json',{}));this.lastFanState=JSON.stringify(this.fanAlerts.snapshot());this.chatSeen=new Map();this.chatPending=[];this.lastChat=-Infinity;this.commandBusy=false;this.pendingRevision=0;
  }
  read(name,fallback){try{return JSON.parse(fs.readFileSync(path.join(this.directory,name),'utf8'));}catch{return fallback;}}
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
- update(settings){if(settings.chatTemplate!==undefined&&!validChatTemplate(settings.chatTemplate))throw Error('Chat-Text: Nutze nur {username} und {message}, höchstens 400 Zeichen.');if(settings.events&&Object.hasOwn(settings.events,'templates'))validateTemplates(settings.events.templates);const previous=this.settings;const next={...previous,...settings};for(const key of ['events','fanAlerts','sceneAliases'])if(settings[key])next[key]={...previous[key],...settings[key]};if(settings.events?.templates)next.events.templates={...previous.events.templates,...settings.events.templates};const validated=cleanSettings(next);this.save('jarvis-settings.json',validated);this.settings=validated;if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.emit('settings',this.settings);return this.settings;}
+ update(settings){if(settings.chatTemplate!==undefined&&!validChatTemplate(settings.chatTemplate))throw Error('Chat-Text: Nutze nur {username} und {message}, höchstens 400 Zeichen.');if(settings.events&&Object.hasOwn(settings.events,'templates'))validateTemplates(settings.events.templates);const previous=this.settings;const next={...previous,...settings};for(const key of ['events','fanAlerts','sceneAliases'])if(settings[key])next[key]={...previous[key],...settings[key]};if(settings.events?.templates)next.events.templates={...previous.events.templates,...settings.events.templates};const validated=cleanSettings(next);this.save('jarvis-settings.json',validated);this.settings=validated;this.pruneChat(this.clock());if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.emit('settings',this.settings);return this.settings;}
  previewEvent(value={}){const type=value?.type;if(!Object.hasOwn(DEFAULT_TEMPLATES,type))throw Error('Bitte eine vorhandene Ereignisansage auswählen.');const valid=validateTemplate(type,value.template);if(!valid.ok)throw Error(valid.error);const text=renderTemplate(valid.text,{username:'Beispielperson',likecount:'1.000',giftname:'Beispielgeschenk',giftcount:'1',coins:'50',submonth:'3',platform:'TikTok'});return this.say('Vorschau mit erfundenen Beispieldaten. '+text,'preview');}
  say(text,kind='answer',speech=true){const entry={id:crypto.randomUUID(),time:this.clock(),kind,text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);if(speech&&this.settings.voiceEnabled)this.speak(text,{priority:kind==='alert'?2:kind==='chat'?0:1});return {ok:true,text,kind};}
  input(text,source){const entry={id:crypto.randomUUID(),time:this.clock(),kind:'user',source:['voice','typed','streamdeck'].includes(source)?source:'typed',text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);}
  unavailable(text,kind='unrecognized'){return {...this.say(text,kind),ok:false};}
  cancelPendingModeration(){this.pendingRevision++;this.pendingModeration=null;this.aiRequest?.abort();}
  remember(command,intent){if(!this.settings.learn)return;const key=normalize(command).slice(0,200);const old=this.memory.find(m=>m.command===key);if(old){old.count++;old.last=this.clock();}else this.memory.push({command:key,intent,count:1,last:this.clock()});this.memory=this.memory.sort((a,b)=>b.last-a.last).slice(0,200);this.save('jarvis-memory.json',this.memory);}
- onChat(batch){for(const m of batch){if(!allowedChat(m,this.settings))continue;const key=m.platform+':'+(m.id||crypto.createHash('sha256').update(m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));if(this.chatSeen.has(key))continue;this.chatSeen.set(key,this.clock());
-  if(this.clock()-this.lastChat<this.settings.chatCooldown*1000)continue;this.lastChat=this.clock();
+ onChat(batch){
+  if(!Array.isArray(batch))return;
+  const now=this.clock();
+  this.pruneChat(now);
+  for(const m of batch){
+   if(!allowedChat(m,this.settings))continue;
+   const key=m.platform+':'+(m.id||crypto.createHash('sha256').update((m.channelId||'')+'|'+m.userId+'|'+m.message+'|'+m.timestamp).digest('hex'));
+   if(this.chatSeen.has(key))continue;
+   this.chatSeen.set(key,now);
+   while(this.chatSeen.size>4000)this.chatSeen.delete(this.chatSeen.keys().next().value);
+   // Keep a short, bounded backlog so consecutive moderator messages are not
+   // silently lost during the configured pause. Chat remains narration only.
+   if(this.chatPending.length<8)this.chatPending.push({message:{...m,badges:Array.isArray(m.badges)?[...m.badges]:[]},time:now});
+  }
+  this.flushChat(now);
+ }
+ pruneChat(now){
+  const maxAge=Math.max(30000,this.settings.chatCooldown*2000);
+  this.chatPending=this.chatPending.filter(item=>now-item.time<maxAge&&allowedChat(item.message,this.settings));
+  for(const [key,time]of this.chatSeen)if(now-time>300000)this.chatSeen.delete(key);
+ }
+ flushChat(now=this.clock()){
+  this.pruneChat(now);
+  if(!this.chatPending.length||now-this.lastChat<this.settings.chatCooldown*1000)return;
+  const m=this.chatPending.shift().message;this.lastChat=now;
   this.say(`${this.settings.address?this.settings.address+', ':''}${chatText(m,this.settings)}`,'chat');
- }for(const [key,time]of this.chatSeen)if(this.clock()-time>300000)this.chatSeen.delete(key);}
+ }
  onEvent(event){this.events.ingest(event,this.settings.events,this.clock());}
  poll(){
+  this.flushChat();
   const eventText=this.events.next(this.settings.events,this.clock());if(eventText)this.say(`${this.settings.address?this.settings.address+', ':''}${eventText}`,'event');
   const alerts=this.alerts.evaluate(this.getSensors(),this.settings.sensorRules,this.clock());
   for(const a of alerts.slice(0,3))this.say(`${this.settings.address?this.settings.address+', ':''}${a.text}`,'alert');

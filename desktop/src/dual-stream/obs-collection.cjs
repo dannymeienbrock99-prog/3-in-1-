@@ -93,4 +93,47 @@ function resolveScene(config,value){
  const labels=scenes.filter(s=>s.label.toLocaleLowerCase('de')===lower),names=scenes.filter(s=>s.name.toLocaleLowerCase('de')===lower),matches=labels.length?labels:names;
  if(matches.length===1)return matches[0].key;if(matches.length>1)throw Error('Dieser Szenenname ist mehrfach vorhanden. Bitte TikTok oder Twitch mit auswählen.');throw Error('Diese Szene ist nicht vorhanden.');
 }
-module.exports={validateObsCollection,sourceSettings,localFile,sceneChoices,resolveScene,DEFAULT_SCENES,SOURCE_TYPES};
+// Imports refer to the user's original media. Removing an import only changes
+// our project graph; this function never opens, moves or deletes any file.
+function removeObsImport(config,request){
+ if(!object(request)||!['all','scene','source','transition'].includes(request.kind))throw Error('Bitte einen OBS-Import zum Entfernen auswählen.');
+ const next=JSON.parse(JSON.stringify(config)),collection=next.obsCollection,kind=request.kind,id=request.id;
+ if(kind!=='all'&&(typeof id!=='string'||!id||id.length>220))throw Error('Ungültiger OBS-Import.');
+ if(kind==='transition'){
+  if(!(next.transitions||[]).some(t=>t.id===id))throw Error('Dieser OBS-Übergang ist nicht mehr vorhanden.');
+  next.transitions=next.transitions.filter(t=>t.id!==id);if(next.program.transition===id)next.program.transition='fade';return next;
+ }
+ if(kind!=='all'&&!collection)throw Error('Diese OBS-Sammlung ist nicht mehr vorhanden.');
+ const removedIds=new Set(),removedFiles=new Set(),removedNames=new Set(),removedAliases=[];
+ const remember=node=>{removedIds.add(node.id);removedNames.add(node.name);const file=node.settings?.file||node.settings?.local_file;if(file)removedFiles.add(file);};
+ if(kind==='all'){
+  for(const node of [...(collection?.sources||[]),...(collection?.scenes||[])])remember(node);
+  if((next.transitions||[]).some(t=>t.id===next.program.transition))next.program.transition='fade';next.transitions=[];
+ }else if(kind==='scene'){
+  const scene=collection.scenes.find(s=>s.key===id&&!s.internal);if(!scene)throw Error('Diese OBS-Szene ist nicht mehr vorhanden.');remember(scene);
+ }else{
+  const source=collection.sources.find(s=>s.id===id);if(!source)throw Error('Diese OBS-Datei oder Quelle ist nicht mehr vorhanden.');remember(source);
+ }
+ if(collection){
+  for(const p of PLATFORMS)for(const slot of DEFAULT_SCENES)if(removedIds.has(collection.aliases?.[p]?.[slot])){removedAliases.push([p,slot]);delete collection.aliases[p][slot];}
+  collection.scenes=collection.scenes.filter(s=>!removedIds.has(s.id));
+  for(const scene of collection.scenes){scene.items=scene.items.filter(i=>!removedIds.has(i.source));if(removedIds.has(scene.partnerId))scene.partnerId='';}
+  // Keep shared media and nested groups while any remaining public scene uses
+  // them. Unreachable imported nodes can then leave the saved project as well.
+  const byId=new Map(collection.scenes.map(s=>[s.id,s])),used=new Set();
+  function visit(scene){if(used.has(scene.id))return;used.add(scene.id);for(const i of scene.items){const child=byId.get(i.source);if(child)visit(child);else used.add(i.source);}}
+  for(const scene of collection.scenes)if(!scene.internal)visit(scene);
+  for(const node of [...collection.sources,...collection.scenes])if(!used.has(node.id))remember(node);
+  collection.sources=collection.sources.filter(s=>used.has(s.id)&&!removedIds.has(s.id));
+  collection.scenes=collection.scenes.filter(s=>used.has(s.id)&&!removedIds.has(s.id));
+  for(const scene of collection.scenes)if(removedIds.has(scene.partnerId))scene.partnerId='';
+  collection.warnings=(collection.warnings||[]).filter(w=>![...removedNames].some(name=>w.startsWith(name+':')||w.startsWith(name+' · ')||w.includes(' · '+name+':')));
+  if(!collection.scenes.some(s=>!s.internal))delete next.obsCollection;
+ }
+ const fileKey=value=>typeof value==='string'?value.replace(/\\/g,'/').toLocaleLowerCase('en'):value,files=new Set([...removedFiles].map(fileKey));
+ for(const [p,slot] of removedAliases)if(slot!=='Spiel'&&next.program.platformBackgrounds?.[p]&&own(next.program.platformBackgrounds[p],slot))next.program.platformBackgrounds[p][slot]=null;
+ for(const backgrounds of [next.program.backgrounds,...PLATFORMS.map(p=>next.program.platformBackgrounds?.[p])])if(backgrounds)for(const slot of ['Start','Pause','Ende'])if(files.has(fileKey(backgrounds[slot])))backgrounds[slot]=null;
+ if(next.program.scene?.startsWith('obs:')&&!next.obsCollection?.scenes.some(s=>s.key===next.program.scene&&!s.internal))next.program.scene='Spiel';
+ return next;
+}
+module.exports={validateObsCollection,sourceSettings,localFile,sceneChoices,resolveScene,removeObsImport,DEFAULT_SCENES,SOURCE_TYPES};

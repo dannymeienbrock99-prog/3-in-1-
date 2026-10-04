@@ -3,7 +3,7 @@
 // A finite parameter contract shared by the local parser and execution layer.
 // These are voice actions, not arbitrary settings paths supplied by a transcript.
 const SETTING_SPECS = Object.freeze({
-  chatMode: {name:'Chat-Auswahl', values:['all','moderators','allowlist'], labels:{all:'alle Chatnachrichten',moderators:'nur Moderatoren',allowlist:'nur freigegebene Personen'}},
+  chatMode: {name:'Chat-Auswahl', values:['all','moderators','allowlist'], labels:{all:'alle Chatnachrichten',moderators:'nur Moderatoren und Kanalinhaber',allowlist:'nur freigegebene Personen'}},
   chatSource: {name:'Chat-Quelle', values:['window','connected'], labels:{window:'Chatfenster',connected:'verbundene Chats'}},
   'events.likeThreshold': {name:'Like-Schwelle', min:1, max:100000000, unit:'Likes'},
   'events.giftAnnouncement': {name:'Geschenk-Ansage', values:['gift','coins','both'], labels:{gift:'Geschenkname',coins:'Coins',both:'Geschenkname und Coins'}},

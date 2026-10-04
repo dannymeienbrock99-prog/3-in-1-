@@ -59,9 +59,23 @@ ipcMain.handle('touch:action',async(event,{command,value}={})=>{
   case 'clipboard-get':return copiedButton?JSON.parse(JSON.stringify(copiedButton)):null;
   case 'always-on-top':windows.alwaysOnTop(value);return current.snapshot();
   case 'packages':return getPackages().list();
+  case 'native-package':{
+   const result=await dialog.showOpenDialog({title:'Paket mit Elgato Stream Deck öffnen',properties:['openFile'],filters:[{name:'Stream-Deck-Pakete und Profile',extensions:['streamDeckPlugin','streamDeckIconPack','streamDeckProfile']}]});if(result.canceled)return {canceled:true};
+   return require('./services/touch-native-packages.cjs').openNativePackage(result.filePaths[0],shell);
+  }
   case 'package-import':{
    const result=await dialog.showOpenDialog({title:'Plugin oder Icon-Paket laden',properties:['openFile'],filters:[{name:'Stream-Deck-Pakete',extensions:['streamDeckPlugin','streamDeckIconPack']}]});if(result.canceled)return {canceled:true};
    await getPackages().importFile(result.filePaths[0]);await demand.sync({force:true});return getPackages().list();
+  }
+  case 'profile-import':{
+   const result=await dialog.showOpenDialog({title:'Stream-Deck-Profil hinzufügen',properties:['openFile'],filters:[{name:'Stream-Deck-Profile',extensions:['streamDeckProfile','zip']}]});if(result.canceled)return {canceled:true};
+   const before=current.snapshot(),imported=await require('./services/touch-profiles.cjs').importStreamDeckProfiles(result.filePaths[0],{packages:getPackages(),convertImage:require('./services/touch-images.cjs').thumbnail,catalog:current.catalog()});
+   const candidate={version:before.version,activeProfile:before.activeProfile,profiles:[...before.profiles,...imported.profiles],baseRevision:before.revision};
+   require('./services/touch-deck.cjs').normalizeConfig(candidate,current.catalog());
+   if(before.revision!==current.snapshot().revision)throw Error('Die Tasten wurden inzwischen verändert. Bitte den Profilimport erneut starten.');
+   fs.writeFileSync(path.join(current.directory,'touch-deck.before-profile-import-'+Date.now()+'.json'),JSON.stringify({version:before.version,activeProfile:before.activeProfile,profiles:before.profiles}));
+   const pluginHost=getHost(),previous=JSON.parse(JSON.stringify(pluginHost.stored));
+   try{pluginHost.importSettingsByButton(imported.settingsByButton);return {...current.save(candidate),importWarnings:imported.warnings,importCount:imported.profiles.length};}catch(error){pluginHost.stored=previous;pluginHost.save();throw error;}
   }
   case 'pack-icons':{
    const page=getPackages().icons({...value,limit:Math.min(24,Math.max(1,Number(value?.limit)||24))}),icons=[];

@@ -174,6 +174,7 @@ function validateConfig(config) {
   }
   if(c.navigation&&!integerIn(c.navigation.port,1024,65535))errors.push(issue('navigation.port','Gültiger lokaler Port erforderlich.'));
   if(c.streamerbot){
+    if(c.streamerbot.executablePath!==undefined&&(typeof c.streamerbot.executablePath!=='string'||c.streamerbot.executablePath.length>2048||/[\x00-\x1f]/.test(c.streamerbot.executablePath)))errors.push(issue('streamerbot.executablePath','Ungültiger Streamer.bot-Pfad.'));
     if(!validateUrl(c.streamerbot.url,{ws:true,allowEmpty:false}))errors.push(issue('streamerbot.url','Gültige WebSocket-Adresse erforderlich.'));
     if(!['none','streamlabs','streamelements'].includes(c.streamerbot.tipProvider))errors.push(issue('streamerbot.tipProvider','Spendenanbieter ist ungültig.'));
   }

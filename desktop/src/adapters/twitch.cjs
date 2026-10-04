@@ -99,7 +99,11 @@ class TwitchAdapter {
     if(rest.startsWith('@')){const space=rest.indexOf(' ');if(space>0){tags=parseTags(rest.slice(1,space));rest=rest.slice(space+1);}}
     const match=rest.match(/^:([^! ]+)!.* PRIVMSG #([^ ]+) :([\s\S]*)$/);if(!match)return;
     const username=match[1],channel=match[2],message=match[3];
-    this.onMessage?.({platform:'twitch',id:tags.id,userId:tags['user-id']||username,username,displayName:tags['display-name']||username,message,timestamp:tags['tmi-sent-ts']?new Date(Number(tags['tmi-sent-ts'])).toISOString():new Date().toISOString(),badges:tags.badges?tags.badges.split(',').filter(Boolean):[],moderator:tags.mod==='1'||String(tags.badges||'').includes('moderator/')||String(tags.badges||'').includes('broadcaster/'),raw:{line,tags,channel}});
+    const badges=tags.badges?tags.badges.split(',').filter(Boolean):[],hasBadge=name=>badges.some(badge=>badge.split('/')[0]===name);
+    const userId=tags['user-id']||username,channelId=tags['room-id']||'login:'+channel.toLowerCase(),identityVerified=/^\d+$/.test(tags['user-id']||'');
+    const isBroadcaster=hasBadge('broadcaster')||identityVerified&&userId===channelId;
+    const stamp=Number(tags['tmi-sent-ts']),sentAt=tags['tmi-sent-ts']&&Number.isFinite(stamp)?new Date(stamp):new Date();
+    this.onMessage?.({platform:'twitch',id:tags.id,userId,channelId,identityVerified,username,displayName:tags['display-name']||username,message,timestamp:Number.isFinite(sentAt.getTime())?sentAt.toISOString():new Date().toISOString(),badges,moderator:tags.mod==='1'||hasBadge('moderator')||isBroadcaster,isBroadcaster,raw:{line,tags,channel}});
   }
 
   async sendChat(){throw new Error('Twitch ist ohne autorisierte Anmeldung als Nur-Lesen-Chat verbunden. Senden ist deaktiviert.');}

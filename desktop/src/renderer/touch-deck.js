@@ -1,5 +1,39 @@
 (() => {
   'use strict';
+  // Keep button identities and their complete bindings when arranging a page.
+  function moveButton(items, from, to, exchange = false) {
+    if (!Array.isArray(items) || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= items.length || to >= items.length || from === to || !items[from]) return false;
+    if (exchange || !items[to]) [items[from], items[to]] = [items[to], items[from]];
+    else { const [item] = items.splice(from, 1); items.splice(to, 0, item); }
+    return true;
+  }
+  function removeButton(items, index) {
+    if (!Array.isArray(items) || !Number.isInteger(index) || index < 0 || index >= items.length || !items[index]) return false;
+    const remaining = items.filter((item, position) => item && position !== index), capacity = items.length;
+    items.splice(0, capacity, ...remaining, ...Array(capacity - remaining.length).fill(null));
+    return true;
+  }
+  function visibleKeyCount(items, editing = false, showEmpty = false) {
+    if (showEmpty) return items.length;
+    const last = items.findLastIndex(Boolean);
+    return editing ? Math.min(items.length, last + 2) : last + 1;
+  }
+  function rememberPosition(config, folderPath, selectedIndex) {
+    const selectedProfile = config?.profiles?.find(item => item.id === config.activeProfile) || config?.profiles?.[0];
+    let items = selectedProfile?.buttons || []; const folders = [];
+    for (const index of folderPath) { if (items[index]?.type !== 'folder') break; folders.push(items[index].id); items = items[index].buttons; }
+    return {profileId:selectedProfile?.id,folders,buttonId:items[selectedIndex]?.id || null,index:selectedIndex};
+  }
+  function restorePosition(config, bookmark) {
+    const selectedProfile = config.profiles.find(item => item.id === bookmark?.profileId);
+    if (!selectedProfile) return {path:[],selected:-1};
+    config.activeProfile = selectedProfile.id;
+    let items = selectedProfile.buttons; const folderPath = [];
+    for (const id of bookmark.folders) { const index = items.findIndex(item => item?.type === 'folder' && item.id === id); if (index < 0) return {path:folderPath,selected:-1}; folderPath.push(index); items = items[index].buttons; }
+    const index = bookmark.buttonId ? items.findIndex(item => item?.id === bookmark.buttonId) : bookmark.index >= 0 && bookmark.index < items.length && !items[bookmark.index] ? bookmark.index : -1;
+    return {path:folderPath,selected:index};
+  }
+  if (typeof document === 'undefined') { module.exports = {moveButton,removeButton,visibleKeyCount,rememberPosition,restorePosition}; return; }
   const root = document.getElementById('touch-deck-root');
   if (!root) return;
   const detached = document.body.hasAttribute('data-td-detached');
@@ -10,7 +44,7 @@
   const symbols = ['◆', '▶', '⏸', '■', '🎙', '🔊', '🔇', '📷', '💡', '🌡', '🌀', '📁', '↗', '★'];
   let state, draft, catalog = {actions:[]}, path = [], selected = -1;
   let dirty = false, editing = false, busy = false, loading = false, initialized = false;
-  let sensorTimer, pollBusy = false, catalogBusy = false, dragIndex = -1, confirmCallback, pendingFocus;
+  let sensorTimer, pollBusy = false, catalogBusy = false, dragIndex = -1, confirmCallback, pendingFocus, showEmpty = false;
   let packages = {plugins:[],iconPacks:[]}, packagesLoaded = false, presentation = {};
   let draftRevision, conflict = false, libraryItem = null, libraryPack = '', libraryOffset = 0, libraryRequest = 0, libraryTotal = 0;
   let presenceKey = '';
@@ -58,7 +92,7 @@
     $('dirty').classList.toggle('td-unsaved', dirty);
     $('mode').textContent = editing ? 'Zur Bedienung' : 'Tasten bearbeiten';
     $('mode').setAttribute('aria-pressed', String(editing));
-    $('mode-note').textContent = editing ? 'Bearbeiten: Taste wählen oder verschieben. Rechtsklick oder langes Drücken öffnet die Tastenoptionen.' : dirty ? 'Bitte zuerst speichern oder Änderungen verwerfen. Danach sind die Tasten wieder bedienbar.' : 'Bedienen: Taste auslösen oder Ordner öffnen. Tastenoptionen mit Rechtsklick oder langem Drücken.';
+    $('mode-note').textContent = editing ? 'Bearbeiten: Taste ziehen oder mit Alt + Pfeiltaste verschieben. Im Editor kannst du Positionen wählen oder Tasten tauschen. Beim Löschen rücken die Tasten nach.' : dirty ? 'Bitte zuerst speichern oder Änderungen verwerfen. Danach sind die Tasten wieder bedienbar.' : 'Bedienen: Taste auslösen oder Ordner öffnen. Tastenoptionen mit Rechtsklick oder langem Drücken.';
     root.classList.toggle('td-editing', editing);
     if ($('detach')) $('detach').textContent = state?.window?.detached || state?.detached ? 'Touch-Fenster zeigen' : 'Entkoppeln';
     if ($('top')) { const pinned = !!(state?.window?.alwaysOnTop ?? state?.alwaysOnTop); $('top').textContent = pinned ? 'Immer oben: An' : 'Immer oben: Aus'; $('top').setAttribute('aria-pressed', String(pinned)); }
@@ -80,7 +114,7 @@
       <div id="td-message" class="td-message" role="status" aria-live="polite"></div>
       <div id="td-confirm" class="td-confirm" hidden><span id="td-confirm-text"></span><div class="td-toolbar"><button id="td-confirm-yes">Bestätigen</button><button id="td-confirm-no" class="primary">Abbrechen</button></div></div>
       <article class="td-panel"><div class="td-profilebar"><label>Profil<select id="td-profile" aria-label="Touch-Deck-Profil"></select></label><label class="td-edit-only">Name<input id="td-profile-name" maxlength="60"></label><button id="td-profile-add" class="td-edit-only">Neues Profil</button><button id="td-profile-delete" class="td-edit-only td-danger">Profil löschen</button><label class="td-edit-only">Raster<select id="td-grid-size"><option value="3x2">3 × 2 · große Tasten</option><option value="5x3">5 × 3 · Standard</option><option value="8x4">8 × 4 · viele Tasten</option></select></label><label class="td-key-size-mode">Tastengröße<select id="td-key-size-mode"><option value="auto">Automatisch</option><option value="custom">Selbst einstellen</option></select></label><label id="td-key-size-wrap" class="td-key-size-range" hidden><span>Tasten: <output id="td-key-size-value">140 px</output></span><input id="td-key-size" type="range" min="80" max="220" step="10" value="140" aria-label="Tastengröße in Pixeln"></label></div>
-      <div class="td-workspace"><div class="td-deck-area"><nav id="td-breadcrumb" class="td-breadcrumb" aria-label="Touch-Deck-Ordner"></nav><p id="td-mode-note" class="td-help"></p><div id="td-grid" class="td-grid" aria-label="Touch-Deck-Tasten"></div></div><aside id="td-editor" class="td-editor td-edit-only" aria-label="Taste bearbeiten"></aside></div></article>
+      <div class="td-workspace"><div class="td-deck-area"><nav id="td-breadcrumb" class="td-breadcrumb" aria-label="Touch-Deck-Ordner"></nav><p id="td-mode-note" class="td-help"></p><div class="td-toolbar td-edit-only"><button id="td-show-empty" aria-pressed="false">Alle freien Plätze zeigen</button><span id="td-capacity" class="td-help"></span></div><div id="td-grid" class="td-grid" aria-label="Touch-Deck-Tasten"></div></div><aside id="td-editor" class="td-editor td-edit-only" aria-label="Taste bearbeiten"></aside></div></article>
       <details class="td-panel td-mobile-panel"><summary>Handy &amp; Tablet verbinden <span id="td-mobile-summary" class="td-help"></span></summary><p class="td-help">Im selben privaten WLAN den QR-Code mit dem Handy oder Tablet scannen. Alternativ die Adresse öffnen und die PIN eingeben. Der Handy-Dienst läuft nur bei eingeschalteter Verbindung, auch im Gaming-Modus.</p><div id="td-mobile"></div></details>
       <div id="td-context" class="td-context-menu" role="menu" aria-label="Tastenoptionen" hidden><span id="td-context-title" class="td-context-title"></span><button id="td-context-edit" role="menuitem">Bearbeiten</button><button id="td-context-copy" role="menuitem">Kopieren</button><button id="td-context-paste" role="menuitem">Einfügen</button><button id="td-context-delete" role="menuitem" class="td-danger">Löschen</button></div>
       <p class="td-footnote td-main-only">Das Touch Deck nutzt die vorhandenen Batto-Aktionen. PC-Werte werden nur bei sichtbaren Messwert-Tasten aktualisiert.</p>
@@ -89,12 +123,18 @@
     on('save', save);
     on('discard', () => ask('Alle ungespeicherten Änderungen am Touch Deck verwerfen?', () => { adopt(state, true); message('Änderungen verworfen.'); }));
     on('mode', async () => { if (detached) { await call('edit-main'); return; } if (!editing) { await refreshCatalog(); await refreshPackages(); } editing = !editing; selected = -1; render(); });
+    on('show-empty', () => { showEmpty = !showEmpty; renderGrid(); });
     on('detach', () => call('detach'));
     on('attach', () => call('attach'));
     on('top', async () => { const next = await call('always-on-top', !(state?.window?.alwaysOnTop ?? state?.alwaysOnTop)); if (next?.profiles) adopt(next); });
     on('package-open', async () => { await refreshPackages(); renderPackages(); $('packages-dialog').showModal(); });
     on('package-import', async () => { try { const next = await call('package-import'); if (next && !next.canceled) { packages = next; packagesLoaded = true; renderPackages(); renderEditor(); $('packages-message').textContent = 'Paket geladen. Die Aktionen und Icons stehen jetzt im Tasten-Editor bereit.'; } } catch (error) { $('packages-message').textContent = cleanError(error); } });
     on('packages-close', () => $('packages-dialog').close());
+    const nativeButton=document.createElement('button');nativeButton.id='td-native-package';nativeButton.textContent='Mit Elgato öffnen';$('package-import').after(nativeButton);
+    on('native-package',async()=>{try{const next=await call('native-package');if(!next?.canceled)$('packages-message').textContent='Datei an Elgato übergeben. Die Installation dort abschließen; Batto meldet damit noch keine fertige Installation.';}catch(error){$('packages-message').textContent=cleanError(error);}});
+    const profileButton=document.createElement('button');profileButton.id='td-profile-import';profileButton.textContent='Stream-Deck-Profil hinzufügen';$('import').before(profileButton);
+    const importNotes=document.createElement('details');importNotes.id='td-import-notes';importNotes.className='td-help';importNotes.hidden=true;$('message').after(importNotes);
+    on('profile-import',async()=>{if(dirty)throw Error('Bitte zuerst deine Änderungen speichern oder verwerfen.');const next=await call('profile-import');if(next&&!next.canceled){adopt(next,true);const warnings=next.importWarnings||[];importNotes.hidden=!warnings.length;importNotes.open=false;importNotes.innerHTML=warnings.length?`<summary>${warnings.length} Hinweise zum Profil anzeigen</summary><ul style="max-height:50vh;overflow:auto">${warnings.map(item=>`<li>${esc(item)}</li>`).join('')}</ul>`:'';message(`${next.importCount||0} Profile hinzugefügt.${warnings.length?' Einige Tasten benötigen die Elgato-Software oder weitere Einstellungen. Öffne die Hinweise zum Profil.':' Prüfe die Tastenbelegungen vor dem Bedienen.'}`,Boolean(warnings.length));}});
     on('library-close', closeLibrary);
     $('library').addEventListener('close', () => { libraryRequest++; libraryItem = null; $('library-icons').replaceChildren(); });
     $('library-pack').onchange = run(async () => { libraryPack = $('library-pack').value; libraryOffset = 0; await loadLibraryPage(); });
@@ -176,7 +216,7 @@
     grid.addEventListener('drop', event => {
       const tile = event.target.closest('[data-td-key]');
       if (!editing || busy || dragIndex < 0 || !tile) return;
-      event.preventDefault(); swap(dragIndex, Number(tile.dataset.tdKey)); dragIndex = -1;
+      event.preventDefault(); arrange(dragIndex, Number(tile.dataset.tdKey)); dragIndex = -1;
     });
     grid.addEventListener('dragend', () => { dragIndex = -1; root.querySelectorAll('.td-dragging').forEach(el => el.classList.remove('td-dragging')); });
     grid.addEventListener('contextmenu', event => {
@@ -188,6 +228,11 @@
       void openContext(Number(tile.dataset.tdKey), event.clientX || bounds.left + 20, event.clientY || bounds.top + 20);
     });
     grid.addEventListener('keydown', event => {
+      if (editing && event.altKey && !event.ctrlKey && !event.metaKey && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {
+        const tile = event.target.closest('[data-td-key]'); if (!tile || busy) return;
+        const index = Number(tile.dataset.tdKey), delta = {ArrowLeft:-1,ArrowRight:1,ArrowUp:-profile().columns,ArrowDown:profile().columns}[event.key];
+        event.preventDefault(); arrange(index,index + delta); $('grid').querySelector(`[data-td-key="${selected}"]`)?.focus(); return;
+      }
       if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
       const tile = event.target.closest('[data-td-key]');
       if (!tile || busy) return;
@@ -324,8 +369,9 @@
     const item = locate(target)?.items[target?.index];
     if (!item) return;
     ask(`„${item.title || 'Taste ' + (target.index + 1)}“${item.type === 'folder' ? ' mit allen enthaltenen Tasten' : ''} löschen?`, async () => {
-      ensureTarget(target, item.id).items[target.index] = null;
-      await finishContextChange(target, 'Taste gelöscht.');
+      const items = ensureTarget(target, item.id).items;
+      removeButton(items, target.index); showEmpty = false;
+      await finishContextChange({...target,index:Math.min(target.index,items.filter(Boolean).length)}, 'Taste gelöscht. Die übrigen Tasten sind nachgerückt.');
     });
   }
   function normalizePath() {
@@ -335,7 +381,7 @@
   }
   function adopt(next, force = false) {
     if (!next?.profiles?.length) return;
-    const previous = draft && JSON.stringify(draft);
+    const previous = draft && JSON.stringify(draft), bookmark = draft && rememberPosition(draft, path, selected);
     const previousSaved = state?.profiles && JSON.stringify(configOf(state));
     const nextSaved = JSON.stringify(configOf(next));
     if (!force && dirty && previousSaved && previousSaved !== nextSaved) conflict = true;
@@ -344,7 +390,7 @@
     if (force || !dirty) {
       const incoming = configOf(next);
       // Keep handlers attached to the same draft objects on metadata-only updates.
-      if (force || previous !== JSON.stringify(incoming)) draft = incoming;
+      if (force || previous !== JSON.stringify(incoming)) { draft = incoming; if (!force && bookmark) { const restored = restorePosition(draft, bookmark); path = restored.path; selected = restored.selected; } }
       dirty = false; conflict = false; draftRevision = next.revision; normalizePath(); if (force) { path = []; selected = -1; }
     }
     if (force || previous !== JSON.stringify(draft)) render();
@@ -360,8 +406,8 @@
     let next;
     try { next = await call('save', {...clone(draft),baseRevision:draftRevision}); }
     catch (error) { if (detached) adopt(state, true); throw error; }
-    const oldPath = [...path], oldSelected = selected;
-    adopt(next, true); path = oldPath; selected = oldSelected; normalizePath(); render(); message('Touch Deck gespeichert. Die Tasten sind auch auf verbundenen Geräten verfügbar.');
+    const bookmark = rememberPosition(draft, path, selected);
+    adopt(next, true); const restored = restorePosition(draft, bookmark); path = restored.path; selected = restored.selected; normalizePath(); render(); message('Touch Deck gespeichert. Die Tasten sind auch auf verbundenen Geräten verfügbar.');
   }
   function render() {
     if (!draft) return;
@@ -416,12 +462,16 @@
     return `${formatted}${sensor.unit ? ' ' + sensor.unit : ''}`;
   }
   function renderGrid() {
+    dragIndex = -1;
+    $('show-empty').textContent = showEmpty ? 'Freie Plätze ausblenden' : 'Alle freien Plätze zeigen';
+    $('show-empty').setAttribute('aria-pressed',String(showEmpty));
+    $('capacity').textContent = `${page().filter(Boolean).length} von ${page().length} Plätzen belegt`;
     $('grid').style.setProperty('--td-columns', profile().columns);
     $('grid').style.setProperty('--td-rows', profile().rows);
     $('grid').classList.toggle('td-grid-dense', profile().columns > 5);
     $('grid').classList.toggle('td-grid-audio', page().some(item => item?.type === 'volume'));
     applySize();
-    $('grid').innerHTML = page().map((item, index) => {
+    $('grid').innerHTML = page().slice(0,visibleKeyCount(page(),editing,editing && showEmpty)).map((item, index) => {
       const live = item?.type === 'plugin' ? presentation[item.id] || {} : {};
       const icon = safeIcon(item?.icon) || safeIcon(live.image), title = item?.title || (item?.type === 'folder' ? 'Ordner' : `Taste ${index + 1}`);
       if (item?.type === 'volume' && !editing) {
@@ -429,7 +479,7 @@
         return `<div class="td-key td-volume-key" data-td-key="${index}" tabindex="0" role="group" aria-label="Lautstärke ${esc(title)}" aria-haspopup="menu"><span class="td-key-number">${index + 1}</span><span class="td-volume-heading">${icon ? `<img src="${icon}" alt="">` : `<span aria-hidden="true">${esc(item.symbol || '🔊')}</span>`}<span class="td-key-title">${esc(title)}</span></span><div data-td-volume-controls="${index}" class="td-volume-controls"><output class="td-volume-value">${available ? (value.muted ? 'Stumm' : volume + ' %') : '—'}</output><input type="range" min="0" max="100" step="1" value="${volume}" aria-label="${esc(title)} Lautstärke" data-td-volume-range data-unavailable="${!available}"${!available || dirty ? ' disabled' : ''}><div class="td-volume-buttons"><button data-td-volume-step="-5" data-unavailable="${!available}" aria-label="${esc(title)} leiser"${!available || dirty ? ' disabled' : ''}>−</button><button data-td-volume-mute data-unavailable="${!available}" aria-label="${esc(title)} ${value?.muted ? 'einschalten' : 'stummschalten'}" aria-pressed="${!!value?.muted}"${!available || dirty ? ' disabled' : ''}>${value?.muted ? '🔇' : '🔊'}</button><button data-td-volume-step="5" data-unavailable="${!available}" aria-label="${esc(title)} lauter"${!available || dirty ? ' disabled' : ''}>+</button></div></div></div>`;
       }
       return `<button class="td-key${!item ? ' td-empty' : ''}${editing && selected === index ? ' td-selected' : ''}" data-td-key="${index}" draggable="${editing && !!item}" aria-label="${esc(!item ? (editing ? 'Leere Taste ' + (index + 1) + ' belegen' : 'Leere Taste ' + (index + 1)) : title)}" aria-haspopup="menu"${editing ? ` aria-pressed="${selected === index}"` : ''}><span class="td-key-number">${index + 1}</span>${item ? `<span class="td-key-art">${icon ? `<img src="${icon}" alt="" draggable="false">` : `<span class="td-symbol" aria-hidden="true">${esc(item.symbol || (item.type === 'folder' ? '📁' : '◆'))}</span>`}${item.type === 'sensor' ? `<strong class="td-key-value" data-td-sensor-value="${index}">${esc(sensorText(item))}</strong>` : ''}</span><span class="td-key-title">${esc(title)}</span><span class="td-key-kind">${item.type === 'folder' ? 'Ordner öffnen' : item.type === 'sensor' ? 'PC-Messwert' : item.type === 'plugin' ? esc(live.error || live.title || 'Plugin') : item.steps?.length > 1 ? item.steps.length + ' Aktionen' : ''}</span>` : '<span class="td-plus" aria-hidden="true">+</span><span class="td-key-title">' + (editing ? 'Belegen' : 'Frei') + '</span>'}</button>`;
-    }).join('');
+    }).join('') || '<p class="td-empty-note td-help">Dieses Deck ist leer. Mit „Tasten bearbeiten“ legst du deine erste Taste an.</p>';
   }
   function updateSensorValues() { $('grid')?.querySelectorAll('[data-td-sensor-value]').forEach(el => { const item = page()[Number(el.dataset.tdSensorValue)]; if (item?.type === 'sensor') el.textContent = sensorText(item); }); }
   function updatePluginValues() {
@@ -475,10 +525,11 @@
     else item.steps = [defaultStep()];
     page()[selected] = item; changed(); renderGrid(); renderEditor(); scheduleSensors(); return true;
   }
-  function swap(from, to) {
+  function arrange(from, to, exchange = false) {
     const items = page();
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= items.length || to >= items.length || from === to) return;
-    [items[from], items[to]] = [items[to], items[from]]; selected = to; changed(); renderGrid(); renderEditor(); message('Tasten getauscht. Zum Übernehmen speichern.');
+    if (conflict) { message('Das Deck wurde in einem anderen Fenster geändert. Lade zuerst den aktuellen Stand.',true); return; }
+    if (!moveButton(items,from,to,exchange)) return;
+    selected = to; closeConfirm(); changed(); renderGrid(); renderEditor(); message(exchange ? 'Tasten getauscht. Zum Übernehmen speichern.' : 'Taste verschoben. Zum Übernehmen speichern.');
   }
   function renderEditor() {
     const editor = $('editor');
@@ -492,7 +543,7 @@
     }
     editor.innerHTML = `<h3>Taste ${selected + 1}</h3><label>Beschriftung<input id="td-title" maxlength="80" value="${esc(item.title)}"></label><label>Art<select id="td-type">${[['action','Aktion / Kombination'],['plugin','Plugin-Aktion'],['volume','Lautstärkeregler'],['folder','Ordner'],['sensor','PC-Messwert']].map(([id, name]) => option(id,name,item.type)).join('')}</select></label>
       <div class="td-symbol-row"><label>Symbol<select id="td-symbol">${[...new Set([item.symbol || '◆', ...symbols])].map(symbol => option(symbol,symbol,item.symbol || '◆')).join('')}</select></label><button id="td-icon">Eigenes Bild</button><button id="td-icon-library">Icon-Bibliothek</button>${safeIcon(item.icon) ? '<button id="td-icon-remove" title="Eigenes Bild entfernen">Bild entfernen</button>' : ''}</div>
-      <div id="td-type-editor"></div><hr><label>Tauschen mit<select id="td-move-target">${page().map((target, index) => index === selected ? '' : option(index, `${index + 1} · ${target?.title || 'Frei'}`, '')).join('')}</select></label><button id="td-move">Tasten tauschen</button><button id="td-delete" class="td-danger">Taste löschen</button>`;
+      <div id="td-type-editor"></div><hr><label>Neue Position<select id="td-move-target">${page().map((target, index) => index === selected ? '' : option(index, `${index + 1} · ${target?.title || 'Frei'}`, '')).join('')}</select></label><button id="td-move">Taste verschieben</button><button id="td-swap">Tasten tauschen</button><p class="td-help">Bei einer belegten Zielposition rücken die Tasten zur Seite. Tauschen wechselt nur die beiden Tasten.</p><button id="td-delete" class="td-danger">Taste löschen &amp; Lücke schließen</button>`;
     $('title').oninput = () => { item.title = $('title').value; changed(); renderGrid(); };
     $('symbol').onchange = () => { item.symbol = $('symbol').value; changed(); renderGrid(); };
     $('type').onchange = () => {
@@ -504,7 +555,8 @@
     on('icon', async () => { const result = await call('icon'); const value = typeof result === 'string' ? result : result?.dataPNG || result?.icon; if (safeIcon(value)) { item.icon = value; changed(); renderGrid(); renderEditor(); } });
     on('icon-library', async () => { await refreshPackages(); libraryItem = item; libraryPack = packages.iconPacks?.some(pack => pack.id === libraryPack) ? libraryPack : packages.iconPacks?.[0]?.id || ''; libraryOffset = 0; renderLibraryPacks(); $('library').showModal(); await loadLibraryPage(); });
     on('icon-remove', () => { delete item.icon; changed(); renderGrid(); renderEditor(); });
-    on('move', () => swap(selected, Number($('move-target').value)));
+    on('move', () => arrange(selected, Number($('move-target').value)));
+    on('swap', () => arrange(selected, Number($('move-target').value),true));
     on('delete', () => deleteAt({profileId:profile().id,path:[...path],index:selected}));
     if (item.type === 'folder') {
       $('type-editor').innerHTML = '<button id="td-folder-open" class="primary">Ordner bearbeiten</button><p class="td-help">Ordner haben das Raster dieses Profils. Über die Leiste über den Tasten gelangst du zurück.</p>';

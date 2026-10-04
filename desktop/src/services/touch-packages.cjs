@@ -51,6 +51,7 @@ function inspect(directory){
   const source=readJson(path.join(directory,'icons.json'),4*1024*1024);if(!Array.isArray(source)||source.length>LIMITS.icons)throw Error('Ungültige Icon-Liste.');
   result.icons=source.map((entry,index)=>{if(!object(entry))throw Error('Ungültiger Icon-Eintrag.');const file=findAsset(directory,'icons/'+relativeName(entry.path));if(!file||!imageExtensions.has(path.extname(file).toLowerCase()))throw Error('Ein Icon im Paket fehlt oder hat ein unbekanntes Format.');return {id:String(index),name:clean(entry.name)||path.basename(file),tags:Array.isArray(entry.tags)?entry.tags.map(t=>clean(t,40)).slice(0,30):[],file};});
  }else{
+  if(manifest.PrivateAPI)throw Error('Dieses integrierte Elgato-Plugin benötigt die originale Stream-Deck-Laufzeit.');
   const raw=manifest.CodePathWin||manifest.CodePath;if(typeof raw!=='string')throw Error('Dieses Plugin hat keinen Windows-Startpfad.');
   result.code=findAsset(directory,raw)||(!path.extname(raw)?findAsset(directory,raw+'.exe'):null);if(!result.code)throw Error('Die Startdatei des Plugins fehlt.');
   const ext=path.extname(result.code).toLowerCase();result.runtime=ext==='.exe'?'exe':['.js','.cjs','.mjs'].includes(ext)?'node':['.html','.htm'].includes(ext)?'html':'unsupported';
@@ -79,7 +80,7 @@ class TouchPackages{
   if(!directory)throw Error('Paketordner fehlt.');this.directory=path.resolve(directory);this.convertImage=convertImage;this.indexFile=path.join(this.directory,'packages.json');this.packages=new Map();this.cache=new Map();this.importing=false;this.errors=[];
   if(fs.existsSync(this.indexFile))try{const entries=readJson(this.indexFile);if(!Array.isArray(entries)||entries.length>150)throw Error('Ungültiges Paketverzeichnis.');for(const relative of entries)try{const p=inspect(inside(this.directory,relative));this.packages.set(p.id,p);}catch(error){this.errors.push(error.message);}}catch(error){this.errors.push(error.message);}
  }
- list(){return {plugins:[...this.packages.values()].filter(p=>p.kind==='plugin').map(p=>({id:p.id,name:p.name,version:p.version,supported:p.supported,compatibility:p.compatibility,actions:p.actions.map(({id,name,hasInspector,supported})=>({id,name,hasInspector,supported}))})),iconPacks:[...this.packages.values()].filter(p=>p.kind==='icons').map(p=>({id:p.id,name:p.name,version:p.version,count:p.icons.length})),errors:[...this.errors]};}
+ list(){return {plugins:[...this.packages.values()].filter(p=>p.kind==='plugin').map(p=>({id:p.id,name:p.name,version:p.version,supported:p.supported,compatibility:p.compatibility,...(p.runtime==='node'&&p.manifest.Nodejs?.Version?{runtimeRequirement:'Node.js '+p.manifest.Nodejs.Version}:{}),actions:p.actions.map(({id,name,hasInspector,supported})=>({id,name,hasInspector,supported}))})),iconPacks:[...this.packages.values()].filter(p=>p.kind==='icons').map(p=>({id:p.id,name:p.name,version:p.version,count:p.icons.length})),errors:[...this.errors]};}
  getPlugin(id){const p=this.packages.get(id);if(!p||p.kind!=='plugin')throw Error('Dieses Plugin ist nicht installiert.');return p;}
  async importFile(filename){
   if(this.importing)throw Error('Ein Paket wird gerade importiert.');if(!/\.(streamDeckPlugin|streamDeckIconPack)$/i.test(filename))throw Error('Bitte eine .streamDeckPlugin- oder .streamDeckIconPack-Datei wählen.');

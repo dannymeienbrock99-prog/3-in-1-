@@ -1,4 +1,33 @@
-# Batto 3-in-1 · Schnellstart 1.12.0
+# Batto 3-in-1 · Schnellstart 1.13.0
+
+## Streamer.bot auf diesem PC einrichten
+
+1. Links **Streamer.bot** öffnen und **Automatisch einrichten** drücken. Wird nichts gefunden, **Streamer.bot.exe auswählen** und die Datei deiner vorhandenen Installation wählen.
+2. **Streamer.bot starten** öffnet den Bot. Eine bereits laufende Instanz wird weiterverwendet. Falls der Status keinen eingerichteten Server erkennt, den WebSocket-Server in Streamer.bot einschalten. Eine vorhandene lokale Serveradresse wird übernommen.
+3. Unter **Streamer.bot verbinden** bei Bedarf das Server-Passwort eingeben und **Speichern & verbinden** drücken. **Beim Programmstart verbinden** speichert die automatische Verbindung; der lokale Bot wird dadurch nicht automatisch gestartet.
+4. **Aktionen laden**, eine aktivierte Aktion auswählen und mit **Nur Vorschau** zuerst Aktions-ID und Nachrichtentext kontrollieren. **Jetzt wirklich ausführen** sendet die Aktion. Eine angenommene Aktion bestätigt noch keine Nachrichtenzustellung im TikTok-Chat.
+
+Bei einem Start- oder Einrichtungsfehler steht der Hinweis direkt im lokalen Bereich. Danach kannst du erneut versuchen oder die richtige Datei auswählen. Ein abgebrochener Dateidialog behält die bisherige Auswahl. Zugangsdaten aus Streamer.bot-Dateien werden nicht in die Oberfläche übernommen.
+
+## Touch-Tasten anordnen und Profile hinzufügen
+
+Unter **Touch Deck → Tasten bearbeiten** belegte Tasten ziehen, mit **Alt + Pfeiltaste** verschieben oder im Editor **Neue Position → Taste verschieben** wählen. Bei einem belegten Ziel rücken andere Tasten weiter; **Tasten tauschen** tauscht nur die beiden Positionen. **Taste löschen & Lücke schließen** entfernt die Taste nach Bestätigung und ordnet die übrigen Tasten neu. Im Bedienmodus endet das Raster an der letzten belegten Taste; im Editor bleibt zusätzlich ein freier Platz. **Alle freien Plätze zeigen** öffnet das gesamte Raster. Vor dem Bedienen Änderungen speichern.
+
+**Stream-Deck-Profil hinzufügen** lädt unterstützte `.streamDeckProfile`-Dateien oder Profil-ZIPs als zusätzliche Profile. Belegte Seiten, Ordner, Bilder und Plugin-Zuordnungen werden übernommen. Die bisherige Belegung wird gesichert; Hinweise nennen fehlende Plugins oder Funktionen. Pluginpakete zuerst unter **Plugins & Icons → Paket laden** hinzufügen und Verbindungen beziehungsweise Konten im jeweiligen Plugin einrichten.
+
+**Plugins & Icons → Mit Elgato öffnen** übergibt ein Plugin, Icon-Paket oder Profil an deine installierte Elgato-Software; die Installation dort abschließen. Geschützte Profile und manche Hersteller- oder Gerätefunktionen benötigen diese originale Laufzeit. Eine importierte Taste allein bestätigt nicht, dass ein fremdes Plugin im Batto Touch Deck vollständig funktioniert.
+
+## OBS-Importe entfernen und Stream prüfen
+
+Unter **Dual Stream → OBS-Szenensammlung** löscht **Szene entfernen** eine einzelne importierte Szene. **Importierte Medien und Übergänge verwalten** bietet **Quelle entfernen** und **Übergang entfernen**. Eine Medienquelle wird aus allen importierten Szenen entfernt, die diese Quelle benutzen; andere gemeinsame Quellen bleiben erhalten. **Alle OBS-Importe entfernen** entfernt Szenen und Videoübergänge aus Batto. Vorher virtuelle Kameras stoppen. Die ursprünglichen Dateien und die Sammlung in OBS bleiben auf dem PC. Ein entfernter aktiver Szeneneintrag wechselt zu **Spiel**, ein entfernter aktiver Videoübergang zu **Überblendung**; die Aufnahme startet dadurch nicht.
+
+Für den Stream die gewünschte **Bildschirmaufnahme**, **Fensteraufnahme** oder **Spielaufnahme** sowie deine Kamera auswählen. **Vorschau → Kamera & Spiel prüfen** zeigt die Quellen; TikTok und Twitch behalten ihre eigenen Anordnungen. Für beide Formate eignet sich **Überblendung**. Danach virtuelle Kamera starten und in LIVE Studio beziehungsweise deiner Sendesoftware **Batto TikTok** oder **Batto Twitch** auswählen. Mikrofon und PC-Ton dort einstellen. Der öffentliche Stream wird in der Sendesoftware gestartet. **LIVE-Studio-Sitzung markieren** aktiviert nur Batto-Regeln für eine laufende Sitzung.
+
+## Eigene Nachrichten und Moderatoren vorlesen
+
+Unter **Jarvis → Nachrichten aus dem Chat vorlesen** als Quelle **Nachrichten aus dem Multi-Chat-Fenster** und als Personenauswahl **Moderatoren & Kanalinhaber** wählen. **Chat-Regeln speichern** übernimmt die Einstellung. Jarvis berücksichtigt die bestätigten Rollen und Benutzer-IDs aus dem verbundenen Twitch-, TikTok- oder YouTube-Chat, einschließlich eigener Kanalnachrichten. Der Anzeigename allein reicht nicht. Das Fenster muss nicht ständig sichtbar sein. Mehrere kurze Nachrichten werden mit dem gewählten Abstand in einer begrenzten Warteschlange vorgelesen; Filtertreffer und doppelte Nachrichten bleiben stumm. Der Chattext führt keine Jarvis-Befehle aus.
+
+Die RGB-Oberfläche bleibt **PRISM 1.7.0**. Vorhandene Lichtprofile und die bisherigen RGB-Anleitungen gelten weiter.
 
 ## Strimer Wireless einstellen
 

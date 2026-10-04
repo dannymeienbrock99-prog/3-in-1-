@@ -92,19 +92,24 @@ class JarvisCore extends EventEmitter{
   const saved=JSON.stringify(this.fanAlerts.snapshot());if(saved!==this.lastFanState){this.save('jarvis-fan-alert-state.json',this.fanAlerts.snapshot());this.lastFanState=saved;}
   if(high.length){
    const describe=f=>`${f.name}: ${Math.round(f.percent.value)} Prozent${f.percent.basis==='rpm-reference'?' der eingestellten Maximaldrehzahl':''}${fresh(f.rpm,this.clock())?', '+Math.round(f.rpm.value).toLocaleString('de-DE')+' Umdrehungen pro Minute':''}`;
-   const detail=high.length<=3?high.map(describe).join('. '):`${high.length} iCUE-LINK-Lüfter haben die Meldeschwelle erreicht. Höchster Wert: ${describe(high.reduce((a,b)=>a.percent.value>b.percent.value?a:b))}`;
+   const detail=high.length<=3?high.map(describe).join('. '):`${high.length} Lüfter haben die Meldeschwelle erreicht. Höchster Wert: ${describe(high.reduce((a,b)=>a.percent.value>b.percent.value?a:b))}`;
    this.say(`${this.settings.address?this.settings.address+', ':''}hohe Lüfterdrehzahl. ${detail}.`,'alert');
   }
   return [...alerts,...high.map(f=>({fanId:f.id}))];
  }
  resolveSensors(text){
   const q=normalize(text), all=this.getSensors().filter(s=>this.settings.sensorRules[s.id]?.readable!==false);
-  const fans=this.getFans();
+  const fans=this.getFans().filter(f=>this.settings.sensorRules[f.rpm?.id||f.rpmSensorId]?.readable!==false);
+  // Read ordinary RPM sensors even before a tile is placed in the overlay. A
+  // mapped tile keeps its chosen name and is not announced a second time.
+  const mapped=new Set(fans.map(f=>f.rpm?.id||f.rpmSensorId).filter(Boolean));
+  for(const sensor of all.filter(s=>s.unit==='RPM'&&!mapped.has(s.id)))fans.push({id:'sensor/'+sensor.id,name:sensor.name,kind:sensor.isLinkFan?'link':'normal',rpm:sensor});
   const namedFans=fans.filter(f=>{const n=normalize(f.name);return n.length>2&&q.includes(n);});
   if((/lufter|\bfan\b|icue link/.test(q)||namedFans.length)&&!/gpu|grafikkarte|pin|spannung|strom|temperatur|warm/.test(q)){
-   const wanted=namedFans.length?namedFans:fans;
-   const percent=/prozent|%|leistung|wie schnell|geschwindigkeit/.test(q);
-   return wanted.slice(0,32).map(f=>({...((percent?f.percent:f.rpm)||{}),id:'fan/'+f.id+(percent?'/percent':'/rpm'),name:f.name,unit:percent?'%':'RPM'}));
+   const link=f=>f.kind==='link'||f.rpm?.isLinkFan===true||!f.kind&&f.rpm?.isLinkFan!==false;
+   const wanted=(namedFans.length?namedFans:fans).filter(f=>/icue|\blink\b/.test(q)?link(f):/\bnormal(?:e|en|er|es)?\b|standard lufter/.test(q)?!link(f):true);
+   const percent=!/\brpm\b|drehzahl|umdrehung/.test(q)&&/prozent|%|leistung/.test(q);
+   return wanted.slice(0,32).filter(f=>this.settings.sensorRules[(percent?f.percent:f.rpm)?.id]?.readable!==false).map(f=>({...((percent?f.percent:f.rpm)||{}),id:'fan/'+f.id+(percent?'/percent':'/rpm'),name:f.name,unit:percent?'%':'RPM'}));
   }
   const connector=/\b(pin|pins|anschluss|stecker)\b|12v.?2.?6|12vhpwr|16.?pin/.test(q);
   const exact=all.filter(s=>{const name=normalize(this.settings.sensorRules[s.id]?.alias||s.name);return name.length>2&&q.includes(name)&&(!connector||/pin|12v.?2.?6|12vhpwr|16.?pin/.test(normalize(s.name+' '+s.device)));});if(exact.length)return exact.slice(0,8);
@@ -177,6 +182,7 @@ class JarvisCore extends EventEmitter{
     else if(action.action==='scene'&&this.obs)result=await this.obs.setScene(action.target);
     else throw Error('Diese Steuerfunktion ist gerade nicht verfügbar. Öffne Batto erneut.');
     if(result?.ok===false)throw Error(result.message||result.error||result.text||'Der Befehl konnte nicht ausgeführt werden.');
+    if(action.action.startsWith('rgb-')&&result?.ok!==true)throw Error('Die RGB-Steuerung hat den Befehl nicht bestätigt.');
     this.remember(text,action.action==='scene'?'scene:'+action.target:'control:'+action.action+(action.target?':'+action.target:''));
     return this.say(prefix+(result?.text||intent.reply),'answer',!['speech-stop','listen'].includes(action.action));
    }
@@ -190,7 +196,8 @@ class JarvisCore extends EventEmitter{
    if(/temperatur|spannung|strom|volt|ampere|watt|\bpin|gpu|cpu|arbeitsspeicher|\bram\b|lufter|messwert|pc werte/.test(q))return this.say(prefix+'dafür finde ich keinen passenden verfügbaren Sensor. Wähle die Messquelle oder gib dem Sensor einen Sprachnamen.');
    // Unknown control requests must not be answered by a model as if an action happened.
    const actionRequest=/\b(offne|offnen|schliesse|schliessen|schalte|schalten|einschalten|ausschalten|starte|starten|stoppe|stoppen|beende|beenden|mach|mache|wechsle|wechsel|wechseln|aktiviere|deaktiviere|aktivieren|deaktivieren|setze|stelle|sende|senden|spiele|spielen|losche|loschen|kopiere|kopieren|blockiere|blockieren|blocke|banne|bannen|entblocke|entblocken|entblockiere|sperre|sperren|entsperre|entsperren|timeout|mute|unmute|filterwort|filter|hinzufugen|entfernen|verbinde|verbinden|trenne|trennen|fuhre|drucke|druck|spiel|send|schick|schicke|offnen|zeige|zeig|gehe|geh|schalt|starte|setz|stell|regle|hebe|heb|lose|liest|lese|lies|hor|hore|brich)\b/.test(q);
-   if(!actionRequest&&this.settings.localAi&&this.askAi){aiRequest=new AbortController();this.aiRequest=aiRequest;const answer=await this.askAi(text,this.settings,this.memory.slice(0,20),aiRequest.signal);if(aiRequest.signal.aborted)return {ok:false,text:'Die Antwort wurde abgebrochen.'};this.remember(text,'conversation');return this.say(prefix+answer);}
+   const rgbRequest=/^(?:rgb|prism|pc beleuchtung|farbe)\b/.test(q);
+   if(!actionRequest&&!rgbRequest&&this.settings.localAi&&this.askAi){aiRequest=new AbortController();this.aiRequest=aiRequest;const answer=await this.askAi(text,this.settings,this.memory.slice(0,20),aiRequest.signal);if(aiRequest.signal.aborted)return {ok:false,text:'Die Antwort wurde abgebrochen.'};this.remember(text,'conversation');return this.say(prefix+answer);}
    return this.unavailable(prefix+'Ich konnte diesen Auftrag keiner Funktion zuordnen. Es wurde nichts ausgeführt. Sage zum Beispiel: Öffne das Touch Deck, wechsle zur Pause oder schalte Auto-Broadcast ein. Mit „Welche Befehle kannst du?“ erhältst du Hilfe.');
   }catch(e){if(aiRequest?.signal.aborted)return {ok:false,text:'Die Antwort wurde abgebrochen.'};this.say(prefix+String(e.message||'Die Aktion ist fehlgeschlagen.'),'error');return {ok:false,text:String(e.message)};}finally{if(this.aiRequest===aiRequest)this.aiRequest=null;this.commandBusy=false;}
  }

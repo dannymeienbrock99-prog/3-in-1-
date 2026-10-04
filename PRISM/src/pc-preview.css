@@ -1,0 +1,80 @@
+.pc-preview {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  margin: auto;
+  overflow: hidden;
+  user-select: none;
+  background: radial-gradient(ellipse at 50% 45%, #151e28 0%, #10171f 65%, #0d151c 100%);
+}
+
+.pc-preview__base,
+.pc-preview__lighting {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.pc-preview__lighting {
+  mix-blend-mode: screen;
+}
+
+.pc-preview__board-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 16px;
+  border-top: 1px solid #24303c;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.pc-preview__board-label {
+  color: #d7e1ed;
+  font-weight: 500;
+}
+
+.pc-preview__board-note {
+  font-size: 10px;
+}
+
+.pc-preview__target {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 160ms, background 160ms;
+}
+
+.pc-preview__target:hover {
+  border-color: #a78bfa44;
+  background: #a78bfa05;
+}
+
+.pc-preview__target:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: -2px;
+  background: #a78bfa10;
+}
+
+.device-visual {
+  display: block;
+  width: 100%;
+  height: 88px;
+  margin: 0 auto;
+  max-width: 210px;
+  filter: drop-shadow(0 0 5px #6154f218);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-preview__target { transition: none; }
+}

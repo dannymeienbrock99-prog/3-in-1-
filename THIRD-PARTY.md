@@ -2,6 +2,7 @@
 
 Die bestehenden Lizenzdateien in `desktop/build`, in den Python-`.dist-info`-Ordnern und in den mitgelieferten Laufzeiten bleiben erhalten. Bilder aus dem Benutzerauftrag sind keine allgemein freigegebene Bildbibliothek. Marken gehören ihren jeweiligen Inhabern.
 
+
 - OBS-Anwendungsquellcode: https://github.com/dannymeienbrock99-prog/Batto-OBS-Tool (siehe README für Ausgangscommit).
 - Electron: https://github.com/electron/electron/tree/v38.8.6 ; MIT, weitere Chromium-Hinweise in LICENSES.chromium.html.
 - .NET: https://github.com/dotnet/runtime ; Laufzeithinweise werden mitgeliefert.
@@ -13,6 +14,14 @@ Die bestehenden Lizenzdateien in `desktop/build`, in den Python-`.dist-info`-Ord
 - Weitere Python-Pakete: genaue Versionen in `jarvis/requirements-lock.txt`, Metadaten und Lizenzen im mitgelieferten `jarvis/python/Lib/site-packages`.
 - Elgato SDK-Dokumentation und CLI werden zur Paketprüfung verwendet; das Beispiel Windows Utils wird nicht mitverteilt.
 - HWiNFO-SM2-Struktur wird ausschließlich gelesen; kein HWiNFO-Programm oder Treiber ist enthalten. Herstellerbedingungen der Freigabe gelten unabhängig von dieser Anwendung.
+
+## PRISM RGB in Batto 1.10.0
+
+Die eingebaute PRISM-Oberfläche basiert auf dem eigenen [RGB-Tool-Quellstand 1.5.1](https://github.com/dannymeienbrock99-prog/RGB-Tool/tree/v1.5.1). Ihr Quellcode liegt unter `PRISM` im selben Release-Commit. Die Frontend-Lizenzkopien werden unter `resources/PRISM/licenses` mitgeliefert: React, React DOM und Scheduler (MIT), Lucide (ISC einschließlich enthaltener Feather-Hinweise) sowie Vite (MIT, Build-Werkzeug). Die genauen Paketversionen und Integritäten stehen in `PRISM/package-lock.json`.
+
+Der separate Windows-Lichtdienst verwendet .NET 8.0.31, Microsoft Windows SDK.NET.Ref 10.0.26100.57, CsWinRT und WebView2 1.0.4258.31. Die mitgelieferten Laufzeit- und SDK-Lizenzhinweise liegen unter `resources/PRISM/native/licenses`; die festgelegten Downloads und SHA-256-Prüfsummen stehen in `scripts/prepare-rgb.ps1`. Die Suite verwendet ihre vorhandene Electron-/Node-Laufzeit für den RGB-Server.
+
+Windows LampArray und die optionale offizielle [Corsair SDK](https://github.com/CorsairOfficial/cue-sdk) bestimmen die Lichtkompatibilität. Corsair-SDK-DLL und iCUE werden nicht mit diesem Installer verteilt; die Hersteller-SDK kann über PRISM gesondert eingerichtet werden. Die normale Lüfter-RPM-Anzeige verwendet bereits vorhandene HWiNFO-/CSV-Messquellen und enthält keinen zusätzlichen Hardwaretreiber. PC- und Lüfterbilder sind beispielhafte Darstellungen; vom Benutzer bereitgestellte Bilder und Marken behalten ihre jeweiligen Rechte.
 
 ## Touch Deck 1.8.0
 

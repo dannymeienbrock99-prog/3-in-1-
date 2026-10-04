@@ -7,6 +7,7 @@ const {JarvisCore,cleanSettings}=require('./jarvis-core.cjs');
 const {TouchAudio}=require('./touch-audio.cjs');
 const {controlAudio}=require('./jarvis-audio.cjs');
 const {JarvisModeration}=require('./jarvis-moderation.cjs');
+const {RgbService}=require('./rgb-service.cjs');
 const TEST=process.env.BATTO_TEST_INSTANCE==='1',FAN_PORT=TEST?17668:17658,SUITE_PORT=TEST?17666:17656;
 class FanClient{
  constructor({root,data}){this.root=root;this.data=data;this.snapshot=null;this.catalog=null;this.error='Messwertdienst startet';this.child=null;this.busy=false;this.pollPromise=null;}
@@ -50,12 +51,13 @@ class VoiceClient extends EventEmitter{
  close(){clearTimeout(this.idleTimer);this.status='Sprachdienst schläft';const child=this.child;this.child=null;this.ready=false;this.pending=[];if(child){try{child.stdin.write('{"command":"shutdown"}\n');child.stdin.end();}catch{}setTimeout(()=>{if(child.exitCode===null)child.kill();},2500).unref();}}
 }
 class SuiteRuntime extends EventEmitter{
- constructor({directory,fanRoot,voiceCode,voiceBundle,obs,getDual,getHost}){
+ constructor({directory,fanRoot,voiceCode,voiceBundle,rgbRoot,obs,getDual,getHost}){
   super();this.directory=directory;this.closed=false;this.token=crypto.randomBytes(32).toString('hex');this.server=null;this.obs=obs;this.getDual=getDual;this.controls=new SuiteControls({runtime:this,getDual:getDual||(()=>null),getHost:getHost||(()=>null)});
   this.fan=new FanClient({root:fanRoot,data:path.join(directory,'FanAtlas')});this.voice=new VoiceClient({codeRoot:voiceCode,bundledRoot:voiceBundle,data:path.join(directory,'Voice')});
+  this.rgb=new RgbService({root:rgbRoot||path.join(path.dirname(fanRoot),'PRISM'),directory:path.join(directory,'RGB'),onChange:()=>{if(!this.closed)this.emit('state',this.snapshot());}});
   this.jarvis=new JarvisCore({directory,getSensors:()=>this.fan.snapshot?.sensors||[],getFans:()=>{
    const snapshot=this.fan.snapshot,sensors=snapshot?.sensors||[];
-   return (snapshot?.scene?.tiles||[]).map(t=>({id:t.id,name:t.name,announce:t.announce,reference:[t.percentSensorId,t.rpmSensorId,t.maxRpm],percent:t.speedPercent,rpm:sensors.find(s=>s.id===t.rpmSensorId)}));
+   return (snapshot?.scene?.tiles||[]).filter(t=>t.kind!=='normal'||snapshot.scene.showNormalFans).map(t=>({id:t.id,name:t.name,kind:t.kind||'link',rpmSensorId:t.rpmSensorId,announce:t.announce,reference:[t.percentSensorId,t.rpmSensorId,t.maxRpm],percent:t.speedPercent,rpm:sensors.find(s=>s.id===t.rpmSensorId)}));
   },obs:{scenes:async()=>{const d=getDual?.();if(d)return sceneChoices(d.config).map(x=>x.label);if(!obs.connected)throw Error('Der Sender ist noch nicht bereit.');const r=await obs.request('GetSceneList');return r.scenes.map(s=>s.sceneName);},setScene:async name=>{const d=getDual?.();if(d)return d.serial(()=>d.scene(name));await obs.request('SetCurrentProgramScene',{sceneName:name});}},speak:text=>{if(!this.closed)this.voice.send({command:'speak',text});},stopSpeech:()=>this.stopSpeech(),askAi:(text,settings,memory,signal)=>this.askAi(text,settings,memory,signal)});
   this.fanRoot=fanRoot;
   this.jarvis.control=(value)=>this.controls.executeFromJarvis(value);
@@ -67,7 +69,7 @@ class SuiteRuntime extends EventEmitter{
  }
  getAudio(){if(this.closed)throw Error('Batto ist geschlossen.');if(!this.audio)this.audio=new TouchAudio({helperPath:path.join(this.fanRoot,'BattoAudioControl.exe'),getJarvis:()=>({volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted}),setJarvis:patch=>{this.jarvis.update({...this.jarvis.settings,...(patch.volume===undefined?{}:{speechVolume:patch.volume}),...(patch.muted===undefined?{}:{speechMuted:patch.muted})});return {volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted};}});return this.audio;}
  async start(){await this.fan.start();await this.startServer();this.timer=setInterval(async()=>{await this.fan.poll();if(!this.closed){this.jarvis.poll();this.emit('state',this.snapshot());}},2000);this.timer.unref();if(this.jarvis.settings.microphoneEnabled)this.voice.configure(this.jarvis.settings);}
- snapshot(){return {jarvis:this.jarvis.snapshot(),fan:this.fan.catalog?{...this.fan.catalog,state:this.fan.snapshot}:null,fanError:this.fan.error,voice:{status:this.voice.status,ready:this.voice.ready},bridge:{port:SUITE_PORT,available:!!this.server}};}
+ snapshot(){return {jarvis:this.jarvis.snapshot(),fan:this.fan.catalog?{...this.fan.catalog,state:this.fan.snapshot}:null,fanError:this.fan.error,rgb:this.rgb.snapshot(),voice:{status:this.voice.status,ready:this.voice.ready},bridge:{port:SUITE_PORT,available:!!this.server}};}
  listen(){if(this.listeningUntil>Date.now())return {ok:false,text:'Jarvis hört bereits zu.'};this.listeningUntil=Date.now()+45000;const s=this.jarvis.settings;const greeting=s.voiceEnabled&&s.greeting?`${s.address?s.address+', ':''}${s.greeting}`:'';if(this.voice.send({command:'listen',greeting})===false){this.listeningUntil=0;return {ok:false,text:this.voice.status};}clearTimeout(this.listenTimer);this.listenTimer=setTimeout(()=>{this.listeningUntil=0;if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});},45000);this.listenTimer.unref();return {ok:true};}
  stopSpeech(){this.jarvis.cancelPendingModeration();clearTimeout(this.listenTimer);this.listeningUntil=0;if(this.voice.child){this.voice.send({command:'stop'});if(!this.jarvis.settings.microphoneEnabled)this.voice.send({command:'microphone',enabled:false});}return {ok:true};}
  async askAi(text,s,memory,signal){
@@ -89,6 +91,6 @@ class SuiteRuntime extends EventEmitter{
   await new Promise((resolve,reject)=>{this.server.once('error',reject);this.server.listen(SUITE_PORT,'127.0.0.1',resolve);});
   fs.writeFileSync(path.join(this.directory,'bridge.json'),JSON.stringify({port:SUITE_PORT,token:this.token,pid:process.pid,protocol:1}));
  }
- async close(){this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.jarvis.cancelPendingModeration();this.voice.close();this.audio?.close();this.fan.close();this.server?.close();}
+ async close(){this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.jarvis.cancelPendingModeration();this.voice.close();this.audio?.close();this.fan.close();this.server?.close();await this.rgb.close();}
 }
 module.exports={SuiteRuntime,FanClient,VoiceClient};

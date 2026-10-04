@@ -60,6 +60,43 @@ public static class FanDiscoveryTests
         Check("Missing stale wrong-unit and invalid measurements stay unavailable",()=>{var t=new FanTile{PercentSensorKey="percent",RpmSensorKey="rpm",MaxRpm=2000};foreach(var s in new[]{Value("percent","%",90,false),Value("percent","RPM",90),Value("percent","%",101),Value("percent","%",double.NaN)})Assert(!FanTelemetry.Percent(t,new[]{s,Value("rpm","RPM",1600)}).Fresh);});
         Check("Percent source binds only to its matching LINK fan",()=>{var s=new AppState();s.Profile.Fans.Add(Fan("010001"));FanDiscovery.Refresh(s,new[]{Value("p","%",80),Reading("gpu","GPU fan duty","%","NVIDIA"),Reading("ram","Corsair RAM load","%","Corsair")});Assert(s.Stage.Tiles.Count==1&&s.Stage.Tiles[0].PercentSensorKey=="p");});
         Check("Layout percentage settings survive JSON roundtrip and normalize bounds",()=>{var t=new FanTile{RpmSensorKey="rpm",MaxRpm=2000,Announce=false};var copy=System.Text.Json.JsonSerializer.Deserialize<FanTile>(System.Text.Json.JsonSerializer.Serialize(t))!;Assert(copy.MaxRpm==2000&&!copy.Announce&&copy.CenterMode=="percent");copy.MaxRpm=double.NaN;copy.Clamp();Assert(copy.MaxRpm==0);});
+        Check("Normal fan telemetry remains opt-in and ignores PWM-only values, pumps and stale rows",()=>{
+            var s=new AppState();var rows=new[]{Reading("cpu","CPU Fan","RPM","Mainboard"),Reading("gpu","GPU Fan","RPM","NVIDIA"),Reading("duty","GPU Fan","%","NVIDIA"),Reading("pump","AIO Pump","RPM","Mainboard"),Value("stale","RPM",1000,false)};
+            Assert(!FanDiscovery.Refresh(s,rows)&&s.Stage.Tiles.Count==0);s.Stage.ShowNormalFans=true;
+            Assert(FanDiscovery.Refresh(s,rows)&&s.Stage.Tiles.Count==2&&s.Stage.Tiles.All(t=>t.Kind=="normal"&&t.CenterMode=="rpm"&&t.X>=1000));
+            Assert(!FanDiscovery.Refresh(s,rows));
+        });
+        Check("Enabling normal fans preserves existing LINK positions, IDs and settings",()=>{
+            var s=new AppState();var existing=new FanTile{Id="saved-link",Name="Saved",X=271,Y=143,MaxRpm=2000,Announce=false};s.Stage.Tiles.Add(existing);s.Stage.ShowNormalFans=true;
+            FanDiscovery.Refresh(s,new[]{Reading("case","Case Fan","RPM","Mainboard")});Assert(existing.X==271&&existing.Y==143&&existing.Id=="saved-link"&&existing.MaxRpm==2000&&!existing.Announce);
+            var normal=s.Stage.Tiles.Single(t=>t.Kind=="normal");normal.X=1450;s.Stage.ShowNormalFans=false;FanDiscovery.Refresh(s,Array.Empty<SensorRow>());
+            Assert(s.Stage.Tiles.Contains(normal)&&normal.X==1450&&normal.RpmSensorKey=="case");
+        });
+        Check("Normal fan zero RPM is real; missing, negative and nonfinite values remain unavailable",()=>{
+            var s=new AppState();s.Stage.ShowNormalFans=true;var row=Reading("zero","CPU Fan","RPM","Mainboard");row.Update(new("zero","CPU Fan","Mainboard","RPM",0,"fixture",DateTime.UtcNow),15);
+            FanDiscovery.Refresh(s,new[]{row});var snapshot=SuiteState.Snapshot(s,new[]{row},"");Assert(snapshot.Sensors.Single().Fresh&&snapshot.Sensors.Single().Value==0&&snapshot.Scene.Tiles.Single().Kind=="normal"&&snapshot.Scene.ShowNormalFans);
+            foreach(var value in new[]{-1.0,double.NaN,double.PositiveInfinity}){row.Update(new("zero","CPU Fan","Mainboard","RPM",value,"fixture",DateTime.UtcNow),15);Assert(!SuiteState.Snapshot(s,new[]{row},"").Sensors.Single().Fresh);}
+            row.Update(new("zero","CPU Fan","Mainboard","RPM",0,"fixture",DateTime.UtcNow,false),15);Assert(SuiteState.Snapshot(s,new[]{row},"").Sensors.Single().Value==null);
+        });
+        Check("Normal fan positions fit the right half and removed sources stay removed",()=>{
+            Assert(Enumerable.Range(0,20).Select(i=>FanDiscovery.NewSideTile(i,true)).All(t=>t.X>=1000&&t.X+t.Size<=1920&&t.Y+t.Size+64<=1080));
+            var s=new AppState();s.Stage.ShowNormalFans=true;s.Stage.HiddenAutoSensors.Add("case");FanDiscovery.Refresh(s,new[]{Reading("case","Case Fan","RPM","Mainboard")});Assert(s.Stage.Tiles.Count==0);
+        });
+        Check("Legacy bridge layouts default to LINK and ordinary fan settings roundtrip",()=>{
+            var json=new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+            var old=System.Text.Json.JsonSerializer.Deserialize<BridgeScene>("{\"background\":\"\",\"tiles\":[{\"id\":\"old\",\"name\":\"Front\",\"x\":12,\"y\":23,\"size\":180,\"visible\":true,\"rpmSensorId\":\"\",\"temperatureSensorId\":\"\",\"fromProfile\":false}]}",json)!;
+            Assert(!old.ShowNormalFans&&old.Tiles.Single().Kind=="link");
+            var stage=new StageSettings{ShowNormalFans=true,Tiles=new(){new(){Kind="normal",RpmSensorKey="cpu",CenterMode="rpm",X=1500}}};var copy=System.Text.Json.JsonSerializer.Deserialize<StageSettings>(System.Text.Json.JsonSerializer.Serialize(stage))!;
+            Assert(copy.ShowNormalFans&&copy.Tiles.Single().Kind=="normal"&&copy.Tiles.Single().RpmSensorKey=="cpu"&&copy.Tiles.Single().X==1500);
+        });
+        Check("Stage sensor validation separates LINK and normal RPM while retaining unavailable mappings",()=>{
+            var json=new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);var rows=new[]{Reading("cpu","CPU Fan","RPM","Mainboard"),Reading("qx","QX RGB #1 RPM","RPM")};var s=new AppState();
+            BridgeTile Tile(string kind,string key)=>new("tile","CPU Fan",1400,20,180,true,SensorIdentity.PublicId(key),"",false,CenterMode:"rpm",Kind:kind);
+            System.Text.Json.JsonElement Body(BridgeTile tile)=>System.Text.Json.JsonSerializer.SerializeToElement(new BridgeScene("",new(){tile},true),json);
+            foreach(var wrong in new[]{Tile("link","cpu"),Tile("normal","qx")}){try{SuiteState.Configure(s,rows,"stage",Body(wrong));throw new Exception("Wrong fan sensor accepted");}catch(InvalidDataException){Assert(s.Stage.Tiles.Count==0);}}
+            SuiteState.Configure(s,rows,"stage",Body(Tile("normal","cpu")));Assert(s.Stage.Tiles.Single(t=>t.Id=="tile").RpmSensorKey=="cpu");
+            SuiteState.Configure(s,Array.Empty<SensorRow>(),"stage",Body(Tile("normal","cpu")));Assert(s.Stage.Tiles.Single(t=>t.Id=="tile").RpmSensorKey=="cpu");
+        });
         File.WriteAllLines(report,lines); return failed==0?0:1;
     }
 }

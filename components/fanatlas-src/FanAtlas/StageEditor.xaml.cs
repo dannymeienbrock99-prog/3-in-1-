@@ -26,6 +26,7 @@ public partial class StageEditor : UserControl
         owner = window; Settings.Normalize(); loading = true;
         BackgroundSelect.ItemsSource = backgrounds;
         BackgroundSelect.SelectedItem = backgrounds.FirstOrDefault(x => x.File == Settings.Background) ?? backgrounds[0];
+        NormalFansToggle.IsChecked = Settings.ShowNormalFans;
         ProfileSelect.ItemsSource = owner.State.Profile.Fans;
         foreach (var tile in Settings.Tiles) { tile.Clamp(); if (tile.RpmSensorKey.Length > 0) autoSeen.Add(tile.RpmSensorKey); }
         loading = false; RefreshTileList(); BuildTiles(); Refresh();
@@ -57,8 +58,9 @@ public partial class StageEditor : UserControl
     {
         if (owner == null) return;
         loading = true; string? id = selected?.Id;
-        TileSelect.ItemsSource = null; TileSelect.ItemsSource = Settings.Tiles;
-        TileSelect.SelectedItem = Settings.Tiles.FirstOrDefault(t => t.Id == id) ?? Settings.Tiles.FirstOrDefault();
+        var displayed = Settings.Tiles.Where(t => t.Kind != "normal" || Settings.ShowNormalFans).ToList();
+        TileSelect.ItemsSource = null; TileSelect.ItemsSource = displayed;
+        TileSelect.SelectedItem = displayed.FirstOrDefault(t => t.Id == id) ?? displayed.FirstOrDefault();
         selected = TileSelect.SelectedItem as FanTile; loading = false; UpdateSelectors();
     }
     private void UpdateSelectors()
@@ -66,7 +68,7 @@ public partial class StageEditor : UserControl
         if (owner == null) return;
         loading = true;
         TempSelect.ItemsSource = new[] { new SensorChoice("Keine Temperatur zugeordnet", "") }.Concat(owner.Sensors.Where(s => s.Unit == "°C").Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
-        RpmSelect.ItemsSource = new[] { new SensorChoice("Kein Lüfterwert zugeordnet", "") }.Concat(owner.Sensors.Where(IcueDiscovery.IsLinkSpeed).Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
+        RpmSelect.ItemsSource = new[] { new SensorChoice("Kein Lüfterwert zugeordnet", "") }.Concat(owner.Sensors.Where(selected?.Kind == "normal" ? FanDiscovery.IsNormalSpeed : IcueDiscovery.IsLinkSpeed).Select(s => new SensorChoice(s.Name + " · " + s.Device, s.Key))).ToList();
         TempSelect.SelectedItem = TempSelect.Items.Cast<SensorChoice>().FirstOrDefault(s => s.Key == selected?.TemperatureSensorKey) ?? TempSelect.Items[0];
         RpmSelect.SelectedItem = RpmSelect.Items.Cast<SensorChoice>().FirstOrDefault(s => s.Key == selected?.RpmSensorKey) ?? RpmSelect.Items[0];
         NameInput.Text = selected?.Name ?? ""; SizeSlider.Value = selected?.Size ?? 210; VisibleToggle.IsChecked = selected?.Visible ?? false;
@@ -83,6 +85,7 @@ public partial class StageEditor : UserControl
         Scene.Background = string.IsNullOrEmpty(Settings.Background) ? new SolidColorBrush(Color.FromRgb(15, 24, 40)) : new ImageBrush(Bitmap(Settings.Background)) { Stretch = Stretch.Fill };
         foreach (var tile in Settings.Tiles.Take(64))
         {
+            if (tile.Kind == "normal" && !Settings.ShowNormalFans) continue;
             tile.Clamp();
             var root = new Grid { Width = tile.Size, Height = tile.Size + 65, Opacity = tile.Visible ? 1 : 0.38, Cursor = Cursors.SizeAll };
             root.RowDefinitions.Add(new() { Height = new GridLength(tile.Size) }); root.RowDefinitions.Add(new() { Height = new GridLength(65) });
@@ -111,6 +114,12 @@ public partial class StageEditor : UserControl
     {
         if (loading || owner == null || BackgroundSelect.SelectedItem is not BackgroundChoice b) return;
         Settings.Background = b.File; BuildTiles(); owner.ApplyBrandBackground(); owner.StageChanged();
+    }
+    private void NormalFansToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (loading || owner == null) return;
+        Settings.ShowNormalFans = NormalFansToggle.IsChecked == true;
+        FanDiscovery.Refresh(owner.State, owner.Sensors); RefreshTileList(); BuildTiles(); owner.StageChanged();
     }
     private void TileSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
     { if (loading) return; selected = TileSelect.SelectedItem as FanTile; UpdateSelectors(); BuildTiles(); }

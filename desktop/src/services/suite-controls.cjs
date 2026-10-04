@@ -1,9 +1,10 @@
 'use strict';
 const {SETTING_SPECS,validateSetting,applySetting}=require('./jarvis-setting-actions.cjs');
+const {RGB_COLORS}=require('./jarvis-commands.cjs');
 const {sceneChoices}=require('../dual-stream/config.cjs');
 const {transitionChoices,assertTransitionFiles}=require('../dual-stream/transitions.cjs');
 const SCENES=['Spiel','Pause','Start','Ende'];
-const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'iCUE LINK Lüfter',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschgeschenke',widgets:'TikFinity-Widgets',livecenter:'TikTok LIVE Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Chat-Filter',hologram:'Chatfarben',platforms:'Plattformen',commands:'Commands',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys / Multi-Action',events:'Events',media:'Medien',pools:'Medien-Pools',tts:'TTS',discord:'Discord',streamerbot:'Streamer.bot',backups:'Backups',settings:'Einstellungen',diagnostics:'Diagnose 2.1'};
+const VIEWS={touchdeck:'Touch Deck',dualstream:'Dual Stream',jarvis:'Jarvis',sensors:'PC-Messwerte',fans:'iCUE LINK Lüfter',rgb:'RGB-Steuerung',start:'Startseite',dashboard:'Multi-Chat',wishlist:'Wunschgeschenke',widgets:'TikFinity-Widgets',livecenter:'TikTok LIVE Center',moderation:'Moderation',chatarchive:'Chatarchiv',filters:'Chat-Filter',hologram:'Chatfarben',platforms:'Plattformen',commands:'Commands',broadcast:'Auto-Broadcast',hotkeys:'Hotkeys / Multi-Action',events:'Events',media:'Medien',pools:'Medien-Pools',tts:'TTS',discord:'Discord',streamerbot:'Streamer.bot',backups:'Backups',settings:'Einstellungen',diagnostics:'Diagnose 2.1'};
 async function connectAdapter(adapter,name,op){
  if(!adapter)throw Error('Chat-Verbindung fehlt.');
  const on=op==='on'||op==='toggle'&&!adapter.getStatus().connected;
@@ -16,6 +17,14 @@ async function connectAdapter(adapter,name,op){
 }
 class SuiteControls{
  constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;this.jarvisDepth=0;}
+ rgbActions(){
+  const rgb=this.runtime.rgb;if(typeof rgb?.action!=='function')return [];
+  const effects=(rgb.catalog?.()?.effects||[]).filter(item=>item&&typeof item.id==='string'&&/^[a-z][a-z0-9-]{0,40}$/.test(item.id)&&typeof item.name==='string'&&item.name.trim()&&item.name.length<=100).map(({id,name})=>({id,name}));
+  return [{id:'rgb-color',name:'RGB-Farbe wählen',choices:RGB_COLORS.map(item=>({...item}))},
+   {id:'rgb-effect',name:'RGB-Effekt wählen',choices:effects},{id:'rgb-brightness',name:'RGB-Helligkeit'},
+   {id:'rgb-power',name:'RGB-Beleuchtung schalten',choices:[{id:'on',name:'An'},{id:'off',name:'Aus'}]},
+   {id:'rgb-status',name:'RGB-Status lesen'}];
+ }
  catalog(){const host=this.getHost(),legacy=host?.catalog?.()||{},dual=this.getDual(),scenes=sceneChoices(dual?.config).map(({value,label,name,...metadata})=>({id:value,name:label,...(name?{sceneName:name}:{}),...metadata}));return {actions:[
   {id:'listen',name:'Jarvis: fragen & zuhören'}, {id:'speech-stop',name:'Jarvis: sofort still'},
   {id:'command',name:'Jarvis: gespeicherten Befehl ausführen',text:true},
@@ -37,7 +46,7 @@ class SuiteControls{
   {id:'navigate',name:'Programmbereich öffnen',choices:Object.entries(VIEWS).map(([id,name])=>({id,name}))},
   {id:'tikfinity',name:'TikFinity-Web öffnen'}, {id:'show',name:'Batto-Fenster anzeigen'}, {id:'gaming',name:'Gaming-Modus: Oberfläche schließen, Dienste weiterführen'},
   {id:'prepare',name:'Bildquellen vorbereiten'}, {id:'release',name:'Video-Dienst ausschalten'}
- ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'}],sceneMode:dual?'suite':'obs',scenes:scenes.map(x=>x.name),states:legacy.states||{},program:dual?.config.program||{},voice:this.runtime.voice.status};}
+ ],voiceActions:[{id:'jarvis-setting',name:'Jarvis-Einstellung',choices:Object.entries(SETTING_SPECS).map(([id,spec])=>({id,name:spec.name}))},{id:'transition-duration',name:'Übergangsdauer'},...this.rgbActions()],sceneMode:dual?'suite':'obs',scenes:scenes.map(x=>x.name),states:legacy.states||{},program:dual?.config.program||{},voice:this.runtime.voice.status};}
  targets(both=true){return [...(both?[{id:'both',name:'Beide zusammen'}]:[]),{id:'tiktok',name:'TikTok'},{id:'twitch',name:'Twitch'}];}
  validate(steps,{voice=false}={}){
   if(!Array.isArray(steps)||!steps.length||steps.length>8)throw Error('Eine Kombination darf 1 bis 8 Aktionen enthalten.');
@@ -56,6 +65,7 @@ class SuiteControls{
    }
    if(s.action==='jarvis-setting')validateSetting(s);
    if(s.action==='transition-duration'&&(!Number.isInteger(s.value)||s.value<100||s.value>2000))throw Error('Die Übergangsdauer muss zwischen 100 und 2000 Millisekunden liegen.');
+   if(s.action==='rgb-brightness'&&(!Number.isInteger(s.value)||s.value<0||s.value>100))throw Error('Die RGB-Helligkeit muss zwischen 0 und 100 Prozent liegen.');
   }
  }
  async executeFromJarvis(value){
@@ -79,6 +89,13 @@ class SuiteControls{
    case 'jarvis':{const [key,sub]=s.target.split('.');const change=sub?{[key]:{...r.jarvis.settings[key],[sub]:enabled(r.jarvis.settings[key][sub])}}:{[key]:enabled(r.jarvis.settings[key])};r.jarvis.update(change);return;}
    case 'jarvis-setting':return applySetting(r.jarvis,s);
    case 'jarvis-settings':return host.jarvisSettings();
+   case 'rgb-color':case 'rgb-effect':case 'rgb-brightness':case 'rgb-power':case 'rgb-status':{
+    if(typeof r.rgb?.action!=='function')throw Error('Die RGB-Steuerung ist gerade nicht verfügbar.');
+    const payload=s.action==='rgb-color'?{type:'color',color:s.target}:s.action==='rgb-effect'?{type:'effect',effect:s.target}:s.action==='rgb-brightness'?{type:'brightness',brightness:s.value}:s.action==='rgb-power'?{type:s.target}:{type:'status'};
+    const result=await r.rgb.action(payload);
+    if(result?.ok!==true)throw Error(result?.error||result?.message||result?.text||'Die RGB-Steuerung hat den Befehl nicht bestätigt.');
+    return result;
+   }
    case 'microphones':r.voice.send({command:'devices'});return {ok:true,text:'Die Mikrofonliste wird aktualisiert.'};
    case 'transition':case 'transition-duration':{if(!d)throw Error('Dual Stream ist nicht verfügbar.');const result=await d.serial(()=>d.program({...d.config.program,...(s.action==='transition'?{transition:s.target}:{durationMs:s.value})}));if(result?.ok===false)throw Error(result.error||result.text||'Der Übergang wurde nicht gespeichert.');return {ok:true,text:s.action==='transition'?`Szenenübergang: ${transitionChoices(d.config).find(item=>item.id===s.target)?.name||s.target}.`:`Übergangsdauer: ${s.value} Millisekunden.`};}
    case 'companion':d.companionLive=enabled(d.companionLive);d.emitState();return;

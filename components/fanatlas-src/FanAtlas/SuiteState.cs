@@ -28,10 +28,13 @@ internal static class SuiteState
     internal static BridgeSnapshot Snapshot(AppState state, IEnumerable<SensorRow> readings, string selectedId)
     {
         var rows = readings.ToList();
-        var sensors = rows.Select(s => new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, s.Fresh ? s.NumericValue : null, s.Fresh, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s) || IcueDiscovery.IsLinkPercent(s, state.Profile))).ToList();
-        var tiles = state.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0, SensorIdentity.PublicId(t.PercentSensorKey), t.MaxRpm, t.CenterMode, t.Announce, FanTelemetry.Percent(t, rows))).ToList();
+        var sensors = rows.Select(s => {
+            bool valid = s.Fresh && double.IsFinite(s.NumericValue) && (s.Unit != "RPM" || s.NumericValue >= 0);
+            return new BridgeSensor(SensorIdentity.PublicId(s.Key), s.Name, s.Key.StartsWith("csv/") ? "Sensorprotokoll" : s.Device, s.Unit, valid ? s.NumericValue : null, valid, s.UpdatedUtc, IcueDiscovery.IsLinkSpeed(s) || IcueDiscovery.IsLinkPercent(s, state.Profile));
+        }).ToList();
+        var tiles = state.Stage.Tiles.Select(t => new BridgeTile(t.Id, t.Name, t.X, t.Y, t.Size, t.Visible, SensorIdentity.PublicId(t.RpmSensorKey), SensorIdentity.PublicId(t.TemperatureSensorKey), t.ProfileKey.Length > 0, SensorIdentity.PublicId(t.PercentSensorKey), t.MaxRpm, t.CenterMode, t.Announce, FanTelemetry.Percent(t, rows), t.Kind)).ToList();
         var curves = state.CustomCurves.Concat(state.Profile.Curves).Select(c => new BridgeCurve(c.Id, c.Name, c.IsCustom)).ToList();
-        return new("0.2", DateTime.UtcNow, sensors, curves, new(state.Stage.Background, tiles), selectedId, "Auswahl = Entwurf. Hardwarewechsel über iCUE.");
+        return new("0.2", DateTime.UtcNow, sensors, curves, new(state.Stage.Background, tiles, state.Stage.ShowNormalFans), selectedId, "Auswahl = Entwurf. Hardwarewechsel über iCUE.");
     }
 
     internal static FanCurve? Configure(AppState state, IEnumerable<SensorRow> sensors, string command, JsonElement body)
@@ -43,10 +46,27 @@ internal static class SuiteState
                 var scene = body.Deserialize<BridgeScene>(json) ?? throw new InvalidDataException("Layout fehlt.");
                 if (scene.Tiles == null || scene.Tiles.Count > 32 || scene.Background is not ("" or "stream-startet.jpg" or "bin-gleich-zurueck.jpg")) throw new InvalidDataException("Ungültiges Layout.");
                 var old = state.Stage.Tiles.ToDictionary(t => t.Id);
-                string Resolve(string id, string fallback) => sensors.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id)?.Key ?? (SensorIdentity.PublicId(fallback) == id ? fallback : "");
-                state.Stage.Tiles = scene.Tiles.Select(t => { if (t == null) throw new InvalidDataException("Lüfter fehlt."); var prior = old.GetValueOrDefault(t.Id); return new FanTile { Id = t.Id, Name = t.Name, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible, RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? ""), TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? ""), PercentSensorKey = Resolve(t.PercentSensorId, prior?.PercentSensorKey ?? ""), MaxRpm = t.MaxRpm, CenterMode = t.CenterMode, Announce = t.Announce, ProfileKey = prior?.ProfileKey ?? "" }; }).ToList();
+                var rows = sensors.ToArray();
+                string Resolve(string id, string fallback, Func<SensorRow, bool> accepts)
+                {
+                    if (string.IsNullOrEmpty(id)) return "";
+                    var row = rows.FirstOrDefault(s => SensorIdentity.PublicId(s.Key) == id);
+                    if (row != null) { if (!accepts(row)) throw new InvalidDataException("Der Messwert passt nicht zu diesem Lüfter. Bitte einen passenden Sensor wählen."); return row.Key; }
+                    // A missing source must not discard an existing saved mapping.
+                    return SensorIdentity.PublicId(fallback) == id ? fallback : "";
+                }
+                state.Stage.Tiles = scene.Tiles.Select(t => {
+                    if (t == null) throw new InvalidDataException("Lüfter fehlt.");
+                    if (t.Kind is not ("link" or "normal")) throw new InvalidDataException("Ungültige Lüfterart.");
+                    var prior = old.GetValueOrDefault(t.Id); bool normal = t.Kind == "normal";
+                    return new FanTile { Id = t.Id, Name = t.Name, Kind = t.Kind, X = t.X, Y = t.Y, Size = t.Size, Visible = t.Visible,
+                        RpmSensorKey = Resolve(t.RpmSensorId, prior?.RpmSensorKey ?? "", normal ? FanDiscovery.IsNormalSpeed : IcueDiscovery.IsLinkSpeed),
+                        TemperatureSensorKey = Resolve(t.TemperatureSensorId, prior?.TemperatureSensorKey ?? "", s => s.Unit == "°C"),
+                        PercentSensorKey = Resolve(t.PercentSensorId, prior?.PercentSensorKey ?? "", s => normal ? FanDiscovery.IsNormalPercent(s) && !IcueDiscovery.IsLinkPercent(s, state.Profile) : IcueDiscovery.IsLinkPercent(s, state.Profile)),
+                        MaxRpm = t.MaxRpm, CenterMode = t.CenterMode, Announce = t.Announce, ProfileKey = normal ? "" : prior?.ProfileKey ?? "" };
+                }).ToList();
                 foreach (var removed in old.Values.Where(t => !state.Stage.Tiles.Any(n => n.Id == t.Id))) { if (removed.RpmSensorKey.Length > 0) state.Stage.HiddenAutoSensors.Add(removed.RpmSensorKey); if (removed.PercentSensorKey.Length > 0) state.Stage.HiddenAutoSensors.Add(removed.PercentSensorKey); if (removed.ProfileKey.Length > 0) state.Stage.HiddenAutoSensors.Add("profile/" + ProfileReader.Part(removed.ProfileKey, "sensorSN")); }
-                state.Stage.Background = scene.Background; state.Stage.Normalize(); break;
+                state.Stage.Background = scene.Background; state.Stage.ShowNormalFans = scene.ShowNormalFans; state.Stage.Normalize(); FanDiscovery.Refresh(state, rows); break;
             case "profile":
                 string path = body.GetProperty("path").GetString() ?? "";
                 if (!path.EndsWith(".cueprofile", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Bitte ein iCUE-Profil wählen.");

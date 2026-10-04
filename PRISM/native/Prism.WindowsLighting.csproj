@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PRISM-Lighting</AssemblyName>
+    <Version>1.2.0</Version>
+    <ApplicationIcon>$(MSBuildProjectDirectory)\..\PRISM.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeFrameworkVersion>8.0.31</RuntimeFrameworkVersion>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <WindowsSdkReferencePath Condition="'$(WindowsSdkReferencePath)'==''">$(MSBuildProjectDirectory)\..\..\..\work\native-sdk\windows-net8\lib\net8.0</WindowsSdkReferencePath>
+    <WebViewSdkPath Condition="'$(WebViewSdkPath)'==''">$(MSBuildProjectDirectory)\..\..\..\work\native-sdk\webview2</WebViewSdkPath>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="bin\**;obj\**" />
+    <Reference Include="Microsoft.Windows.SDK.NET"><HintPath>$(WindowsSdkReferencePath)\Microsoft.Windows.SDK.NET.dll</HintPath></Reference>
+    <Reference Include="WinRT.Runtime"><HintPath>$(WindowsSdkReferencePath)\WinRT.Runtime.dll</HintPath></Reference>
+    <Reference Include="Microsoft.Web.WebView2.Core"><HintPath>$(WebViewSdkPath)\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath></Reference>
+    <Reference Include="Microsoft.Web.WebView2.WinForms"><HintPath>$(WebViewSdkPath)\lib\net462\Microsoft.Web.WebView2.WinForms.dll</HintPath></Reference>
+    <Content Include="$(WebViewSdkPath)\runtimes\win-x64\native\WebView2Loader.dll" Link="WebView2Loader.dll" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+</Project>

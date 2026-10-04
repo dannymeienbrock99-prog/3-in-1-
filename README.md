@@ -1,4 +1,16 @@
-# Batto 3-in-1 · 1.9.3
+# Batto 3-in-1 · 1.10.0
+
+## RGB-Steuerung und normale Lüfter · 1.10.0
+
+**RGB-Steuerung** öffnet die eingebaute PRISM-Oberfläche 1.5.1. Farben, Helligkeit, Geschwindigkeit, Richtung, 14 Effekte und eigene Lichtprofile lassen sich dort einstellen. Die PC-Übersicht zeigt erkannte Komponentennamen. Ein erkanntes MSI-Mainboard verwendet die MSI-Vorschau, ASUS den White Build; bei anderen Herstellern bleibt die allgemeine Vorschau. Die Bilder veranschaulichen den Aufbau und sind kein Foto des erkannten Mainboardmodells.
+
+Die Geräteerkennung und Lichtsteuerung verwenden Windows LampArray und optional die offizielle Corsair-iCUE-Schnittstelle. Ein erkannter PC-Bauteil ist nur steuerbar, wenn eine unterstützte Lichtverbindung vorhanden ist. Mainboard- und RAM-Namen allein bestätigen keine RGB-Unterstützung. iCUE und dessen SDK müssen für Corsair eingerichtet sein; die Hersteller-SDK wird bei Bedarf getrennt geladen. Die Ansicht zeigt fehlende Voraussetzungen. Stream Deck und Elgato-Geräte sind von der RGB-Geräteansprache ausgeschlossen.
+
+Jarvis versteht **„Öffne RGB-Steuerung“**, **„RGB blau“**, **„RGB Effekt Regenbogen“**, **„RGB Effekt Komet“**, **„RGB Helligkeit auf 50 Prozent“**, **„RGB aus“**, **„RGB an“** und **„RGB Status“**. Eine Farbwahl verwendet statisches Licht. Einstellungen und Geräteverbindung sind dieselben wie in der RGB-Ansicht; Fehler werden angezeigt und vorgelesen. Die RGB-Oberfläche wird erst beim Öffnen geladen.
+
+Unter **Deine iCUE-LINK-Lüfter → Normale Lüfter anzeigen** erscheinen zusätzlich verfügbare normale Lüfter rechts mit ihren Namen und aktuellen **RPM**. Die Option ist zunächst ausgeschaltet. Voraussetzung ist eine laufende Messquelle, etwa HWiNFO-Sensorfreigabe oder ein Sensor-CSV-Protokoll unter **PC-Messwerte**. **Normalen Lüfter hinzufügen** erstellt eine eigene Kachel; anschließend einen **Drehzahlsensor (U/min)** wählen und **Lüfter speichern**. Die Kacheln lassen sich frei verschieben. **Gleichmäßig ausrichten** ordnet LINK-Lüfter links und normale Lüfter rechts an. Ausschalten blendet normale Kacheln aus und erhält ihr Layout.
+
+Fehlende oder veraltete Werte bleiben **—**; ein echter Stillstand wird als **0 RPM** angezeigt. Jarvis kann mit **„Normale Lüfter RPM“** die zusätzlichen Drehzahlen vorlesen. **„Lüfterdrehzahl“** umfasst verfügbare Lüfter, **„iCUE LINK Lüfterdrehzahl“** nur LINK. Diese Messwertanzeige verändert keine Kühlkurven. Echte Lüfterkurven und Kühlprofilwechsel werden weiterhin im zuständigen Herstellerprogramm eingestellt.
 
 ## Lüfterkurven repariert · 1.9.3
 
@@ -191,7 +203,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.9.3.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.10.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 
@@ -200,6 +212,7 @@ Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installati
 3. Im eigenen Sender Quellen vorbereiten und Jarvis-Szenen zuordnen.
 4. Lüfterbühne gestalten; OBS-Adresse als Browserquelle einfügen.
 5. Stream-Deck-Paket installieren und pro Taste den gewünschten Sensor/Befehl auswählen.
+6. **RGB-Steuerung** öffnen, unterstützte Geräte verbinden und Licht einstellen. Optional normale Lüfter auf der Lüfterbühne einschalten.
 
 Lokale Daten: `%LOCALAPPDATA%\CrazyBatto\BattoSuite`; OBS-/Chat-Konfiguration: `%APPDATA%\Batto3in1-v247`. Keine persönlichen Profile, Zugangsdaten, Protokolle oder Sprachaufnahmen werden mit diesem Repository ausgeliefert. Deinstallation erhält persönliche Einstellungen.
 
@@ -213,7 +226,9 @@ Windows x64, .NET SDK 8+, Node 24, Python **3.12 x64**, Inno Setup 7.1+. Auf ein
 
 Beim ersten Build werden öffentliche Sprachmodelle und die gesperrten Abhängigkeiten heruntergeladen. Modelle und Laufzeiten gehören zum Installer, nicht ins Git-Repository. Mit bereits vorbereitetem `jarvis/python` und `jarvis/models` kann `-PrepareVoice` entfallen. Der separate originale Piper-Helfer aus OBS Tool 2.4.7 wird ebenfalls anhand fester SHA-256-Prüfsummen vorbereitet.
 
-`desktop`: Electron-Host mit bestehenden OBS-/Chat-Modulen. `jarvis/app`: lokale Sprachprozesse ohne Kamera. `components/fanatlas-src`: lesender .NET-Sensor- und Overlaydienst sowie natives Stream-Deck-Plugin. `streamdeck`: Manifest, Tastenbilder und Einstellungen. `installer`: Inno-Setup-Projekt.
+`scripts/prepare-rgb.ps1` prüft die PRISM-Tests mit simulierten Geräten, baut die Oberfläche und veröffentlicht den nativen Windows-Lichtdienst. Die festgelegten Windows-SDK- und WebView2-Pakete werden vor Verwendung per SHA-256 geprüft. Für eine vorbereitete lokale Build-Umgebung unterstützt der Schritt `-Offline`, `-WindowsSdkReferences`, `-WebViewSdk` und `-NuGetPackages`. Die Suite führt den RGB-Server im Electron-Prozess aus und benötigt keine separate PRISM-Node-Laufzeit.
+
+`desktop`: Electron-Host mit bestehenden OBS-/Chat-Modulen. `PRISM`: eingebaute RGB-Oberfläche, Geräteverbindung und nativer Lichtdienst. `jarvis/app`: lokale Sprachprozesse ohne Kamera. `components/fanatlas-src`: lesender .NET-Sensor- und Overlaydienst sowie natives Stream-Deck-Plugin. `streamdeck`: Manifest, Tastenbilder und Einstellungen. `installer`: Inno-Setup-Projekt.
 
 Android wird separat mit `scripts/build-touch-android.ps1` gebaut; SDK-/Signaturhinweise stehen in [mobile/android/README.md](mobile/android/README.md). Release-APK und dauerhafter privater Signaturschlüssel werden lokal verwaltet. Die Android-CI erzeugt nur ein als `ci-test` benanntes Testpaket; dieses ersetzt keine veröffentlichte Release-APK. Signaturschlüssel und private Plugin-Einstellungen gehören niemals ins Repository.
 

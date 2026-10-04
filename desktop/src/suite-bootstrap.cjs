@@ -9,6 +9,9 @@ const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())i
 function checkSender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}if(path.resolve(file)!==path.resolve(__dirname,'renderer/index.html'))throw Error('Diese Bedienoberfläche ist nicht berechtigt.');}
 function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSender(e);if(!runtime)throw Error('Batto 3-in-1 startet noch.');return fn(value);});}
 handle('state',()=>runtime.snapshot());
+handle('rgb-start',()=>runtime.rgb.start());
+handle('rgb-state',()=>runtime.rgb.snapshot());
+handle('rgb-stop',()=>runtime.rgb.stop());
 handle('command',value=>runtime.jarvis.execute(value));
 handle('settings',value=>runtime.jarvis.update(value));
 handle('preview-event',value=>runtime.jarvis.previewEvent(value));
@@ -40,7 +43,7 @@ handle('plugin',()=>{const file=path.join(app.isPackaged?process.resourcesPath:p
 handle('forget-memory',()=>{runtime.jarvis.memory=[];runtime.jarvis.save('jarvis-memory.json',[]);return {ok:true};});
 app.whenReady().then(async()=>{
  const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..');
- runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
+ runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
  runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));

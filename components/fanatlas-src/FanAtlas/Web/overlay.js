@@ -44,13 +44,13 @@ async function poll() {
     const present = new Set();
     for (const tile of data.scene.tiles) {
       present.add(tile.id); const e = tileNode(tile);
-      e.root.hidden = !tile.visible; e.root.style.left = tile.x + "px"; e.root.style.top = tile.y + "px"; e.root.style.width = tile.size + "px"; e.temp.style.fontSize = tile.size * .115 + "px";
+      e.root.hidden = !tile.visible || tile.kind === 'normal' && !data.scene.showNormalFans; e.root.classList.toggle('normal-fan',tile.kind === 'normal'); e.root.style.left = tile.x + "px"; e.root.style.top = tile.y + "px"; e.root.style.width = tile.size + "px"; e.temp.style.fontSize = tile.size * .115 + "px";
       e.name.textContent = tile.name;
-      const t = sensors.get(tile.temperatureSensorId), r = sensors.get(tile.rpmSensorId);
+      const t = sensors.get(tile.temperatureSensorId), raw = sensors.get(tile.rpmSensorId), r = raw?.unit === 'RPM' && Number.isFinite(raw.value) && raw.value >= 0 ? raw : undefined;
       const center = tile.centerMode === 'temperature' ? t : tile.centerMode === 'rpm' ? r : tile.speedPercent;
       e.temp.textContent = center?.fresh && Number.isFinite(center.value) ? center.value.toLocaleString("de-DE",{maximumFractionDigits:0}) + " " + center.unit : tile.centerMode === 'temperature' ? "— °C" : tile.centerMode === 'rpm' ? "—" : "— %";
       e.rpm.textContent = r?.fresh && Number.isFinite(r.value) ? r.value.toLocaleString("de-DE",{maximumFractionDigits:r.unit==="RPM"?0:1}) + " " + r.unit : "—";
-      e.state.textContent = tile.speedPercent?.fresh ? (tile.speedPercent.basis === "rpm-reference" ? "% der Max.-Drehzahl" : "Live · gemessene %") : r?.fresh ? "Live · % nicht zugeordnet" : tile.fromProfile && !tile.rpmSensorId ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
+      e.state.textContent = tile.speedPercent?.fresh ? (tile.speedPercent.basis === "rpm-reference" ? "% der Max.-Drehzahl" : "Live · gemessene %") : r?.fresh ? tile.centerMode === 'rpm' ? "Live · U/min" : "Live · % nicht zugeordnet" : tile.fromProfile && !tile.rpmSensorId ? "Profil · warte auf Live-Werte" : "Quelle fehlt / veraltet";
       e.root.classList.toggle("stale",!r?.fresh);
       e.root.setAttribute("aria-label", tile.name + ", " + e.temp.textContent + ", " + e.rpm.textContent);
     }

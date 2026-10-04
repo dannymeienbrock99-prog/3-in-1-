@@ -1,4 +1,20 @@
-# Batto 3-in-1 · Schnellstart 1.9.3
+# Batto 3-in-1 · Schnellstart 1.10.0
+
+## RGB direkt in Batto einstellen
+
+In der Seitenleiste **RGB-Steuerung** öffnen. Die eingebaute PRISM-Ansicht bietet Farben, Helligkeit, 14 Effekte und speicherbare Lichtprofile. Für echte Beleuchtung zuerst die unterstützten Geräte verbinden. Windows-LampArray-Geräte sowie Geräte der optional eingerichteten Corsair-iCUE-Schnittstelle können gesteuert werden; die Ansicht nennt fehlende Voraussetzungen. Ein erkannter Komponentenname bestätigt noch keine steuerbare RGB-Verbindung. Stream Deck und Elgato-Geräte werden von der RGB-Geräteansprache ausgeschlossen.
+
+Die PC-Übersicht zeigt die erkannten Namen. Für MSI erscheint die MSI-Vorschau, für ASUS der White Build mit weißen Lüftern, RAM, Grafikkarte und Kühlung. Bei anderen Herstellern erscheint die allgemeine Vorschau. Die Bilder dienen als Beispielaufbau.
+
+Jarvis-Befehle: **„Öffne RGB-Steuerung“**, **„RGB blau“**, **„RGB Effekt Regenbogen“**, **„RGB Effekt Komet“**, **„RGB Helligkeit auf 50 Prozent“**, **„RGB aus“**, **„RGB an“** und **„RGB Status“**. Bei einer Farbe wechselt das Licht auf statisch. Eine fehlende Geräteverbindung wird gemeldet. Die RGB-Oberfläche wird beim Öffnen geladen.
+
+## Normale Lüfter rechts anzeigen
+
+Unter **Deine iCUE-LINK-Lüfter** die Option **Normale Lüfter anzeigen** einschalten. Aktuelle normale Lüfter-Drehzahlen werden zusätzlich rechts angezeigt. Dafür eine bestehende Messquelle unter **PC-Messwerte** verwenden, beispielsweise HWiNFO-Sensorfreigabe oder ein laufendes CSV-Protokoll.
+
+Für eine eigene Kachel **Normalen Lüfter hinzufügen** drücken, Name und **Drehzahlsensor (U/min)** wählen und **Lüfter speichern**. Kacheln lassen sich frei verschieben. **Gleichmäßig ausrichten** ordnet LINK links und normale Lüfter rechts an. Ausblenden erhält die gespeicherten Kacheln.
+
+Fehlende oder veraltete Werte zeigen **—**; ein gemessener Stillstand zeigt **0 RPM**. Jarvis liest mit **„Normale Lüfter RPM“** nur normale Lüfter, mit **„Lüfterdrehzahl“** alle verfügbaren und mit **„iCUE LINK Lüfterdrehzahl“** nur LINK-Lüfter vor. Die RPM-Anzeige verändert keine Hardware-Kühlkurven; diese weiterhin im Herstellerprogramm einstellen.
 
 ## Lüfterkurven repariert · 1.9.3
 

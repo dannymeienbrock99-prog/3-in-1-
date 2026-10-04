@@ -23,7 +23,7 @@ const unavailable = () => ambiguous('Diese Funktion ist gerade nicht verfügbar.
 const NAVIGATION = {
   touchdeck: ['touch deck', 'batto touch deck', 'touchdeck', 'tuch deck'], dualstream: ['dual stream', 'dualstream'],
   jarvis: ['jarvis', 'javis', 'jarvis einstellungen', 'javis einstellungen'], sensors: ['pc werte', 'pc messwerte', 'messwerte', 'sensoren'],
-  fans: ['lufter', 'luftersteuerung', 'fan atlas'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
+  fans: ['lufter', 'luftersteuerung', 'fan atlas'], rgb: ['rgb', 'rgb steuerung', 'rgb beleuchtung', 'prism', 'pc beleuchtung'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
   wishlist: ['wunschliste'], widgets: ['widgets'], livecenter: ['live center'], moderation: ['moderation'],
   chatarchive: ['chatarchiv', 'chat archiv'], filters: ['filter', 'chat filter', 'chatfilter'], hologram: ['hologramm', 'chatfarben', 'chat farben', 'schottfarben', 'zettfarben'],
   platforms: ['plattformen'], commands: ['bot', 'bot befehle', 'kommands', 'comands'], broadcast: ['auto broadcast', 'autobroadcast', 'broadcast'],
@@ -61,6 +61,9 @@ const SOURCE_ALIASES = {
   game: ['spielbild','spielquelle','bildschirm','spiel aufnahme']
 };
 const TRANSITION_ALIASES = {fade:['überblendung','uberblendung','überblenden','uberblenden','fade'],cut:['schnitt','cut']};
+const RGB_COLORS = [['#ff0000','Rot'],['#0000ff','Blau'],['#00ff00','Grün'],['#ffffff','Weiß'],['#ff00ff','Pink'],['#8000ff','Lila'],['#00ffff','Türkis'],['#ffff00','Gelb'],['#ff8000','Orange']].map(([id,name])=>({id,name}));
+const RGB_COLOR_ALIASES = {'#8000ff':['violett'],'#00ffff':['cyan'],'#ff00ff':['magenta']};
+const RGB_EFFECT_ALIASES = {static:['statisch','einfarbig','dauerlicht'],breathing:['atmen','pulsieren','atmend'],rainbow:['regenbogen'],wave:['welle'],colorcycle:['farbwechsel','farbenwechsel'],comet:['komet'],chase:['lauflicht'],scanner:['scanner'],ripple:['ripple','wasserwelle'],fire:['feuer'],aurora:['aurora','nordlicht'],stripes:['streifen'],sparkle:['funkeln','glitzern'],gradient:['farbverlauf']};
 const SCENE_ALIASES = {pause: ['pause', 'pausenszene', 'pause szene', 'bin gleich zuruck'],
   spiel: ['spiel', 'spielszene', 'spiel szene', 'gaming', 'weiter', 'zuruck zum spiel'],
   start: ['start', 'startszene', 'start szene', 'stream startet'], ende: ['ende', 'endszene', 'ende szene', 'stream ende']};
@@ -164,6 +167,21 @@ function spokenInteger(input){
   match=/^(?:ein)?hundert([a-z]+)$/.exec(text);
   if(match){const value=spokenInteger(match[1]);if(Number.isInteger(value)&&value>0&&value<100)return 100+value;}
   return NaN;
+}
+function rgbCommand(text,catalog){
+  const noun='(?:rgb(?: beleuchtung)?|pc beleuchtung|prism)',prefix='(?:(?:stelle|stell|setze|setz|mache|mach) (?:die |das )?)?';
+  let match=new RegExp('^'+prefix+noun+' helligkeit (?:auf )?(.+?) (?:prozent|%)$').exec(text);
+  if(match){const value=spokenInteger(match[1]);if(!Number.isInteger(value)||value<0||value>100)return ambiguous('Die RGB-Helligkeit muss zwischen 0 und 100 Prozent liegen.');const result=simple(catalog,'rgb-brightness','RGB-Helligkeit aktualisiert.');if(result.kind==='action')result.action.value=value;return result;}
+  match=new RegExp('^'+prefix+noun+' (?:effekt|effekte) (?:auf )?(.+)$').exec(text);
+  if(match)return select(catalog,'rgb-effect',match[1],RGB_EFFECT_ALIASES);
+  match=new RegExp('^'+prefix+noun+' (?:farbe (?:auf )?|auf )(.+)$').exec(text)||new RegExp('^(?:farbe|farbe die) '+noun+' (.+)$').exec(text)||/^farbe (?:auf )?(.+)$/.exec(text);
+  if(match)return select(catalog,'rgb-color',match[1],RGB_COLOR_ALIASES);
+  match=new RegExp('^'+prefix+noun+' (.+)$').exec(text);
+  if(match&&RGB_COLORS.some(item=>choiceMatches(item,match[1],RGB_COLOR_ALIASES)))return select(catalog,'rgb-color',match[1],RGB_COLOR_ALIASES);
+  const sw=switchPhrase(text);
+  if(sw&&new RegExp('^'+noun+'$').test(sw.query))return sw.op==='toggle'?ambiguous('Sag bitte eindeutig „RGB an“ oder „RGB aus“.'):select(catalog,'rgb-power',sw.op,{},{});
+  if(new RegExp('^(?:(?:wie ist|zeige|zeig|sage|sag) (?:mir )?(?:den )?)?'+noun+' status$').test(text)||/^status (?:der |von )?rgb beleuchtung$/.test(text))return simple(catalog,'rgb-status','RGB-Status abgefragt.');
+  return null;
 }
 function settingCommand(text,catalog){
   const result=(target,value,extra={})=>{
@@ -288,7 +306,7 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransiti
   if (/^(?:bestatigen|bestatige|ja bestatigen|ja bestatige)$/.test(text)) return {kind: 'confirmation'};
   if (/^(?:abbrechen|nicht bestatigen|nein abbrechen)$/.test(text)) return {kind: 'cancel-confirmation'};
   if (/^(?:hilfe|befehle|befehlsliste|was kannst du|welche befehle (?:kennst|kannst) du|zeige (?:mir )?(?:die )?befehle)$/.test(text))
-    return {kind: 'help', text: 'Du kannst Szenen, Programmbereiche, Chat, Jarvis und Lautstärke steuern. Zum Beispiel: '+commandExamples(catalog,{limit:6}).map(example => example.phrase).join('. ')+'. Alle Befehle und Vorlagen findest du in der durchsuchbaren Befehlsliste bei Jarvis. Frage außerdem gezielt nach PC-Messwerten, zum Beispiel GPU-Temperatur oder Lüfterdrehzahl.'};
+    return {kind: 'help', text: 'Du kannst Szenen, Programmbereiche, Chat, Jarvis und Lautstärke'+(definition(catalog,'rgb-color')?' sowie RGB-Farben, Effekte und Helligkeit':'')+' steuern. Zum Beispiel: '+commandExamples(catalog,{limit:6}).map(example => example.phrase).join('. ')+'. Alle Befehle und Vorlagen findest du in der durchsuchbaren Befehlsliste bei Jarvis. Frage außerdem gezielt nach PC-Messwerten, zum Beispiel GPU-Temperatur oder Lüfterdrehzahl.'};
   // Negation and multiple commands must not accidentally execute the first match.
   // These two phrases are explicit requests to stop reading, not negated actions.
   const stopReading = /^(?:lies|lese) (?:den |die )?(chat|nachrichten|geschenke|likes|follower|ereignisse|abos) nicht mehr vor$/.exec(text);
@@ -347,6 +365,8 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransiti
     }
   }
   if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
+  const rgb=rgbCommand(text,catalog);
+  if(rgb)return rgb;
   // These exact, observed speech-recognition variants only open a harmless page.
   // Never apply fuzzy correction to switches, saved actions or moderation.
   const heardNavigation={'chatfarben':'hologram','chat farben':'hologram','schottfarben':'hologram','zettfarben':'hologram','ne chatfilter':'filters','ne chat filter':'filters'};
@@ -450,7 +470,7 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransiti
 }
 function commandExamples(catalog = {}, {limit} = {}) {
   const examples=[],phrases=new Set(),has=id=>!!definition(catalog,id),present=(id,target)=>choices(catalog,id).some(c=>c.id===target);
-  const groups={scene:'Szenen & Übergänge',transition:'Szenen & Übergänge',start:'Bild & Ausgaben',stop:'Bild & Ausgaben',source:'Bild & Ausgaben',overlay:'Einblendungen',jarvis:'Jarvis & Ansagen',control:'Chat & Automationen','broadcast-profile':'Auto-Broadcast',chain:'Aktionsketten',event:'Ereignisse',hotkey:'Hotkeys',broadcast:'Nachrichten senden',media:'Medien',connect:'Verbindungen',navigate:'Programmbereiche'};
+  const groups={scene:'Szenen & Übergänge',transition:'Szenen & Übergänge',start:'Bild & Ausgaben',stop:'Bild & Ausgaben',source:'Bild & Ausgaben',overlay:'Einblendungen',jarvis:'Jarvis & Ansagen',control:'Chat & Automationen','broadcast-profile':'Auto-Broadcast',chain:'Aktionsketten',event:'Ereignisse',hotkey:'Hotkeys',broadcast:'Nachrichten senden',media:'Medien',connect:'Verbindungen',navigate:'Programmbereiche','rgb-color':'RGB & Licht','rgb-effect':'RGB & Licht','rgb-brightness':'RGB & Licht','rgb-power':'RGB & Licht','rgb-status':'RGB & Licht'};
   const add=(phrase,description,category,expectedAction,metadata={})=>{if(phrases.has(phrase))return;phrases.add(phrase);examples.push({phrase,description,category,...(expectedAction?{expectedAction,expectedKind:'action'}:{}),...metadata});};
   const action=(phrase,description,id,target,extra={},metadata={})=>add(phrase,description,groups[id]||'Jarvis & Ansagen',{action:id,...(target===undefined?{}:{target}),...extra},metadata);
   const sameAction=(phrase,expected)=>JSON.stringify(resolveCommand(phrase,{catalog})?.action)===JSON.stringify(expected);
@@ -532,6 +552,11 @@ function commandExamples(catalog = {}, {limit} = {}) {
   if(has('companion'))for(const [op,phrase]of [['on','LIVE Studio Sitzung an'],['off','LIVE Studio Sitzung aus'],['toggle','Schalte LIVE Studio Sitzung um']])action(phrase,'LIVE-Studio-Sitzung im Tool markieren','companion',undefined,{op});
   if(has('listen'))action('Mikrofon testen','Einmal auf einen gesprochenen Testbefehl hören','listen');
   if(present('jarvis','events.subscriptions'))action('Bedanke dich für Abos','Abo-Danksagungen einschalten','jarvis','events.subscriptions',{op:'on'});
+  for(const item of choices(catalog,'rgb-color'))action(`RGB Farbe ${item.name}`,'RGB-Farbe für verbundene, unterstützte Geräte wählen','rgb-color',item.id);
+  for(const item of choices(catalog,'rgb-effect'))action(`RGB Effekt ${item.name}`,'RGB-Effekt für verbundene, unterstützte Geräte wählen','rgb-effect',item.id);
+  if(has('rgb-brightness'))action('RGB Helligkeit 50 Prozent','RGB-Helligkeit von 0 bis 100 Prozent einstellen','rgb-brightness',undefined,{value:50});
+  for(const [target,phrase]of [['on','RGB an'],['off','RGB aus']])if(present('rgb-power',target))action(phrase,'RGB-Beleuchtung der verbundenen, unterstützten Geräte schalten','rgb-power',target);
+  if(has('rgb-status'))action('RGB Status','Aktuellen Verbindungs- und Beleuchtungsstatus lesen','rgb-status');
   const settings=[
     ['chatMode','all','Lies alle Chatnachrichten vor','Alle Personen auf den gewählten Plattformen vorlesen'],
     ['chatMode','moderators','Lies nur Moderatoren vor','Nur Moderatoren und Kanalinhaber vorlesen'],
@@ -561,7 +586,7 @@ function commandExamples(catalog = {}, {limit} = {}) {
     audio(`Mach ${targetQuery} leiser`,'Lautstärke um 5 Prozentpunkte senken',{delta:-5});audio(`Mach ${targetQuery} lauter`,'Lautstärke um 5 Prozentpunkte erhöhen',{delta:5});
     audio(`${targetQuery} stumm`,'Ton stummschalten',{patch:{muted:true}});audio(`Hebe die Stummschaltung von ${targetQuery} auf`,'Ton wieder einschalten',{patch:{muted:false}});
   }
-  for(const [phrase,description]of [['CPU Temperatur','Temperatur des Prozessors'],['GPU Temperatur','Temperatur der Grafikkarte'],['GPU Spannung','Übermittelte GPU-Spannung'],['CPU Auslastung','Auslastung des Prozessors'],['RAM Auslastung','Belegung des Arbeitsspeichers'],['Lüfterdrehzahl','Drehzahlen der verbundenen Lüfter'],['PC Werte','Wichtigste verfügbare PC-Messwerte']])add(phrase,description+'; nur tatsächlich verfügbare Messwerte.','PC-Messwerte',null,{expectedKind:'sensor'});
+  for(const [phrase,description]of [['CPU Temperatur','Temperatur des Prozessors'],['GPU Temperatur','Temperatur der Grafikkarte'],['GPU Spannung','Übermittelte GPU-Spannung'],['CPU Auslastung','Auslastung des Prozessors'],['RAM Auslastung','Belegung des Arbeitsspeichers'],['Lüfterdrehzahl','Drehzahlen der verbundenen Lüfter'],['Normale Lüfter RPM','Übermittelte Drehzahlen normaler Lüfter'],['iCUE LINK Lüfterdrehzahl','Drehzahlen der erkannten iCUE-LINK-Lüfter'],['PC Werte','Wichtigste verfügbare PC-Messwerte']])add(phrase,description+'; nur tatsächlich verfügbare Messwerte.','PC-Messwerte',null,{expectedKind:'sensor'});
   const template=(phrase,description,category,requiresInput,expectedKind)=>add(phrase,description,category,null,{template:true,requiresInput,expectedKind});
   template('<Programm> Lautstärke auf 35 Prozent','Programm durch einen eindeutigen aktiven Audiokanal ersetzen.','Lautstärke',['Programm'],'audio');
   for(const platform of ['Twitch','YouTube'])for(const [verb,last,description]of [['Blockiere','','Person dauerhaft sperren'],['Entblocke','','Person entsperren'],['Sperre',' für 10 Minuten','Person zeitweise stummschalten']])template(`${verb} <Benutzername> auf ${platform}${last}`,`${description}. Namen ersetzen; verbundene Moderationsrechte und separate Bestätigung nötig.`,'Moderation',['Benutzername'],'moderation');
@@ -571,4 +596,4 @@ function commandExamples(catalog = {}, {limit} = {}) {
   add('Abbrechen','Eine vorgemerkte Moderation verwerfen.','Moderation',null,{expectedKind:'cancel-confirmation'});
   return Number.isFinite(limit)?examples.slice(0,Math.max(0,Math.floor(limit))):examples;
 }
-module.exports = {normalize, normalizeCommand, resolveCommand, commandExamples};
+module.exports = {normalize, normalizeCommand, resolveCommand, commandExamples, RGB_COLORS};

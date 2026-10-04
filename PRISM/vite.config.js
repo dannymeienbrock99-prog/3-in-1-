@@ -1,0 +1,2 @@
+import { defineConfig } from 'vite';
+export default defineConfig({esbuild:{jsx:'automatic'},server:{host:'127.0.0.1',port:5173,strictPort:true,proxy:{'/api':'http://127.0.0.1:4783'}},build:{target:'es2022'}});

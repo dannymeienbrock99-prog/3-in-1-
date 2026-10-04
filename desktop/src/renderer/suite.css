@@ -32,3 +32,7 @@ body.presentation-paused *,body.presentation-paused *::before,body.presentation-
 
 /* The fan editor scrolls as one page, including long curves and touch displays. */
 #view-fans{overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}.app:has(#view-fans.active){min-width:0}@media(max-width:900px){.app:has(#view-fans.active) .top-status .chip{display:none}.app:has(#view-fans.active) .brand-title{font-size:16px}.app:has(#view-fans.active) .brand-logo{width:70px}}
+
+/* Normal fan telemetry is optional; coordinates remain in the same OBS canvas. */
+.suite-normal-fans{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}.suite-normal-fans .suite-check,.suite-normal-fans .suite-help{margin:0}.suite-normal-fans button{min-height:42px}.suite-fan.normal-fan .temp{border-color:#b2f0ac}.suite-fan.normal-fan .fan-rpm{color:#b2f0ac}.suite-stage.show-normal-fans:after{content:"Normale Lüfter · RPM";position:absolute;left:1000px;top:6px;color:#b2f0ac;font-size:18px;font-weight:650;background:#071323bd;padding:3px 8px;border-radius:4px;pointer-events:none}
+.suite-fan.normal-fan img{filter:grayscale(1)}

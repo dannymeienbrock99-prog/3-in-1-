@@ -1,0 +1,49 @@
+export const DEFAULT_CONFIG={effect:'rainbow',colors:['#a78bfa','#f34793','#3278ff','#00c6c9'],brightness:80,speed:50,direction:'forward',scale:50};
+export const PREVIEW_DEVICES=[{id:0,name:'Lüfter',category:'fans',vendor:'Vorschau',ledCount:48},{id:1,name:'RAM',category:'ram',vendor:'Vorschau',ledCount:16},{id:2,name:'Mainboard',category:'motherboard',vendor:'Vorschau',ledCount:12},{id:3,name:'Grafikkarte',category:'gpu',vendor:'Vorschau',ledCount:12},{id:4,name:'LED-Strip',category:'strip',vendor:'Vorschau',ledCount:30}].map(d=>({...d,directMode:true,zones:[{id:0,name:'Alle LEDs',ledCount:d.ledCount,startIndex:0}]}));
+const scenePreset=(name,effect,colors,settings)=>({name,effect,colors,config:{...DEFAULT_CONFIG,effect,colors,...settings}});
+export const SCENES=[
+ {name:'Neon Night',colors:['#a044ff','#e443c9','#4c37fa','#8d54ff'],effect:'wave'},
+ {name:'Aurora',colors:['#00caaa','#16a5bf','#7761ff','#9c49eb'],effect:'gradient'},
+ {name:'Sunset',colors:['#fa4e71','#ff7c26','#ffbf39','#e94139'],effect:'wave'},
+ {name:'Ice Blue',colors:['#227aff','#00bdf3','#8ce8ff','#3985e8'],effect:'breathing'},
+ scenePreset('Kaminfeuer','fire',['#620b02','#df3008','#ff8a15','#ffe27a'],{brightness:85,speed:40,scale:55}),
+ scenePreset('Polarlicht','aurora',['#032423','#00b57f','#69f8c0','#584fe2'],{brightness:80,speed:22,scale:35}),
+ scenePreset('Neon-Komet','comet',['#54f5ff','#386fff','#ca52ff','#ff49be'],{brightness:90,speed:60,scale:40}),
+ scenePreset('Neon-Lauflicht','chase',['#e746aa','#956bff','#35d5f0','#fff3fa'],{brightness:80,speed:55,scale:45}),
+];
+export const EFFECT_NAMES={static:'Statisch',rainbow:'Regenbogen',breathing:'Atmen',wave:'Welle',gradient:'Farbverlauf',sparkle:'Funkeln',colorcycle:'Farbwechsel',comet:'Komet',chase:'Lauflicht',scanner:'Scanner',ripple:'Wasserwelle',fire:'Feuer',aurora:'Nordlicht',stripes:'Farbstreifen'};
+export const EFFECT_DETAILS={
+ static:{description:'Eine gleichmäßige Farbe, die dauerhaft leuchtet.',colors:'first',speed:false,direction:false},
+ rainbow:{description:'Das komplette Farbspektrum wandert über die LEDs.',colors:'spectrum',speed:true,direction:true,scale:{label:'Spektrumdichte',help:'Höhere Werte verteilen mehr Regenbogenfarben über die LED-Reihe.'}},
+ breathing:{description:'Deine Farben werden gemeinsam sanft heller und dunkler.',colors:'all',speed:true,direction:false},
+ wave:{description:'Eine leuchtende Welle bewegt sich durch deine Farbpalette.',colors:'all',speed:true,direction:true,scale:{label:'Wellendichte',help:'Höhere Werte zeigen mehr Wellen gleichzeitig.'}},
+ gradient:{description:'Deine Farben gehen entlang der LEDs weich ineinander über.',colors:'all',speed:false,direction:true,directionLabel:'Farbfolge'},
+ sparkle:{description:'Einzelne LEDs funkeln in zufälligen Farben deiner Palette.',colors:'all',speed:true,direction:false,scale:{label:'Funkeldichte',help:'Höhere Werte lassen mehr LEDs gleichzeitig funkeln.'}},
+ colorcycle:{description:'Alle LEDs wechseln gemeinsam weich zwischen deinen Farben.',colors:'all',speed:true,direction:false,note:'Wähle mindestens zwei Farben, um einen Farbwechsel zu sehen.'},
+ comet:{description:'Ein heller Komet zieht einen weichen Farbschweif hinter sich her.',colors:'all',speed:true,direction:true,scale:{label:'Schweiflänge',help:'Höhere Werte verlängern den leuchtenden Schweif.'}},
+ chase:{description:'Leuchtende Punkte laufen in deinen Farben über die LED-Reihe.',colors:'all',speed:true,direction:true,scale:{label:'Lichtdichte',help:'Höhere Werte zeigen mehr laufende Lichtpunkte.'}},
+ scanner:{description:'Ein Lichtstrahl läuft hin und her, wie bei einem Scanner.',colors:'all',speed:true,direction:true,scale:{label:'Strahlbreite',help:'Höhere Werte verbreitern den wandernden Lichtstrahl.'}},
+ ripple:{description:'Weiche Lichtwellen breiten sich aus und gehen ineinander über.',colors:'all',speed:true,direction:true,scale:{label:'Wellendichte',help:'Höhere Werte erzeugen mehr Lichtwellen gleichzeitig.'}},
+ fire:{description:'Deine Farben flackern in einer lebendigen Flammenstruktur.',colors:'all',speed:true,direction:true,scale:{label:'Flammenstruktur',help:'Höhere Werte geben den Flammen mehr kleine Wirbel. Die Szene „Kaminfeuer“ liefert warme Farben.'}},
+ aurora:{description:'Sanfte Farbbänder gleiten wie ein Nordlicht über die LEDs.',colors:'all',speed:true,direction:true,scale:{label:'Banddichte',help:'Höhere Werte zeigen mehr Nordlichtbänder gleichzeitig.'}},
+ stripes:{description:'Klare Farbstreifen wandern in der Reihenfolge deiner Palette.',colors:'all',speed:true,direction:true,note:'Mit mindestens zwei Farben werden die bewegten Streifen sichtbar.',scale:{label:'Streifendichte',help:'Höhere Werte erzeugen mehr und schmalere Farbstreifen.'}},
+};
+export const MAX_PROFILES=100;
+export function categorize(d){
+ const names={0:'motherboard',1:'ram',2:'gpu',3:'fans',4:'strip',5:'keyboard',6:'mouse',7:'mouse',8:'headset',9:'headset',10:'gamepad',11:'light',12:'light',13:'light',14:'drive',15:'fans',16:'microphone',17:'peripheral',18:'keyboard',19:'peripheral',20:'peripheral'};
+ const s=`${d.name} ${d.description??''}`.toLowerCase();
+ if(/ram|dram|memory|dimm|vengeance|dominator|trident/.test(s))return 'ram';
+ if(/gpu|graphics|geforce|radeon|grafik/.test(s))return 'gpu';
+ if(/keyboard|tastatur/.test(s))return 'keyboard';
+ if(/mouse|maus/.test(s))return 'mouse';
+ if(/strip|led band/.test(s))return 'strip';
+ if(/motherboard|mainboard|aura|mystic|baseboard/.test(s))return 'motherboard';
+ if(/fan|lüfter|controller|commander/.test(s))return 'fans';
+ return names[d.type]||'peripheral';
+}
+export async function api(path,body){const response=await fetch(`/api/${path}`,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(path.startsWith('system')||path==='coverage'?24000:path==='corsair/setup'?120000:['discover','rescan','connect','window/show'].includes(path)?25000:16000)});const data=await response.json();if(!response.ok)throw new Error(data.error||data.message||'Die Verbindung konnte nicht hergestellt werden.');return data;}
+export function validConfig(raw){if(!raw||!Object.hasOwn(EFFECT_NAMES,raw.effect)||!Array.isArray(raw.colors)||raw.colors.length<1||raw.colors.length>8||!raw.colors.every(c=>/^#[0-9a-f]{6}$/i.test(c)))throw new Error('Das Profil enthält ungültige Farben oder Effekte.');for(const k of ['brightness','speed','scale'])if(!Number.isFinite(raw[k])||raw[k]<0||raw[k]>100)throw new Error('Die Profilwerte müssen zwischen 0 und 100 liegen.');if(!['forward','reverse'].includes(raw.direction))throw new Error('Ungültige Effektrichtung.');return {effect:raw.effect,colors:[...raw.colors],brightness:raw.brightness,speed:Math.max(1,raw.speed),scale:Math.max(1,raw.scale),direction:raw.direction};}
+export function readProfiles(){try{const data=JSON.parse(localStorage.getItem('prism.profiles.v1')||'[]');if(!Array.isArray(data))return [];const profiles=[],ids=new Set();for(const p of data){try{if(!p||typeof p.name!=='string'||!p.name.trim())continue;const config=validConfig(p.config);let id=typeof p.id==='string'&&p.id?p.id:crypto.randomUUID();if(ids.has(id))id=crypto.randomUUID();ids.add(id);profiles.push({id,name:p.name.trim().slice(0,60),config});if(profiles.length===MAX_PROFILES)break;}catch{}}return profiles;}catch{return [];}}
+export function downloadProfiles(profiles){const blob=new Blob([JSON.stringify({app:'PRISM',version:1,profiles},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='PRISM-Profile.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+export function hexToHsv(hex){const rgb=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255);const max=Math.max(...rgb),min=Math.min(...rgb),delta=max-min;let h=0;if(delta){const i=rgb.indexOf(max);h=(i===0?(rgb[1]-rgb[2])/delta:i===1?(rgb[2]-rgb[0])/delta+2:(rgb[0]-rgb[1])/delta+4)*60;}return {h:(h+360)%360,s:max===0?0:delta/max,v:max};}
+export function hsvToHex(h,s,v){const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;const parts=h<60?[c,x,0]:h<120?[x,c,0]:h<180?[0,c,x]:h<240?[0,x,c]:h<300?[x,0,c]:[c,0,x];return '#'+parts.map(n=>Math.round((n+m)*255).toString(16).padStart(2,'0')).join('');}

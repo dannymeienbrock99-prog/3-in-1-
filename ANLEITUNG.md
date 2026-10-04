@@ -23,6 +23,8 @@ Unter **Dual Stream → OBS-Szenensammlung** löscht **Szene entfernen** eine ei
 
 Für den Stream die gewünschte **Bildschirmaufnahme**, **Fensteraufnahme** oder **Spielaufnahme** sowie deine Kamera auswählen. **Vorschau → Kamera & Spiel prüfen** zeigt die Quellen; TikTok und Twitch behalten ihre eigenen Anordnungen. Für beide Formate eignet sich **Überblendung**. Danach virtuelle Kamera starten und in LIVE Studio beziehungsweise deiner Sendesoftware **Batto TikTok** oder **Batto Twitch** auswählen. Mikrofon und PC-Ton dort einstellen. Der öffentliche Stream wird in der Sendesoftware gestartet. **LIVE-Studio-Sitzung markieren** aktiviert nur Batto-Regeln für eine laufende Sitzung.
 
+Bei **Bildschirmaufnahme → Aufnahmeverfahren** stehen **Automatisch**, **Windows-Aufnahme** und **DirectX-Aufnahme** zur Wahl. Bleibt der Bildschirm schwarz, **Windows-Aufnahme** wählen und die Vorschau erneut starten. Die Auswahl wird gespeichert; Kameras und beide Layouts behalten ihre Einstellungen. Eine neue Bildschirmaufnahme kann einige Sekunden benötigen.
+
 ## Eigene Nachrichten und Moderatoren vorlesen
 
 Unter **Jarvis → Nachrichten aus dem Chat vorlesen** als Quelle **Nachrichten aus dem Multi-Chat-Fenster** und als Personenauswahl **Moderatoren & Kanalinhaber** wählen. **Chat-Regeln speichern** übernimmt die Einstellung. Jarvis berücksichtigt die bestätigten Rollen und Benutzer-IDs aus dem verbundenen Twitch-, TikTok- oder YouTube-Chat, einschließlich eigener Kanalnachrichten. Der Anzeigename allein reicht nicht. Das Fenster muss nicht ständig sichtbar sein. Mehrere kurze Nachrichten werden mit dem gewählten Abstand in einer begrenzten Warteschlange vorgelesen; Filtertreffer und doppelte Nachrichten bleiben stumm. Der Chattext führt keine Jarvis-Befehle aus.

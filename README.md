@@ -12,6 +12,8 @@
 
 **Jarvis → Nachrichten aus dem Chat vorlesen → Moderatoren & Kanalinhaber** verwendet die bestätigten Rollen und Benutzer-IDs aus den verbundenen Plattformen, auch für deine eigenen Kanalnachrichten. **Nachrichten aus dem Multi-Chat-Fenster** berücksichtigt die dort vorgesehenen Nachrichten, auch wenn das Fenster gerade geschlossen ist. Kurze Nachrichtenfolgen werden mit dem eingestellten Abstand in einer begrenzten Warteschlange vorgelesen. Filtertreffer und doppelte Nachrichten bleiben stumm; Chattexte lösen keine Jarvis-Steuerbefehle aus.
 
+Bei **Bildschirmaufnahme → Aufnahmeverfahren** stehen **Automatisch**, **Windows-Aufnahme** und **DirectX-Aufnahme** zur Wahl. Bleibt der Bildschirm schwarz, **Windows-Aufnahme** wählen und die Vorschau erneut starten. Die Auswahl wird gespeichert; Kameras und beide Layouts behalten ihre Einstellungen. Eine neue Bildschirmaufnahme kann einige Sekunden benötigen.
+
 Die integrierte RGB-Oberfläche bleibt **PRISM 1.7.0**. Zum Streamen in **Dual Stream** die gewünschte Bildschirm-/Spielquelle und Kamera wählen, **Kamera & Spiel prüfen** öffnen und danach **Batto TikTok** bzw. **Batto Twitch** in der Sendesoftware auswählen. Für beide Formate eignet sich **Überblendung**. Mikrofon und PC-Ton werden in der Sendesoftware eingestellt; die virtuellen Kameras übertragen nur Bild. Ein funktionierender lokaler Vorschautest bestätigt keine Verbindung zu Twitch oder TikTok.
 
 ## Strimer Wireless und eigener Effekt · 1.12.0

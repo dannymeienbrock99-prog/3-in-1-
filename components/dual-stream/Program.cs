@@ -191,8 +191,10 @@ internal sealed class Engine : IDisposable {
      var s=selected[name];if(!B(s,"enabled"))continue;string target=S(s,"target");
      if(name=="game"){
       var kind=S(s,"kind","game");
+      var captureMethod=S(s,"captureMethod","auto");if(captureMethod is not "auto" and not "dxgi" and not "wgc")throw new InvalidOperationException("Unbekanntes Aufnahmeverfahren.");
+      int monitorMethod=captureMethod switch{"dxgi"=>1,"wgc"=>2,_=>0};
       sources[name]=kind switch{
-       "screen"=>Source("monitor_capture","Gemeinsamer Bildschirm",new{monitor_id=target,capture_cursor=true}),
+       "screen"=>Source("monitor_capture","Gemeinsamer Bildschirm",new{monitor_id=target,method=monitorMethod,capture_cursor=true}),
        "window"=>Source("window_capture","Gemeinsames Fenster",new{window=target,priority=0,cursor=true}),
        _=>Source("game_capture","Gemeinsames Spiel",new{capture_mode="window",window=target,priority=0,limit_framerate=true,capture_cursor=true})};
      }else if(CameraIds.Contains(name))sources[name]=Source("dshow_input","Gemeinsame Kamera "+(name=="camera"?"1":name[^1].ToString()),new{video_device_id=target,res_type=0,deactivate_when_not_showing=true,use_custom_audio_device=false,audio_device_id=""});

@@ -1,7 +1,7 @@
 import React from 'react';
 import {Info} from 'lucide-react';
 
-export const providerName=provider=>provider==='corsair'?'Corsair · iCUE':provider==='windows'?'Windows · Dynamische Beleuchtung':provider||'RGB-Anbindung';
+export const providerName=provider=>({corsair:'Corsair · iCUE',windows:'Windows · Dynamische Beleuchtung',msi:'MSI · Mystic Light',kingston:'Kingston · FURY CTRL',lianli:'Lian Li · USB-Controller'}[provider]||provider||'RGB-Anbindung');
 const labels={connected:'Bereit',sdkMissing:'Anbindung fehlt',notConnected:'iCUE nicht verbunden',denied:'Zugriff nicht erlaubt',unsupported:'Nicht unterstützt',unavailable:'Nicht verfügbar',error:'Abfrage fehlgeschlagen'};
 export function RGBDiscovery({status}){
  const native=status.native||{};
@@ -10,7 +10,7 @@ export function RGBDiscovery({status}){
  const warnings=[...new Set([...(Array.isArray(native.warnings)?native.warnings:[]),...(Array.isArray(native.windows?.warnings)?native.windows.warnings:[])])];
  return <>
   {status.error?<div className="connection-error rgb-inline-error" role="status"><Info size={18}/><span>{status.error}</span></div>:null}
-  <div className="rgb-provider-statuses">{['windows','corsair'].map(provider=>{const value=native[provider];return <article className="rgb-provider-status surface" key={provider}><div className="rgb-provider-heading"><h3>{providerName(provider)}</h3><span>{value?labels[value.status]||'Geprüft':'Noch nicht geprüft'}</span></div><p>{value?.message||'Die RGB-Gerätesuche prüft diese Anbindung.'}</p>{Number.isInteger(value?.deviceCount)?<p>{value.deviceCount} {value.deviceCount===1?'RGB-Gerät':'RGB-Geräte'} gemeldet</p>:null}</article>;})}</div>
+  <div className="rgb-provider-statuses">{['windows','corsair','msi','kingston','lianli'].map(provider=>{const value=native[provider];return <article className="rgb-provider-status surface" key={provider}><div className="rgb-provider-heading"><h3>{providerName(provider)}</h3><span>{value?labels[value.status]||'Geprüft':'Noch nicht geprüft'}</span></div><p>{value?.message||'Die RGB-Gerätesuche prüft diese Anbindung.'}</p>{Number.isInteger(value?.deviceCount)?<p>{value.deviceCount} {value.deviceCount===1?'RGB-Gerät':'RGB-Geräte'} gemeldet</p>:null}</article>;})}</div>
   {unavailable.length?<div className="rgb-unavailable surface"><h3>Gemeldet, aber derzeit nicht steuerbar</h3>{unavailable.map((device,index)=><article key={`${device.provider}-${device.name}-${index}`}><div><strong>{device.name||'Gerätename nicht gemeldet'}</strong><span>{providerName(device.provider)} · {labels[device.status]}</span></div><p>{device.reason||'Diese Anbindung stellt für das Gerät keine direkte LED-Steuerung bereit.'}</p><ControllerChannels channels={device.channels}/></article>)}</div>:null}
   {warnings.length?<div className="help-note rgb-discovery-warning" role="status"><Info size={18}/><ul>{warnings.map((warning,index)=><li key={index}>{typeof warning==='string'?warning:warning.message}</li>)}</ul></div>:null}
  </>;

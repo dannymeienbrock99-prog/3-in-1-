@@ -8,23 +8,30 @@ import { assertDeviceAllowed, isProtectedDevice, PROTECTED_DEVICES } from './dev
 const helperPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../native/bin/PRISM-Lighting.exe');
 const MAX_MESSAGE = 8 * 1024 * 1024;
 
-// Uses only Windows' supported LampArray interface. It never opens arbitrary HID
+// Uses supported Windows LampArray and optional manufacturer SDK interfaces.
+// It never opens arbitrary HID
 // devices, starts OpenRGB, installs drivers or terminates another application's process.
 export class WindowsLightingClient extends EventEmitter {
-  constructor({ executable = helperPath, args = [], timeout = 15000, platform = process.platform } = {}) {
+  constructor({ executable = helperPath, args = [], timeout = 15000, platform = process.platform, uiPort = 4783 } = {}) {
     super();
     this.executable = executable; this.args = args; this.timeout = timeout; this.platform = platform;
     this.backend = 'windows'; this.host = null; this.port = null; this.protocol = null;
     this.process = null; this.ready = false; this.devices = []; this.pending = new Map();
     this.sequence = 0; this.buffer = ''; this.details = null; this.closing = false;
     this.protectedDevices = PROTECTED_DEVICES;
+    this.setUiPort(uiPort);
+  }
+  setUiPort(port) {
+    if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new BridgeError('Ungültiger Port der lokalen RGB-Oberfläche.', 'INVALID_UI_PORT', 400);
+    if (this.process && this.process.exitCode === null && this.uiPort !== port) throw new BridgeError('Der Port der laufenden RGB-Oberfläche kann erst nach Schließen ihrer Anbindung geändert werden.', 'UI_PORT_LOCKED', 409);
+    this.uiPort = port;
   }
   get connected() { return this.ready && !!this.process && this.process.exitCode === null; }
   ensureHelper() {
     if (this.platform !== 'win32') throw new BridgeError('Die direkte RGB-Steuerung benötigt Windows 10/11 und kompatible LampArray-Geräte.', 'WINDOWS_REQUIRED', 422);
     if (this.process && this.process.exitCode === null && !this.process.killed) return;
     this.closing = false; this.buffer = ''; this.ready = false;
-    const child = spawn(this.executable, this.args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(this.executable, [...this.args.filter(arg => !String(arg).startsWith('--ui-port=')), `--ui-port=${this.uiPort}`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     this.process = child;
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', chunk => {
@@ -94,12 +101,15 @@ export class WindowsLightingClient extends EventEmitter {
         && new Set(device.zones.map(zone => zone.id)).size === device.zones.length
         ? device.zones.map(zone => ({ ...zone, name: String(zone.name || `LED-Zone ${zone.id + 1}`) }))
         : [{ id: 0, name: 'Alle LEDs', startIndex: 0, ledCount: device.ledCount }];
-      return { ...device, name: String(device.name || (device.provider === 'corsair' ? 'Corsair-RGB-Gerät' : 'Windows-RGB-Gerät')), type: device.type ?? 21,
+      const nativeEffects = device.provider === 'msi' && Array.isArray(device.nativeEffects) ? device.nativeEffects : [];
+      if (nativeEffects.length > 128 || nativeEffects.some(effect => !effect || typeof effect.id !== 'string' || !/^msi:style:[\da-f]{16}$/.test(effect.id) || !Number.isInteger(effect.modeId) || effect.modeId < 0 || effect.modeId > 127 || typeof effect.name !== 'string' || effect.name.length < 1 || effect.name.length > 128 || effect.name.trim().toLowerCase() === 'direct all sync') || new Set(nativeEffects.map(effect => effect.id)).size !== nativeEffects.length) throw new BridgeError('MSI hat ungültige Hersteller-Effekte gemeldet.', 'NATIVE_INVALID_DATA');
+      const modes = device.provider === 'msi' && Array.isArray(device.modes) ? device.modes.map(mode => ({id:mode.id,name:String(mode.name)})) : [{ id: 0, name: device.provider === 'corsair' ? 'Corsair iCUE direkt' : 'Windows direkt' }];
+      return { ...device, name: String(device.name || (device.provider === 'corsair' ? 'Corsair-RGB-Gerät' : device.provider === 'msi' ? 'MSI-Mystic-Light-Zone' : 'Windows-RGB-Gerät')), type: device.type ?? 21,
         colors: Array.from({ length: device.ledCount }, (_, i) => device.colors?.[i] >>> 0 || 0),
-        leds: Array.from({ length: device.ledCount }, (_, id) => ({ id, name: `LED ${id + 1}`, color: '#000000' })),
+        leds: Array.from({ length: device.ledCount }, (_, id) => ({ id, name: String(device.leds?.[id]?.name || `LED ${id + 1}`), color: String(device.leds?.[id]?.color || '#000000') })),
         zones,
-        modes: [{ id: 0, name: device.provider === 'corsair' ? 'Corsair iCUE direkt' : 'Windows direkt' }], directMode: device.directMode !== false,
-        directModeId: 0, backend: device.provider ?? 'windows', layoutValid: true };
+        modes, nativeEffects, directMode: device.directMode !== false,
+        directModeId: device.provider === 'msi' ? device.directModeId : 0, backend: device.provider ?? 'windows', layoutValid: true };
     });
     this.details = Array.isArray(result) ? null : {
       ...(result?.environment ?? {}),
@@ -124,9 +134,33 @@ export class WindowsLightingClient extends EventEmitter {
     device.colors = [...colors];
     device.colorsKnown = true;
   }
+  async applyNativeEffect(device, effectId, options = {}) {
+    assertDeviceAllowed(device);
+    if (!this.connected || !this.devices.includes(device)) throw new BridgeError('RGB-Gerät nicht mehr verfügbar. Bitte erneut suchen.', 'DEVICE_LIST_CHANGED', 409);
+    const effect = device.nativeEffects?.find(value => value.id === effectId);
+    if (device.provider !== 'msi' || !effect || !/^msi:style:[\da-f]{16}$/.test(effectId) || !Number.isInteger(effect.modeId) || effect.modeId < 0 || effect.modeId > 127) throw new BridgeError('Dieser Hersteller-Effekt wurde für das ausgewählte Gerät nicht gemeldet.', 'NATIVE_EFFECT_UNSUPPORTED', 422);
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new BridgeError('Ungültige Hersteller-Einstellungen.', 'INVALID_EFFECT', 400);
+    const { brightness, speed, colors, direction } = options;
+    const supported = {};
+    for (const [key, value, maximum] of [['brightness', brightness, effect.brightnessMax], ['speed', speed, effect.speedMax]]) {
+      if (value === undefined) continue;
+      if (!Number.isInteger(value) || value < 0 || value > 100) throw new BridgeError(`Ungültiger MSI-Wert für ${key}.`, 'INVALID_EFFECT', 400);
+      // Shared page settings also contain values for controls this device does
+      // not expose. Only supported controls become a manufacturer API request.
+      if (Number.isInteger(maximum) && maximum >= 1 && maximum <= 10000) supported[key] = value;
+    }
+    if (colors !== undefined && (!Array.isArray(colors) || colors.length < 1 || colors.length > 8 || colors.some(color => typeof color !== 'string' || !/^#[\da-f]{6}$/i.test(color)))) throw new BridgeError('Ungültige MSI-Effektfarbe.', 'INVALID_COLORS', 400);
+    if (direction !== undefined && direction !== 'forward') throw new BridgeError('Die MSI-Schnittstelle meldet keine steuerbare Effektrichtung.', 'NATIVE_EFFECT_UNSUPPORTED', 422);
+    const result = await this.request('effect', { deviceId: device.id, modeId: effect.modeId, ...supported, colors });
+    if (result?.updated !== true || result.deviceId !== device.id || result.modeId !== effect.modeId) throw new BridgeError('Der MSI-Hersteller-Effekt wurde nicht für das ausgewählte Ziel bestätigt.', 'NATIVE_EFFECT_FAILED', 422);
+    device.colorsKnown = false;
+    device.activeMode = effectId;
+    return result;
+  }
   async showWindow(url) {
-    const value = new URL(url);
-    if (value.protocol !== 'http:' || value.hostname !== '127.0.0.1' || value.port !== '4783' || value.pathname !== '/' || value.search || value.hash || value.username || value.password) throw new BridgeError('Ungültige lokale Programm-Adresse.', 'INVALID_URL', 400);
+    let value;
+    try { value = new URL(url); } catch { throw new BridgeError('Ungültige lokale Programm-Adresse.', 'INVALID_URL', 400); }
+    if (url !== `http://127.0.0.1:${this.uiPort}/` || value.protocol !== 'http:' || value.hostname !== '127.0.0.1' || value.port !== String(this.uiPort) || value.pathname !== '/' || value.search || value.hash || value.username || value.password) throw new BridgeError('Ungültige lokale Programm-Adresse.', 'INVALID_URL', 400);
     return this.request('show', { url });
   }
   async release(deviceIds) {

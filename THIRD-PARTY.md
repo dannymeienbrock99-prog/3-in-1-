@@ -44,3 +44,12 @@ Unveränderte DirectShow-Leser-DLL aus OBS VirtualCam 2.1.2 (Miau Lightouch / Ca
 
 ## OBS Tool 2.4.7
 Der eigene lokale Multi-Chat-Quellstand entspricht dem bereitgestellten 2.4.7-Installer. Die Originalquellen werden separat erhalten. Piper-Runtime, Modell, Lizenzen und Quellarchive dieses Programms werden unverändert mitgeliefert; Herkunft und Hashes stehen in desktop/vendor/piper/README.md und manifest.json.
+
+## PRISM 1.6.0 · Hersteller-Anbindungen
+Lian-Li-Protokoll und Effektzuordnungen: sgtaziz/lian-li-linux, Commit d335fdd459b0a308814497d36cf1d8c7dc1a782d, MIT; vollständige Lizenz unter PRISM/licenses/lian-li-linux-MIT.txt. Eigener Windows-HID-Helfer, keine Linux-Treiberinstallation.
+
+MSI Mystic Light SDK 1.0.0.08: https://www.msi.com/Landing/mystic-light-rgb-gaming-pc/download . Die proprietäre SDK-DLL wird nicht verteilt. Bei ausdrücklicher Einrichtung lädt PRISM sie direkt vom Hersteller und prüft die fest hinterlegten SHA-256-Werte. Erfordert lokal installiertes Mystic Light.
+
+Kingston-FURY-CTRL-Protokollreferenz: https://github.com/Beej126/KingstonFuryRgbCLI . Eigene unabhängige Dienstanbindung und Rijndael-256-Protokollcodec; das referenzierte CLI, FuryCTRL.dll und NTIOLib_X64.sys werden nicht eingebunden oder verteilt. Erfordert einen bereits installierten offiziellen Herstellerdienst. Die Anbindung ist experimentell und wurde mit verschlüsselten Protokoll-Testdaten geprüft.
+
+Corsair iCUE SDK bleibt eine optionale, separat eingerichtete Hersteller-Anbindung. Das SDK liefert LED-Farbsteuerung, keinen vollständigen iCUE-Effektkatalog und keine Lüfterdrehzahlen/PWM-Regelung. Die 30 PRISM-Effekte werden von unserer Software berechnet.

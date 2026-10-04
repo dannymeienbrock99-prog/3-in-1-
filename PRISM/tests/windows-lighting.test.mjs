@@ -74,6 +74,34 @@ test('native main window rejects nonlocal destinations without spawning a helper
   assert.equal(client.process, null);
 });
 
+test('configured embedded UI port is passed to the helper and only its exact loopback root is accepted', async t => {
+  const client = new WindowsLightingClient({ executable: process.execPath, args: [fixture], platform: 'win32', timeout: 2000 });
+  t.after(() => client.close()); client.setUiPort(43873);
+  for (const url of ['not-a-url', 'http://127.0.0.1:4783/', 'http://localhost:43873/', 'http://127.1:43873/', 'http://2130706433:43873/', 'http://[::1]:43873/', 'https://127.0.0.1:43873/', 'http://user:pass@127.0.0.1:43873/', 'http://127.0.0.1:43873/other', 'http://127.0.0.1:43873/?x=1', 'http://127.0.0.1:43873/#fragment', 'http://example.com:43873/'])
+    await assert.rejects(() => client.showWindow(url), { code: 'INVALID_URL' });
+  assert.equal(client.process, null);
+  const result = await client.showWindow('http://127.0.0.1:43873/'); assert.equal(result.shown, true);
+  assert.ok(client.process.spawnargs.includes('--ui-port=43873'));
+  assert.throws(() => client.setUiPort(43874), { code: 'UI_PORT_LOCKED' });
+  client.setUiPort(43873);
+});
+
+test('bridge configures the actual allocated UI port before the first helper launch', async t => {
+  const client = new WindowsLightingClient({ executable: process.execPath, args: [fixture], platform: 'win32', timeout: 2000 });
+  const bridge = createBridge({ client, port: 0 });
+  t.after(async () => { await client.close(); await new Promise(resolve => bridge.server.close(resolve)); });
+  const address = await bridge.listen(); assert.equal(client.uiPort, address.port); assert.equal(client.process, null);
+  const response = await fetch(`http://127.0.0.1:${address.port}/api/window/show`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(response.status, 200); assert.equal((await response.json()).shown, true);
+  assert.ok(client.process.spawnargs.includes(`--ui-port=${address.port}`));
+});
+
+test('invalid UI port configuration is rejected before starting any helper', () => {
+  const client = new WindowsLightingClient();
+  for (const port of [0, 1023, 65536, 4783.5, '4783', NaN]) assert.throws(() => client.setUiPort(port), { code: 'INVALID_UI_PORT' });
+  assert.equal(client.uiPort, 4783); assert.equal(client.process, null);
+});
+
 test('automatic RGB discovery preserves names and does not reset a running effect on reload', async () => {
   const client = new WindowsLightingClient({ executable: process.execPath, args: [fixture], platform: 'win32', timeout: 2000 });
   const bridge = createBridge({ client, port: 0 });

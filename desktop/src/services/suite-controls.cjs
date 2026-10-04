@@ -19,7 +19,7 @@ class SuiteControls{
  constructor({runtime,getDual,getHost}){Object.assign(this,{runtime,getDual,getHost});this.busy=false;this.jarvisDepth=0;}
  rgbActions(){
   const rgb=this.runtime.rgb;if(typeof rgb?.action!=='function')return [];
-  const effects=(rgb.catalog?.()?.effects||[]).filter(item=>item&&typeof item.id==='string'&&/^[a-z][a-z0-9-]{0,40}$/.test(item.id)&&typeof item.name==='string'&&item.name.trim()&&item.name.length<=100).map(({id,name})=>({id,name}));
+  const effects=(rgb.catalog?.()?.effects||[]).filter(item=>item&&typeof item.id==='string'&&(/^[a-z][a-z0-9-]{0,40}$/.test(item.id)||/^native:(kingston|msi|lianli):[a-zA-Z0-9:_-]{1,80}$/.test(item.id))&&typeof item.name==='string'&&item.name.trim()&&item.name.length<=100).map(({id,name})=>({id,name}));
   return [{id:'rgb-color',name:'RGB-Farbe wählen',choices:RGB_COLORS.map(item=>({...item}))},
    {id:'rgb-effect',name:'RGB-Effekt wählen',choices:effects},{id:'rgb-brightness',name:'RGB-Helligkeit'},
    {id:'rgb-power',name:'RGB-Beleuchtung schalten',choices:[{id:'on',name:'An'},{id:'off',name:'Aus'}]},

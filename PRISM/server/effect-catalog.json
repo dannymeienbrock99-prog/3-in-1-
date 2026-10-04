@@ -1,0 +1,122 @@
+[
+  {
+    "id": "static",
+    "name": "Statisch"
+  },
+  {
+    "id": "rainbow",
+    "name": "Regenbogen"
+  },
+  {
+    "id": "breathing",
+    "name": "Atmen"
+  },
+  {
+    "id": "wave",
+    "name": "Welle"
+  },
+  {
+    "id": "gradient",
+    "name": "Farbverlauf"
+  },
+  {
+    "id": "sparkle",
+    "name": "Funkeln"
+  },
+  {
+    "id": "colorcycle",
+    "name": "Farbwechsel"
+  },
+  {
+    "id": "comet",
+    "name": "Komet"
+  },
+  {
+    "id": "chase",
+    "name": "Lauflicht"
+  },
+  {
+    "id": "scanner",
+    "name": "Scanner"
+  },
+  {
+    "id": "ripple",
+    "name": "Wasserwelle"
+  },
+  {
+    "id": "fire",
+    "name": "Feuer"
+  },
+  {
+    "id": "aurora",
+    "name": "Nordlicht"
+  },
+  {
+    "id": "stripes",
+    "name": "Farbstreifen"
+  },
+  {
+    "id": "rainbowbreathing",
+    "name": "Regenbogen-Atmen"
+  },
+  {
+    "id": "rainbowcomet",
+    "name": "Regenbogen-Komet"
+  },
+  {
+    "id": "rainbowsparkle",
+    "name": "Regenbogen-Funkeln"
+  },
+  {
+    "id": "heartbeat",
+    "name": "Herzschlag"
+  },
+  {
+    "id": "strobe",
+    "name": "Stroboskop"
+  },
+  {
+    "id": "lightning",
+    "name": "Blitze"
+  },
+  {
+    "id": "twinkle",
+    "name": "Sternenglanz"
+  },
+  {
+    "id": "meteorshower",
+    "name": "Meteorschauer"
+  },
+  {
+    "id": "stack",
+    "name": "Lichtstapel"
+  },
+  {
+    "id": "pingpong",
+    "name": "Pingpong"
+  },
+  {
+    "id": "marquee",
+    "name": "Theaterlicht"
+  },
+  {
+    "id": "duel",
+    "name": "Lichtduell"
+  },
+  {
+    "id": "police",
+    "name": "Wechselblitzer"
+  },
+  {
+    "id": "gradientwave",
+    "name": "Verlaufwelle"
+  },
+  {
+    "id": "pulse",
+    "name": "Lichtpuls"
+  },
+  {
+    "id": "embers",
+    "name": "Glut"
+  }
+]

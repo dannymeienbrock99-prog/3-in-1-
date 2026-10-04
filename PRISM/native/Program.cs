@@ -222,9 +222,11 @@ internal sealed class MainWindow : Form
 {
     private readonly WebView2 web = new() { Dock = DockStyle.Fill };
     private readonly string userDataFolder;
-    public MainWindow(string userDataFolder)
+    private readonly int expectedUiPort;
+    public MainWindow(string userDataFolder, int expectedUiPort)
     {
         this.userDataFolder = userDataFolder;
+        this.expectedUiPort = expectedUiPort;
         Text = "PRISM RGB Studio";
         Width = 1420; Height = 980; MinimumSize = new Size(850, 620);
         BackColor = System.Drawing.Color.FromArgb(12, 13, 18);
@@ -235,7 +237,7 @@ internal sealed class MainWindow : Form
 
     public async Task Open(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme != "http" || uri.Host != "127.0.0.1" || uri.Port != 4783 || uri.AbsolutePath != "/" || uri.Query.Length != 0 || uri.Fragment.Length != 0 || uri.UserInfo.Length != 0)
+        if (!UiPolicy.TryLocalUrl(url, expectedUiPort, out Uri? uri))
             throw new LightingException("INVALID_URL", "PRISM kann nur seine lokale Steuerzentrale öffnen.");
         Show();
         if (web.CoreWebView2 != null) { Activate(); return; }
@@ -249,22 +251,16 @@ internal sealed class MainWindow : Form
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
-            if (e.IsUserInitiated && SafeExternalLink(e.Uri))
+            if (e.IsUserInitiated && UiPolicy.SafeExternalLink(e.Uri))
             {
                 try { Process.Start(new ProcessStartInfo(e.Uri) { UseShellExecute = true }); } catch { }
             }
         };
         core.NavigationStarting += (_, e) => { if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var target) || target.Scheme != uri.Scheme || target.Host != uri.Host || target.Port != uri.Port) e.Cancel = true; };
-        core.Navigate(uri.AbsoluteUri);
+        core.Navigate(uri!.AbsoluteUri);
         Activate();
     }
 
-    private static bool SafeExternalLink(string value)
-    {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != "https") return false;
-        return uri.Host is "learn.microsoft.com" or "www.microsoft.com" or "support.microsoft.com" or "developer.microsoft.com" or "go.microsoft.com" or "aka.ms" or "www.corsair.com" or "corsair.com" or "corsairofficial.github.io"
-            || uri.Host == "github.com" && (uri.AbsolutePath.Equals("/CorsairOfficial/cue-sdk", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/CorsairOfficial/cue-sdk/", StringComparison.OrdinalIgnoreCase));
-    }
 }
 
 internal static class Program
@@ -273,6 +269,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        int expectedUiPort = UiPolicy.ParsePort(args);
         // GUI-subsystem applications have redirected pipes, but no console code page.
         // Calling Console.InputEncoding would fail with ERROR_INVALID_HANDLE.
         Console.SetIn(new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false)));
@@ -282,6 +279,7 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         var lighting = new LightingService();
         var corsair = new CorsairLightingService();
+        var msi = new MsiLightingService();
         using var dispatcher = new Control();
         _ = dispatcher.Handle;
         var context = new ApplicationContext();
@@ -289,7 +287,7 @@ internal static class Program
         bool suppressWindowClosed = false;
         string userData = args.FirstOrDefault(a => a.StartsWith("--user-data="))?[12..] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PRISM", "WebView2");
 
-        object ReleaseAll() { lighting.Release(); corsair.Release(); return new { released = true }; }
+        object ReleaseAll() { lighting.Release(); corsair.Release(); msi.Release(); return new { released = true }; }
 
         async Task<object> Execute(JsonElement command)
         {
@@ -314,29 +312,42 @@ internal static class Program
                         corsairStatus = corsair.Status; corsairMessage = corsair.Message;
                     }
                     catch (Exception error) { cueDevices = []; corsairStatus = "unavailable"; corsairMessage = error.Message; corsair.Warnings.Add(error.Message); }
+                    JsonElement[] msiDevices;
+                    string msiStatus, msiMessage;
+                    try
+                    {
+                        msiDevices = msi.Enumerate().Select(d => JsonSerializer.SerializeToElement(d, JsonOptions)).ToArray();
+                        msiStatus = msi.Status; msiMessage = msi.Message;
+                    }
+                    catch (Exception error) { msiDevices = []; msiStatus = "unavailable"; msiMessage = error.Message; msi.Warnings.Add(error.Message); }
                     var windowsWarnings = windows.GetProperty("warnings").EnumerateArray().Select(w => w.GetString() ?? "").ToArray();
-                    var discovered = windows.GetProperty("discovery").EnumerateArray().Select(d => d.Clone()).Concat(corsair.Discovery.Select(d => JsonSerializer.SerializeToElement(d, JsonOptions))).ToArray();
+                    var discovered = windows.GetProperty("discovery").EnumerateArray().Select(d => d.Clone()).Concat(corsair.Discovery.Select(d => JsonSerializer.SerializeToElement(d, JsonOptions))).Concat(msi.Discovery.Select(d => JsonSerializer.SerializeToElement(d, JsonOptions))).ToArray();
                     return new
                     {
-                        devices = windowsDevices.Concat(cueDevices).ToArray(), backend = "windows-native", compatibleOnly = true,
-                        foreground = Ownership.IsForeground, backgroundSupported = cueDevices.Length > 0,
-                        excludedCount = windows.GetProperty("excludedCount").GetInt32() + corsair.ExcludedCount, warnings = windowsWarnings.Concat(corsair.Warnings).ToArray(), discovery = discovered,
+                        devices = windowsDevices.Concat(cueDevices).Concat(msiDevices).ToArray(), backend = "windows-native", compatibleOnly = true,
+                        foreground = Ownership.IsForeground, backgroundSupported = cueDevices.Length > 0 || msiDevices.Length > 0,
+                        excludedCount = windows.GetProperty("excludedCount").GetInt32() + corsair.ExcludedCount + msi.ExcludedCount, warnings = windowsWarnings.Concat(corsair.Warnings).Concat(msi.Warnings).ToArray(), discovery = discovered,
                         environment = new
                         {
                             windows = new { status = windowsStatus, message = windowsMessage, deviceCount = windowsDevices.Length, foreground = Ownership.IsForeground, backgroundSupported = false, warnings = windowsWarnings, excludedCount = windows.GetProperty("excludedCount").GetInt32() },
-                            corsair = new { status = corsairStatus, message = corsairMessage, deviceCount = cueDevices.Length, backgroundSupported = true, warnings = corsair.Warnings.ToArray(), excludedCount = corsair.ExcludedCount }
+                            corsair = new { status = corsairStatus, message = corsairMessage, deviceCount = cueDevices.Length, backgroundSupported = true, warnings = corsair.Warnings.ToArray(), excludedCount = corsair.ExcludedCount },
+                            msi = new { status = msiStatus, message = msiMessage, deviceCount = msiDevices.Length, backgroundSupported = true, warnings = msi.Warnings.ToArray(), excludedCount = msi.ExcludedCount }
                         }
                     };
                 case "set":
                     int deviceId = command.GetProperty("deviceId").GetInt32();
-                    return deviceId >= 10000 ? corsair.Set(deviceId, command.GetProperty("colors")) : lighting.Set(deviceId, command.GetProperty("colors"));
+                    return deviceId >= 20000 ? msi.Set(deviceId, command.GetProperty("colors")) : deviceId >= 10000 ? corsair.Set(deviceId, command.GetProperty("colors")) : lighting.Set(deviceId, command.GetProperty("colors"));
+                case "effect":
+                    int effectDevice = command.GetProperty("deviceId").GetInt32();
+                    if (effectDevice < 20000) throw new LightingException("NATIVE_EFFECT_UNSUPPORTED", "Dieses Gerät meldet keinen unterstützten Hersteller-Effekt.");
+                    return msi.Effect(effectDevice, command);
                 case "release": return ReleaseAll();
                 case "show":
                     try
                     {
                         if (window == null || window.IsDisposed)
                         {
-                            window = new MainWindow(userData);
+                            window = new MainWindow(userData, expectedUiPort);
                             window.FormClosed += (_, _) => { if (suppressWindowClosed) return; ReleaseAll(); Emit(new { @event = "windowClosed" }); };
                         }
                         await window.Open(command.GetProperty("url").GetString() ?? "");

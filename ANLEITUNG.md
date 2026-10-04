@@ -1,4 +1,11 @@
-# Batto 3-in-1 · Schnellstart 1.10.0
+# Batto 3-in-1 · Schnellstart 1.11.0
+
+## RGB-Neuerungen
+Öffne **RGB-Steuerung**. Alle 14 bisherigen Effekte bleiben vorhanden; insgesamt gibt es jetzt 30 PRISM-Effekte. Unter **Effekte deiner Geräte** stehen außerdem die vom erkannten Gerät unterstützten Herstellereffekte. Du kannst einzelne RAM-Riegel/Anschlüsse oder mit der ausdrücklich beschrifteten Schaltfläche alle passenden Ziele einstellen.
+
+Für MSI unter **RGB verbinden → MSI-Anbindung einrichten** dem einmaligen Download zustimmen und MSI Center mit Mystic Light öffnen. Für Kingston muss der offizielle FURY-CTRL-Dienst laufen; diese Anbindung ist experimentell. Lian Li wird nur für unterstützte HID-Controller angeboten. Nicht verfügbare Einträge im 94-Effekt-Katalog erklären die jeweilige Einschränkung. Aktuelle Drehzahlen stehen beim Controller.
+
+Die MSI-Vorschau nutzt das bereitgestellte Mainboard-Bild und zeigt die tatsächlich erkannten RAM-Riegel samt Namen und Kapazität. PC-Erkennung allein bestätigt keine RGB-Steuerung.
 
 ## RGB direkt in Batto einstellen
 

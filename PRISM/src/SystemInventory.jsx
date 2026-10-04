@@ -1,12 +1,14 @@
 import React from 'react';
 import {Info,RefreshCw,ShieldCheck} from 'lucide-react';
 import {HardwareDevices} from './HardwareDevices.jsx';
+import {memorySummary} from '../server/memory-models.mjs';
 
 const number=value=>Number(value).toLocaleString('de-DE',{maximumFractionDigits:1});
 const words=parts=>parts.filter(Boolean).join(' · ');
 export function SystemInventory({system,busy,onRefresh}){
  const modules=system?.memory??[];
  const moduleTotal=system?.installedMemoryGb||modules.reduce((sum,m)=>sum+(Number(m.capacityGb)||0),0);
+ const summary=memorySummary(modules);
  const errors=Array.isArray(system?.errors)?system.errors:[];
  const warnings=Array.isArray(system?.warnings)?system.warnings:[];
  const partial=Boolean(system?.error||errors.length||warnings.length);
@@ -14,8 +16,8 @@ export function SystemInventory({system,busy,onRefresh}){
   ['Betriebssystem','os',system?.os?[words([system.os.name,system.os.version,system.os.architecture])]:[]],
   ['Prozessor','cpus',(system?.cpus??[]).map(c=>words([c.name,c.cores?`${c.cores} Kerne`:c.logicalCores?`${c.logicalCores} logische Kerne`:null]))],
   ['Arbeitsspeicher','memory',modules.length?[
-   `${moduleTotal?`${number(moduleTotal)} GB · `:''}${modules.length} ${modules.length===1?'Modul':'Module'}`,
-   ...modules.map(m=>words([m.capacityGb?`${number(m.capacityGb)} GB`:null,m.manufacturer,m.partNumber,m.speedMhz?`${number(m.speedMhz)} MHz`:null]))
+   `${moduleTotal?`${number(moduleTotal)} GB · `:''}${summary.moduleCapacityGb?`${modules.length} × ${number(summary.moduleCapacityGb)} GB`: `${modules.length} ${modules.length===1?'Modul':'Module'}`}`,
+   ...modules.map(m=>words([m.capacityGb?`${number(m.capacityGb)} GB`:null,m.modelName||m.manufacturer,m.partNumber,m.slot,m.speedMhz?`Aktuell (Windows): ${number(m.speedMhz)} MHz`:null]))
   ]:system?.totalMemoryGb?[`${number(system.totalMemoryGb)} GB vom Betriebssystem gemeldet`,'Hersteller und Moduldaten nicht verfügbar']:[]],
   ['Mainboard','motherboard',(system?.motherboard??[]).map(b=>[b.manufacturer,b.name].filter(Boolean).join(' '))],
   ['Grafikkarte','gpus',(system?.gpus??[]).map(g=>g.name)],

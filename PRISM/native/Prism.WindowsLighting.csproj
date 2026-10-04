@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>PRISM-Lighting</AssemblyName>
-    <Version>1.2.0</Version>
+    <Version>1.6.0</Version>
     <ApplicationIcon>$(MSBuildProjectDirectory)\..\PRISM.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <RuntimeFrameworkVersion>8.0.31</RuntimeFrameworkVersion>
@@ -20,7 +20,7 @@
     <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="bin\**;obj\**" />
+    <Compile Remove="bin\**;obj\**;tests\**" />
     <Reference Include="Microsoft.Windows.SDK.NET"><HintPath>$(WindowsSdkReferencePath)\Microsoft.Windows.SDK.NET.dll</HintPath></Reference>
     <Reference Include="WinRT.Runtime"><HintPath>$(WindowsSdkReferencePath)\WinRT.Runtime.dll</HintPath></Reference>
     <Reference Include="Microsoft.Web.WebView2.Core"><HintPath>$(WebViewSdkPath)\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath></Reference>

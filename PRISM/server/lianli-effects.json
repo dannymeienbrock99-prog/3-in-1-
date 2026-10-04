@@ -1,0 +1,646 @@
+{
+  "source": "https://github.com/sgtaziz/lian-li-linux",
+  "commit": "d335fdd459b0a308814497d36cf1d8c7dc1a782d",
+  "license": "MIT",
+  "modes": [
+    {
+      "id": "Off",
+      "name": "Off"
+    },
+    {
+      "id": "Direct",
+      "name": "Direct"
+    },
+    {
+      "id": "Static",
+      "name": "Static"
+    },
+    {
+      "id": "Rainbow",
+      "name": "Rainbow"
+    },
+    {
+      "id": "RainbowMorph",
+      "name": "Rainbow Morph"
+    },
+    {
+      "id": "Breathing",
+      "name": "Breathing"
+    },
+    {
+      "id": "Runway",
+      "name": "Runway"
+    },
+    {
+      "id": "Meteor",
+      "name": "Meteor"
+    },
+    {
+      "id": "ColorCycle",
+      "name": "Color Cycle"
+    },
+    {
+      "id": "Staggered",
+      "name": "Staggered"
+    },
+    {
+      "id": "Tide",
+      "name": "Tide"
+    },
+    {
+      "id": "Mixing",
+      "name": "Mixing"
+    },
+    {
+      "id": "Voice",
+      "name": "Voice"
+    },
+    {
+      "id": "Door",
+      "name": "Door"
+    },
+    {
+      "id": "Render",
+      "name": "Render"
+    },
+    {
+      "id": "Ripple",
+      "name": "Ripple"
+    },
+    {
+      "id": "Reflect",
+      "name": "Reflect"
+    },
+    {
+      "id": "TailChasing",
+      "name": "Tail Chasing"
+    },
+    {
+      "id": "Paint",
+      "name": "Paint"
+    },
+    {
+      "id": "PingPong",
+      "name": "Ping Pong"
+    },
+    {
+      "id": "Stack",
+      "name": "Stack"
+    },
+    {
+      "id": "StackMulti",
+      "name": "Stack Multi"
+    },
+    {
+      "id": "Neon",
+      "name": "Neon"
+    },
+    {
+      "id": "CoverCycle",
+      "name": "Cover Cycle"
+    },
+    {
+      "id": "Wave",
+      "name": "Wave"
+    },
+    {
+      "id": "Racing",
+      "name": "Racing"
+    },
+    {
+      "id": "Lottery",
+      "name": "Lottery"
+    },
+    {
+      "id": "Intertwine",
+      "name": "Intertwine"
+    },
+    {
+      "id": "MeteorShower",
+      "name": "Meteor Shower"
+    },
+    {
+      "id": "Collide",
+      "name": "Collide"
+    },
+    {
+      "id": "ElectricCurrent",
+      "name": "Electric Current"
+    },
+    {
+      "id": "Kaleidoscope",
+      "name": "Kaleidoscope"
+    },
+    {
+      "id": "BigBang",
+      "name": "Big Bang"
+    },
+    {
+      "id": "Vortex",
+      "name": "Vortex"
+    },
+    {
+      "id": "Pump",
+      "name": "Pump"
+    },
+    {
+      "id": "ColorsMorph",
+      "name": "Colors Morph"
+    },
+    {
+      "id": "TaiChi",
+      "name": "Tai Chi"
+    },
+    {
+      "id": "CrossingOver",
+      "name": "Crossing Over"
+    },
+    {
+      "id": "ColorfulStarryNight",
+      "name": "Colorful Starry Night"
+    },
+    {
+      "id": "StaticStarryNight",
+      "name": "Static Starry Night"
+    },
+    {
+      "id": "Bounce",
+      "name": "Bounce"
+    },
+    {
+      "id": "TickerTape",
+      "name": "Ticker Tape"
+    },
+    {
+      "id": "Fluctuation",
+      "name": "Fluctuation"
+    },
+    {
+      "id": "Transmit",
+      "name": "Transmit"
+    },
+    {
+      "id": "Burst",
+      "name": "Burst"
+    },
+    {
+      "id": "MopUp",
+      "name": "Mop Up"
+    },
+    {
+      "id": "PacMan",
+      "name": "PacMan"
+    },
+    {
+      "id": "MeteorRainbow",
+      "name": "Meteor Rainbow"
+    },
+    {
+      "id": "Spring",
+      "name": "Spring"
+    },
+    {
+      "id": "Scan",
+      "name": "Scan"
+    },
+    {
+      "id": "Contest",
+      "name": "Contest"
+    },
+    {
+      "id": "Warning",
+      "name": "Warning"
+    },
+    {
+      "id": "SpanningTeacups",
+      "name": "Spanning Teacups"
+    },
+    {
+      "id": "Tornado",
+      "name": "Tornado"
+    },
+    {
+      "id": "DoubleMeteor",
+      "name": "Double Meteor"
+    },
+    {
+      "id": "MeteorContest",
+      "name": "Meteor Contest"
+    },
+    {
+      "id": "MeteorMix",
+      "name": "Meteor Mix"
+    },
+    {
+      "id": "ReturnArc",
+      "name": "Return Arc"
+    },
+    {
+      "id": "DoubleArc",
+      "name": "Double Arc"
+    },
+    {
+      "id": "HeartBeat",
+      "name": "Heart Beat"
+    },
+    {
+      "id": "HeartBeatRunway",
+      "name": "Heart Beat Runway"
+    },
+    {
+      "id": "Disco",
+      "name": "Disco"
+    },
+    {
+      "id": "SeaFlow",
+      "name": "Sea Flow"
+    },
+    {
+      "id": "Echo",
+      "name": "Echo"
+    },
+    {
+      "id": "ColorfulCity",
+      "name": "Colorful City"
+    },
+    {
+      "id": "Twinkle",
+      "name": "Twinkle"
+    },
+    {
+      "id": "Groove",
+      "name": "Groove"
+    },
+    {
+      "id": "Tunnel",
+      "name": "Tunnel"
+    },
+    {
+      "id": "BreathingRainbow",
+      "name": "Breathing Rainbow"
+    },
+    {
+      "id": "Snooker",
+      "name": "Snooker"
+    },
+    {
+      "id": "BlowUp",
+      "name": "Blow Up"
+    },
+    {
+      "id": "ShockWave",
+      "name": "Shock Wave"
+    },
+    {
+      "id": "BulletStack",
+      "name": "Bullet Stack"
+    },
+    {
+      "id": "Drizzling",
+      "name": "Drizzling"
+    },
+    {
+      "id": "FadeOut",
+      "name": "Fade Out"
+    },
+    {
+      "id": "ColorTransfer",
+      "name": "Color Transfer"
+    },
+    {
+      "id": "CrossOver",
+      "name": "Cross Over"
+    },
+    {
+      "id": "Parallel",
+      "name": "Parallel"
+    },
+    {
+      "id": "Endless",
+      "name": "Endless"
+    },
+    {
+      "id": "River",
+      "name": "River"
+    },
+    {
+      "id": "Duel",
+      "name": "Duel"
+    },
+    {
+      "id": "Hourglass",
+      "name": "Hourglass"
+    },
+    {
+      "id": "Pioneer",
+      "name": "Pioneer"
+    },
+    {
+      "id": "ShuttleRun",
+      "name": "Shuttle Run"
+    },
+    {
+      "id": "GradientRibbon",
+      "name": "Gradient Ribbon"
+    },
+    {
+      "id": "RainbowWave",
+      "name": "Rainbow Wave"
+    },
+    {
+      "id": "ColorfulMeteor",
+      "name": "Colorful Meteor"
+    },
+    {
+      "id": "Wing",
+      "name": "Wing"
+    },
+    {
+      "id": "Drumming",
+      "name": "Drumming"
+    },
+    {
+      "id": "Boomerang",
+      "name": "Boomerang"
+    },
+    {
+      "id": "CandyBox",
+      "name": "Candy Box"
+    },
+    {
+      "id": "Transformation",
+      "name": "Transformation"
+    },
+    {
+      "id": "StaticColorful",
+      "name": "Static corner colors"
+    },
+    {
+      "id": "BreathingColorful",
+      "name": "Breathing corner colors"
+    }
+  ],
+  "mappings": {
+    "single": {
+      "Off": 0,
+      "Static": 1,
+      "Breathing": 2,
+      "RainbowMorph": 4,
+      "Rainbow": 5,
+      "Runway": 28,
+      "Meteor": 36,
+      "ColorCycle": 35,
+      "Staggered": 24,
+      "Tide": 26,
+      "Mixing": 30,
+      "Stack": 32,
+      "StackMulti": 33,
+      "Neon": 34,
+      "Voice": 38,
+      "Groove": 39,
+      "Render": 40,
+      "Tunnel": 41
+    },
+    "alInner": {
+      "Off": 0,
+      "Static": 1,
+      "Breathing": 2,
+      "RainbowMorph": 4,
+      "Rainbow": 5,
+      "BreathingRainbow": 6,
+      "MeteorRainbow": 8,
+      "ColorCycle": 24,
+      "Meteor": 25,
+      "Runway": 26,
+      "MopUp": 27,
+      "Lottery": 29,
+      "Wave": 30,
+      "Spring": 31,
+      "TailChasing": 32,
+      "Warning": 33,
+      "Voice": 34,
+      "Mixing": 35,
+      "Stack": 36,
+      "Tide": 37,
+      "Scan": 38,
+      "PacMan": 39,
+      "ColorfulCity": 40,
+      "Render": 41,
+      "Twinkle": 42
+    },
+    "alOuter": {
+      "Off": 0,
+      "Static": 1,
+      "Breathing": 2,
+      "BreathingRainbow": 6,
+      "Rainbow": 40,
+      "RainbowMorph": 53,
+      "ColorCycle": 43,
+      "TaiChi": 44,
+      "Meteor": 25,
+      "Runway": 26,
+      "Warning": 45,
+      "Voice": 46,
+      "SpanningTeacups": 56,
+      "Tornado": 54,
+      "Mixing": 47,
+      "Stack": 48,
+      "Staggered": 55,
+      "Tide": 49,
+      "Scan": 50,
+      "Contest": 51,
+      "StaticColorful": 1,
+      "BreathingColorful": 2
+    },
+    "alV2Outer": {
+      "Off": 0,
+      "Static": 1,
+      "Breathing": 2,
+      "RainbowMorph": 4,
+      "BreathingRainbow": 6,
+      "Meteor": 25,
+      "Runway": 26,
+      "MopUp": 62,
+      "Rainbow": 43,
+      "ColorCycle": 46,
+      "TaiChi": 47,
+      "Warning": 48,
+      "Voice": 49,
+      "Mixing": 50,
+      "Tide": 51,
+      "Scan": 52,
+      "Contest": 53,
+      "ColorfulCity": 56,
+      "Render": 57,
+      "Twinkle": 58,
+      "Wave": 59,
+      "Spring": 60,
+      "TailChasing": 61,
+      "Tornado": 63,
+      "Staggered": 64,
+      "SpanningTeacups": 65,
+      "ElectricCurrent": 66,
+      "Stack": 67,
+      "StaticColorful": 1,
+      "BreathingColorful": 2
+    },
+    "slInf": {
+      "Off": 0,
+      "Static": 1,
+      "Breathing": 2,
+      "RainbowMorph": 4,
+      "Rainbow": 5,
+      "BreathingRainbow": 6,
+      "MeteorRainbow": 8,
+      "ColorCycle": 24,
+      "Meteor": 25,
+      "Runway": 26,
+      "MopUp": 68,
+      "DoubleMeteor": 29,
+      "MeteorContest": 30,
+      "MeteorMix": 31,
+      "ReturnArc": 32,
+      "DoubleArc": 33,
+      "Door": 34,
+      "Disco": 35,
+      "HeartBeat": 36,
+      "Lottery": 38,
+      "Warning": 41,
+      "Voice": 42,
+      "Mixing": 43,
+      "Stack": 44,
+      "Tide": 45,
+      "Scan": 46,
+      "HeartBeatRunway": 69
+    },
+"tl": {
+      "Rainbow": 1,
+      "RainbowMorph": 2,
+      "Static": 3,
+      "Breathing": 4,
+      "Runway": 5,
+      "Meteor": 6,
+      "ColorCycle": 7,
+      "Staggered": 8,
+      "Tide": 9,
+      "Mixing": 10,
+      "Voice": 11,
+      "Door": 12,
+      "Render": 13,
+      "Ripple": 14,
+      "Reflect": 15,
+      "TailChasing": 16,
+      "Paint": 17,
+      "PingPong": 18,
+      "Stack": 19,
+      "CoverCycle": 20,
+      "Wave": 21,
+      "Racing": 22,
+      "Lottery": 23,
+      "Intertwine": 24,
+      "MeteorShower": 25,
+      "Collide": 26,
+      "ElectricCurrent": 27,
+      "Kaleidoscope": 28,
+      "Off": 3
+    }
+  },
+  "singleModes": [
+    "Off",
+    "Static",
+    "Breathing",
+    "ColorCycle",
+    "Rainbow",
+    "RainbowMorph",
+    "Runway",
+    "Meteor",
+    "Staggered",
+    "Tide",
+    "Mixing",
+    "Stack",
+    "StackMulti",
+    "Neon"
+  ],
+  "v2Extra": [
+    "Voice",
+    "Groove",
+    "Render",
+    "Tunnel"
+  ],
+  "dualModes": [
+    "Off",
+    "Static",
+    "Breathing",
+    "Rainbow",
+    "MeteorRainbow",
+    "ColorCycle",
+    "Meteor",
+    "Runway",
+    "MopUp",
+    "Lottery",
+    "Wave",
+    "Spring",
+    "TailChasing",
+    "Warning",
+    "Voice",
+    "Mixing",
+    "Stack",
+    "Tide",
+    "Scan",
+    "PacMan",
+    "StaticColorful",
+    "BreathingColorful"
+  ],
+  "alV2Extra": [
+    "RainbowMorph",
+    "ColorfulCity",
+    "Render",
+    "Twinkle"
+  ],
+  "slInfinityModes": [
+    "Off",
+    "Static",
+    "Breathing",
+    "Rainbow",
+    "RainbowMorph",
+    "BreathingRainbow",
+    "MeteorRainbow",
+    "ColorCycle",
+    "Meteor",
+    "Runway",
+    "MopUp",
+    "DoubleMeteor",
+    "MeteorContest",
+    "MeteorMix",
+    "ReturnArc",
+    "DoubleArc",
+    "Door",
+    "Disco",
+    "HeartBeat",
+    "Lottery",
+    "Warning",
+    "Voice",
+    "Mixing",
+    "Stack",
+    "Tide",
+    "Scan",
+    "HeartBeatRunway"
+  ],
+  "tlFanModes": [
+    "Off",
+    "Rainbow",
+    "Static",
+    "Runway",
+    "Meteor",
+    "ColorCycle",
+    "Render",
+    "TailChasing",
+    "Stack",
+    "CoverCycle",
+    "Wave",
+    "Racing",
+    "Lottery",
+    "Intertwine",
+    "MeteorShower"
+  ]
+}

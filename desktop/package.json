@@ -1,6 +1,6 @@
 {
   "name": "batto-3-in-1",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "Batto 3-in-1 mit der Originaloberfläche von OBS Tool 2.4.7",
   "main": "electron/suite-entry.cjs",
   "author": "Crazy_Batto",
@@ -144,7 +144,9 @@
           "native/bin/**",
           "native/licenses/**",
           "licenses/**",
-          "package.json"
+          "package.json",
+          "native-kingston/bin/**",
+          "native-lianli/bin/**"
         ],
         "to": "PRISM",
         "from": "../PRISM"

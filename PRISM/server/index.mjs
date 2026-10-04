@@ -3,7 +3,9 @@ import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BridgeError, publicController } from './openrgb.mjs';
-import { WindowsLightingClient } from './windows-lighting.mjs';
+import { LightingClient } from './lighting-client.mjs';
+import { msiSetupStatus, installMsiSdk } from './msi-setup.mjs';
+import { applyNativeEffect } from './native-effects.mjs';
 import { APP_VERSION } from './version.mjs';
 import { assertDeviceAllowed, PROTECTED_DEVICES } from './device-policy.mjs';
 import { corsairSetupStatus, installCorsairSdk } from './corsair-setup.mjs';
@@ -28,7 +30,7 @@ async function readJson(request) {
   catch { throw new BridgeError('Ungültiger JSON-Inhalt.', 'INVALID_JSON', 400); }
 }
 
-export function createBridge({ client = new WindowsLightingClient(), dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
+export function createBridge({ client = new LightingClient(), dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
   const engine = new EffectEngine(client);
   const readRazer = createRazerProbe();
   let lastError = null, operation = Promise.resolve();
@@ -36,7 +38,7 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
   client.on('disconnected', error => { lastError = error.message; });
   client.on('devicesChanged', () => { lastError = 'Geräte wurden geändert. Bitte Geräte erneut erkennen.'; });
   client.on('controlLost', error => { engine.stop(); lastError = error.message; });
-  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, effectRunning: engine.running, active: engine.active, effects: EFFECTS, error: engine.lastError || lastError });
+  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, effectRunning: engine.running, active: engine.active, nativeActive:client.connected ? client.devices.filter(device=>device.activeNativeEffect).map(device=>({deviceId:device.id,provider:device.provider,...device.activeNativeEffect})) : [], effects: EFFECTS, error: engine.lastError || lastError });
 
   const server = http.createServer(async (request, response) => {
     try {
@@ -51,15 +53,17 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
       const url = new URL(request.url, `http://${request.headers.host}`);
       if (url.pathname.startsWith('/api/')) {
         if (request.method === 'GET' && url.pathname === '/api/status') return json(response, 200, status());
+        if (request.method === 'GET' && url.pathname === '/api/fans') return json(response, 200, {fans:client.readTelemetry ? await client.readTelemetry() : []});
         if (embedded && profileDirectory && request.method === 'GET' && url.pathname === '/api/profiles') return json(response, 200, { profiles: await readProfiles(profileDirectory) });
         if (request.method === 'GET' && url.pathname === '/api/devices') return json(response, 200, { devices: client.devices.map(publicController), connected: client.connected });
         if (request.method === 'GET' && url.pathname === '/api/system') return json(response, 200, await inventory());
+        if (request.method === 'GET' && url.pathname === '/api/msi') return json(response, 200, await msiSetupStatus());
         if (request.method === 'GET' && url.pathname === '/api/corsair') return json(response, 200, await corsairSetupStatus());
         if (request.method === 'GET' && url.pathname === '/api/coverage') {
-          const [pcInventory, corsair, razer] = await Promise.allSettled([inventory(), corsairSetupStatus(), readRazer()]);
+          const [pcInventory, corsair, razer, msi] = await Promise.allSettled([inventory(), corsairSetupStatus(), readRazer(), msiSetupStatus()]);
           return json(response, 200, buildCoverage({
             inventory:pcInventory.status === 'fulfilled' ? pcInventory.value : {warnings:['Windows-Informationen konnten nicht gelesen werden.']},
-            corsair:corsair.status === 'fulfilled' ? corsair.value : {}, razer:razer.status === 'fulfilled' ? razer.value : {},
+            msi:msi.status === 'fulfilled' ? msi.value : {}, corsair:corsair.status === 'fulfilled' ? corsair.value : {}, razer:razer.status === 'fulfilled' ? razer.value : {},
             native:{connected:client.connected, devices:client.devices.map(publicController), details:client.details}
           }));
         }
@@ -68,10 +72,11 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
         const body = await readJson(request);
         if (embedded && profileDirectory && url.pathname === '/api/profiles') return json(response, 200, await serialize(async () => ({ profiles: await saveProfiles(profileDirectory, body.profiles) })));
         if (url.pathname === '/api/system/refresh') return json(response, 200, await inventory({ force: true }));
+        if (url.pathname === '/api/msi/setup') return json(response, 200, await installMsiSdk(body));
         if (url.pathname === '/api/corsair/setup') return json(response, 200, await installCorsairSdk(body));
         if (url.pathname === '/api/window/show') {
           if (!client.showWindow) throw new BridgeError('Diese Testverbindung hat kein Programmfenster.', 'WINDOW_UNAVAILABLE', 422);
-          return json(response, 200, await client.showWindow(`http://127.0.0.1:${server.address().port}`));
+          return json(response, 200, await client.showWindow(`http://127.0.0.1:${server.address().port}/`));
         }
         if (url.pathname === '/api/discover') return json(response, 200, await serialize(async () => {
           // Startup discovery never resets an existing device session or running effect.
@@ -88,6 +93,7 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
           lastError = null; engine.lastError = null;
           return { status: status(), devices, message: devices.length ? 'Direkt unterstützte RGB-Geräte erkannt.' : 'Keine direkt unterstützten RGB-Geräte gemeldet. PC-Komponenten werden unabhängig davon über Windows erkannt. Für Corsair die iCUE-Anbindung einrichten.' };
         }));
+        if (url.pathname === '/api/native-effect') return json(response, 200, await serialize(async () => { const result = await applyNativeEffect(client, engine, body); lastError = null; engine.lastError = null; return result; }));
         if (url.pathname === '/api/apply') return json(response, 200, await serialize(async () => {
           const result = await engine.apply(body);
           lastError = null;
@@ -100,6 +106,7 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
           if (body.blackout) {
             if (!client.connected) throw new BridgeError('Die Windows-RGB-Verbindung ist nicht aktiv.', 'RGB_DISCONNECTED');
             const targets = body.deviceIds ? client.devices.filter(device => body.deviceIds.includes(device.id)) : client.devices.filter(device => device.directMode);
+            if (!targets.length) throw new BridgeError('Bitte ein Gerät mit direkter LED-Steuerung auswählen. Herstellereffekte können am jeweiligen Gerät auf „Aus“ gestellt werden.', 'INVALID_TARGETS', 400);
             if (body.deviceIds && targets.length !== new Set(body.deviceIds).size) throw new BridgeError('Ein ausgewähltes Gerät ist nicht mehr verfügbar.', 'DEVICE_NOT_FOUND', 404);
             for (const device of targets) assertDeviceAllowed(device);
             for (const device of targets) { await client.selectDirect(device); await client.update(device, device.colors.map(() => 0)); }
@@ -127,12 +134,12 @@ export function createBridge({ client = new WindowsLightingClient(), dist = path
       if (!(error instanceof BridgeError)) console.error(error);
       const message = error instanceof BridgeError ? error.message : 'Interner Fehler in der lokalen RGB-Verbindung.';
       lastError = message;
-      json(response, error.status || 500, { error: message, message, code: error.code || 'INTERNAL_ERROR', status: status() });
+      json(response, error.status || 500, { error: message, message, code: error.code || 'INTERNAL_ERROR', ...(error.appliedDeviceIds?.length ? { appliedDeviceIds:error.appliedDeviceIds } : {}), status: status() });
     }
   });
   server.requestTimeout = 15_000; server.headersTimeout = 10_000;
   server.on('close', () => { engine.stop(); client.close(); });
-  return { server, client, engine, status, listen: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.off('error', reject); resolve(server.address()); }); }) };
+  return { server, client, engine, status, listen: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.off('error', reject); try { const address = server.address(); client.setUiPort?.(address.port); resolve(address); } catch (error) { server.close(() => reject(error)); } }); }) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -61,7 +61,6 @@ try {
         Invoke-RgbChecked 'npm.cmd' @('ci', '--no-audit', '--no-fund')
     }
     # Fixture providers test device discovery and RGB behavior without physical LED writes.
-    Invoke-RgbChecked 'npm.cmd' @('test')
     Invoke-RgbChecked 'npm.cmd' @('run', 'build')
 } finally { Pop-Location }
 
@@ -108,7 +107,28 @@ foreach ($name in @('PRISM-Lighting.exe', 'WebView2Loader.dll')) {
     if (-not (Test-Path -LiteralPath $file)) { throw "RGB native output is missing: $name" }
     Copy-Item -LiteralPath $file -Destination (Join-Path $nativeBin $name) -Force
 }
-foreach ($name in @('index.html', 'pc-base.png', 'pc-msi.png', 'pc-asus.png')) {
+Invoke-RgbChecked 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $rgbRoot 'native-kingston/build.ps1'))
+
+$lianliArguments = @(
+    'publish', (Join-Path $rgbRoot 'native-lianli/Prism.LianLi.csproj'),
+    '--configuration', 'Release', '--runtime', 'win-x64', '--self-contained', 'true',
+    '--output', (Join-Path $rgbRoot 'native-lianli/bin'),
+    "-p:BaseOutputPath=$(Join-Path $buildRoot 'lianli-build/')",
+    "-p:BaseIntermediateOutputPath=$(Join-Path $buildRoot 'lianli-obj/')",
+    "-p:RestoreConfigFile=$nugetConfig"
+)
+if ($NuGetPackages) { $lianliArguments += "-p:RestorePackagesPath=$([IO.Path]::GetFullPath($NuGetPackages))" }
+Push-Location -LiteralPath (Join-Path $rgbRoot 'native-lianli')
+try { Invoke-RgbChecked 'dotnet' $lianliArguments } finally { Pop-Location }
+$msiTestArguments = @('run','--project',(Join-Path $rgbRoot 'native/tests/Prism.MsiSdk.Tests.csproj'),'--configuration','Release','-p:UseAppHost=false',"-p:RestoreConfigFile=$nugetConfig")
+if ($NuGetPackages) { $msiTestArguments += "-p:RestorePackagesPath=$([IO.Path]::GetFullPath($NuGetPackages))" }
+Invoke-RgbChecked 'dotnet' $msiTestArguments
+Push-Location -LiteralPath $rgbRoot
+try { Invoke-RgbChecked 'npm.cmd' @('test') } finally { Pop-Location }
+foreach ($name in @('native-kingston/bin/PRISM-KingstonCodec.exe','native-lianli/bin/PRISM-LianLi.exe')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $rgbRoot $name))) { throw "RGB provider output is missing: $name" }
+}
+foreach ($name in @('index.html', 'pc-base.png', 'pc-msi.png', 'pc-asus.png', 'motherboard-msi.png')) {
     if (-not (Test-Path -LiteralPath (Join-Path $rgbRoot ('dist/' + $name)))) { throw "RGB preview output is missing: $name" }
 }
 foreach ($name in @('Windows-SDK-license.rtf', 'CsWinRT-LICENSE.txt', 'WebView2-LICENSE.txt', 'dotnet-LICENSE.txt', 'dotnet-THIRD-PARTY-NOTICES.txt', 'WindowsDesktop-LICENSE.txt')) {

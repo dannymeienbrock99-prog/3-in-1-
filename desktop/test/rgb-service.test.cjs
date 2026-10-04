@@ -7,17 +7,24 @@ const {RgbService,EFFECT_NAMES}=require('../src/services/rgb-service.cjs');
 const root=path.resolve(__dirname,'../../PRISM');
 const bridgeModule=import(pathToFileURL(path.join(root,'server/index.mjs')).href);
 function device(id=1,extra={}){return {id,name:'Synthetic RGB Controller '+id,vendor:'Test fixture',type:0,directMode:true,protected:false,colorsKnown:true,colors:[0x332211,0x665544,0x998877,0xccbbaa],modes:[],zones:[{id:0,name:'Front',startIndex:0,ledCount:2},{id:1,name:'Rear',startIndex:2,ledCount:2}],...extra};}
+function memory(id=40000,extra={}){return device(id,{name:'Synthetic Kingston DDR5 Slot '+(id-40000),vendor:'Kingston',provider:'kingston',type:1,directMode:false,ledCount:0,colors:[],zones:[],nativeEffects:[
+ {id:'static_color',name:'Statisch',supported:true,colorsMax:1,controls:{colors:true,brightness:true,speed:false,direction:false}},
+ {id:'all_off',name:'Aus',supported:true,colorsMax:0,controls:{colors:false,brightness:false,speed:false,direction:false}},
+ {id:'breath',name:'Atmen',supported:true,colorsMax:10,controls:{colors:true,brightness:true,speed:true,direction:false}},
+ {id:'racing',name:'Rennen',supported:true,colorsMax:0,controls:{colors:false,brightness:false,speed:false,direction:false}}
+ ],...extra});}
 class FakeClient extends EventEmitter{
- constructor(devices){super();this.devices=devices;this.connected=false;this.connections=0;this.closes=0;this.direct=[];this.writes=[];this.backend='mock-only';}
+ constructor(devices){super();this.devices=devices;this.connected=false;this.connections=0;this.closes=0;this.direct=[];this.writes=[];this.nativeWrites=[];this.backend='mock-only';}
  async connect(){this.connections++;this.connected=true;return this.devices;}
  async selectDirect(item){this.direct.push(item.id);}
  async update(item,colors){this.writes.push({id:item.id,colors:[...colors]});item.colors=[...colors];}
+ async applyNativeEffect(item,effectId,options){this.nativeWrites.push({id:item.id,effectId,...options});return {accepted:true};}
  async close(){this.closes++;this.connected=false;}
 }
-async function fixture(t,{devices=[device(),device(2)],factoryWrap}={}){
+async function fixture(t,{devices=[device(),device(2)],factoryWrap,replyWrap}={}){
  const {createBridge}=await bridgeModule,directory=fs.mkdtempSync(path.join(os.tmpdir(),'batto-rgb-service-')),client=new FakeClient(devices),calls=[],changes=[];
  let owned,created=0;const bridgeFactory=options=>{created++;assert.equal(options.port,0);assert.equal(options.embedded,true);owned=createBridge({...options,client});return factoryWrap?factoryWrap(owned):owned;};
- const service=new RgbService({root,directory,bridgeFactory,onChange:s=>changes.push(s),fetchRequest:async(url,options)=>{calls.push({route:new URL(url).pathname,body:options.body&&JSON.parse(options.body)});return fetch(url,options);}});
+ const service=new RgbService({root,directory,bridgeFactory,onChange:s=>changes.push(s),fetchRequest:async(url,options)=>{const call={route:new URL(url).pathname,body:options.body&&JSON.parse(options.body)};calls.push(call);const response=await fetch(url,options);return replyWrap?replyWrap(response,call):response;}});
  t.after(async()=>{await service.close();fs.rmSync(directory,{recursive:true,force:true});});
  async function seed({brightness=61,effect='static',zoneIds={1:[1]},deviceIds=[1]}={}){
   await service.start();await client.connect();const response=await fetch(new URL(service.url).origin+'/api/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceIds,zoneIds,effect,colors:['#123456','#abcdef'],brightness,speed:23,scale:47,direction:'reverse'})});assert.equal(response.ok,true);await response.json();client.writes.length=0;client.direct.length=0;calls.length=0;
@@ -28,7 +35,7 @@ test('RGB service rejects invalid actions before starting or contacting any brid
  const f=await fixture(t);
  for(const input of [null,[],{}, {type:'execute'},{type:'color',color:'red'},{type:'color',color:'#fff'},{type:'effect',effect:'unsupported'},{type:'brightness',brightness:NaN},{type:'brightness',brightness:-1},{type:'brightness',brightness:101}])assert.throws(()=>f.service.action(input));
  assert.equal(f.created,0);assert.deepEqual(f.calls,[]);assert.equal(f.service.snapshot().running,false);assert.equal(f.service.snapshot().available,true);
- assert.equal(f.service.catalog().effects.length,14);assert.deepEqual(new Set(f.service.catalog().effects.map(item=>item.id)),new Set(Object.keys(EFFECT_NAMES)));
+ for(const id of Object.keys(EFFECT_NAMES))assert(f.service.catalog().effects.some(item=>item.id===id),'original software effect '+id);
 });
 test('status starts only its owned local UI and never discovers or writes LEDs',async t=>{
  const f=await fixture(t),result=await f.service.action({type:'status'}),snapshot=f.service.snapshot();
@@ -98,4 +105,115 @@ test('a driver rejection stays a failure and does not poison the next queued RGB
  await assert.rejects(f.service.action({type:'color',color:'#ff0000'}),/Synthetic driver rejected/);assert.equal(f.service.snapshot().revision,0);assert.deepEqual(f.client.writes,[]);
  const result=await f.service.action({type:'color',color:'#0000ff'});assert.equal(result.ok,true);assert.equal(f.service.snapshot().revision,1);assert.equal(f.service.snapshot().error,'');assert(f.client.writes.length>0);
  assert(f.client.writes.every(write=>write.id===1),'a failed first command must not broaden the next device selection');assert.deepEqual(f.service.snapshot().active[0].zones,[1]);assert.deepEqual(f.client.devices[1].colors,other);assert.deepEqual(f.client.devices[0].colors.slice(0,2),untouched);
+});
+
+async function seedNative(f,ids=[40000],effectId='breath',options={}){
+ await f.service.start();await f.client.connect();const response=await fetch(new URL(f.service.url).origin+'/api/native-effect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceIds:ids,effectId,colors:['#123456','#abcdef'],brightness:43,speed:23,direction:'forward',...options})});
+ assert.equal(response.ok,true);await response.json();f.client.nativeWrites.length=0;f.client.writes.length=0;f.calls.length=0;
+}
+
+test('Jarvis native catalog contains actual manufacturer modes and keeps every original software effect',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001)]});
+ await f.service.start();assert(!f.service.catalog().effects.some(effect=>effect.id.startsWith('native:')));
+ await f.client.connect();const effects=f.service.catalog().effects;
+ for(const id of Object.keys(EFFECT_NAMES))assert(effects.some(effect=>effect.id===id));
+ assert.equal(effects.filter(effect=>effect.id==='native:kingston:breath').length,1,'identical mode across physical slots is one voice choice');
+ assert.equal(effects.find(effect=>effect.id==='native:kingston:breath').name,'Kingston Atmen');
+ f.client.devices[0].nativeEffects.push({id:'unknown',name:'Ungeprüft',supported:false});
+ assert(!f.service.catalog().effects.some(effect=>effect.id==='native:kingston:unknown'));
+ assert.throws(()=>f.service.action({type:'effect',effect:'native:kingston:unknown'}),/Unbekannter RGB-Effekt/);
+});
+
+test('native-only DDR5 color, brightness, off and on use acknowledged manufacturer effects and retain the selected slot',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001),device(1)]});await seedNative(f,[40001]);
+ await f.service.action({type:'brightness',brightness:35});
+ assert.equal(f.client.nativeWrites.at(-1).effectId,'breath');assert.equal(f.client.nativeWrites.at(-1).brightness,35);
+ assert.deepEqual(f.client.nativeWrites.at(-1).colors,['#123456','#abcdef']);
+ await f.service.action({type:'color',color:'#FF0000'});assert.equal(f.client.nativeWrites.at(-1).effectId,'static_color');assert.deepEqual(f.client.nativeWrites.at(-1).colors,['#ff0000']);
+ await f.service.action({type:'off'});assert.equal(f.client.nativeWrites.at(-1).effectId,'all_off');
+ await f.service.action({type:'on'});assert.equal(f.client.nativeWrites.at(-1).effectId,'static_color');assert.equal(f.client.nativeWrites.at(-1).brightness,35);
+ assert(f.client.nativeWrites.every(write=>write.id===40001));assert.deepEqual(f.client.writes,[]);assert.deepEqual(f.client.direct,[]);
+ assert(f.calls.filter(call=>call.route==='/api/native-effect').every(call=>call.body.zoneIds===undefined));
+ const saved=JSON.parse(fs.readFileSync(path.join(f.directory,'voice-settings.json'),'utf8'));assert.equal(saved.settings.effect,'static');assert.equal(saved.settings.brightness,35);assert(!saved.settings.effect.startsWith('native:'));
+});
+
+test('explicit native voice effect scopes actual provider modes while software settings keep their original schema',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001),device(1)]});await f.service.start();await f.client.connect();
+ const before=f.service.snapshot().lastSettings.effect;
+ const result=await f.service.action({type:'effect',effect:'native:kingston:breath'});
+ assert.match(result.text,/Kingston Atmen/);assert.deepEqual(f.client.nativeWrites.map(write=>write.id),[40000,40001]);assert.deepEqual(f.client.writes,[]);
+ assert.equal(f.service.snapshot().lastSettings.effect,before);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(f.directory,'voice-settings.json'),'utf8')).settings.effect,before);
+ await f.service.action({type:'brightness',brightness:24});assert.deepEqual(f.client.nativeWrites.slice(-2).map(write=>write.id),[40000,40001]);
+ assert(f.client.nativeWrites.slice(-2).every(write=>write.brightness===24));
+});
+
+test('generic effects map only unambiguous supported native modes and validate mixed plans before any LED write',async t=>{
+ const f=await fixture(t,{devices:[device(1),memory()]});
+ await assert.rejects(f.service.action({type:'effect',effect:'scanner'}),/kein eindeutiger Herstellereffekt/);
+ assert.deepEqual(f.client.writes,[]);assert.deepEqual(f.client.direct,[]);assert.deepEqual(f.client.nativeWrites,[]);
+ await f.service.action({type:'effect',effect:'breathing'});
+ assert.equal(f.client.nativeWrites[0].effectId,'breath');assert(f.client.writes.some(write=>write.id===1));
+ const nativeCalls=f.calls.filter(call=>call.route==='/api/native-effect');assert.equal(nativeCalls[0].body.deviceIds[0],40000);
+ const beforeNative=f.client.nativeWrites.length,beforeDirect=f.client.writes.length;
+ await f.service.action({type:'brightness',brightness:31});
+ assert(f.client.writes.length>beforeDirect);assert.equal(f.client.nativeWrites.length,beforeNative+1,'remember the whole mixed voice selection despite separate provider timestamps');
+ f.bridge.engine.stop();
+});
+
+test('a newer UI native selection replaces older native activity and never recruits prior slots',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001),memory(40002)]});await seedNative(f,[40000]);
+ f.client.devices[0].activeNativeEffect.appliedAt=1000;
+ await seedNative(f,[40002]);f.client.devices[2].activeNativeEffect.appliedAt=2000;
+ await f.service.action({type:'color',color:'#0000ff'});
+ assert.deepEqual(f.client.nativeWrites.map(write=>write.id),[40002]);
+ await f.service.action({type:'brightness',brightness:22});assert(f.client.nativeWrites.every(write=>write.id===40002));
+});
+
+test('missing native slots and unsupported brightness fail without affecting a different device',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001),device(1)]});await seedNative(f,[40001],'racing');
+ await assert.rejects(f.service.action({type:'brightness',brightness:30}),/keine Änderung der Helligkeit/);
+ assert.deepEqual(f.client.writes,[]);assert.deepEqual(f.client.nativeWrites,[]);
+ await f.service.action({type:'color',color:'#00ff00'});f.client.nativeWrites.length=0;f.client.devices=f.client.devices.filter(item=>item.id!==40001);
+ await assert.rejects(f.service.action({type:'off'}),/zuletzt verwendetes RGB-Gerät fehlt/);assert.deepEqual(f.client.nativeWrites,[]);assert.deepEqual(f.client.writes,[]);
+});
+
+test('incomplete native acknowledgement is a failure and the next queued command keeps every originally selected target',async t=>{
+ let incomplete=true;
+ const f=await fixture(t,{devices:[memory(),memory(40001),memory(40002)],replyWrap:async(response,call)=>{
+  if(incomplete&&call.route==='/api/native-effect'){incomplete=false;const body=await response.json();return {ok:true,json:async()=>({...body,applied:[]})};}return response;
+ }});
+ await seedNative(f,[40001]); // the seed bypasses the service request wrapper
+ await assert.rejects(f.service.action({type:'color',color:'#ff0000'}),/nicht vollständig bestätigt/);assert.equal(f.service.snapshot().revision,0);
+ await f.service.action({type:'color',color:'#0000ff'});
+ assert(f.client.nativeWrites.every(write=>write.id===40001),'a partial acknowledgement cannot broaden selected slots');assert.deepEqual(f.service.lastTargets,[40001]);
+});
+
+test('a native driver rejection after partial success does not narrow or widen the next original multi-slot request',async t=>{
+ const {BridgeError}=await import(pathToFileURL(path.join(root,'server/openrgb.mjs')).href);
+ const f=await fixture(t,{devices:[memory(),memory(40001),memory(40002)]});await seedNative(f,[40000,40001]);
+ const apply=f.client.applyNativeEffect.bind(f.client);let rejectOnce=true;
+ f.client.applyNativeEffect=async(item,effectId,options)=>{if(item.id===40001&&rejectOnce){rejectOnce=false;throw new BridgeError('Synthetic native rejection','MOCK_NATIVE_REJECTION',503);}return apply(item,effectId,options);};
+ await assert.rejects(f.service.action({type:'color',color:'#ff0000'}),/Synthetic native rejection/);
+ f.client.nativeWrites.length=0;await f.service.action({type:'color',color:'#0000ff'});
+ assert.deepEqual(f.client.nativeWrites.map(write=>write.id),[40000,40001]);assert.deepEqual(f.service.lastTargets,[40000,40001]);
+});
+
+test('additional implemented software effects retain the saved settings schema and reload after restart',async t=>{
+ const supplied=JSON.parse(fs.readFileSync(path.join(root,'server/effect-catalog.json'),'utf8'));
+ const f=await fixture(t,{devices:[device(1)]});
+ assert.equal(f.service.catalog().effects.length,supplied.length);
+ const additional=supplied.find(effect=>!Object.hasOwn(EFFECT_NAMES,effect.id));assert(additional,'the shared catalog includes new implemented effects');
+ await f.service.action({type:'effect',effect:additional.id});f.bridge.engine.stop();
+ const saved=JSON.parse(fs.readFileSync(path.join(f.directory,'voice-settings.json'),'utf8'));
+ assert.equal(saved.settings.effect,additional.id);assert.deepEqual(Object.keys(saved.settings).sort(),['effect','colors','brightness','speed','scale','direction'].sort());
+ await f.service.stop();await f.service.start();assert.equal(f.service.snapshot().lastSettings.effect,additional.id);
+});
+
+test('native-only RGB status reports acknowledged manufacturer settings without claiming measured animation',async t=>{
+ const f=await fixture(t,{devices:[memory(),memory(40001)]});await seedNative(f,[40000,40001]);
+ const snapshot=f.service.snapshot();assert.equal(snapshot.nativeActive.length,2);assert.equal(snapshot.effectRunning,false);
+ const writes=f.client.nativeWrites.length,calls=f.calls.length,result=await f.service.action({type:'status'});
+ assert.match(result.text,/Für 2 Geräte sind Herstellereffekte eingestellt/);assert.doesNotMatch(result.text,/Kein bewegter RGB-Effekt aktiv|Ein RGB-Effekt läuft/);
+ assert.equal(f.client.nativeWrites.length,writes);assert.equal(f.calls.length,calls);
 });

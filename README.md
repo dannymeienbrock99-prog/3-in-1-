@@ -1,10 +1,16 @@
-# Batto 3-in-1 · 1.10.0
+# Batto 3-in-1 · 1.11.0
 
-## RGB-Steuerung und normale Lüfter · 1.10.0
+## RGB, RAM und Lüfter · 1.11.0
 
-**RGB-Steuerung** öffnet die eingebaute PRISM-Oberfläche 1.5.1. Farben, Helligkeit, Geschwindigkeit, Richtung, 14 Effekte und eigene Lichtprofile lassen sich dort einstellen. Die PC-Übersicht zeigt erkannte Komponentennamen. Ein erkanntes MSI-Mainboard verwendet die MSI-Vorschau, ASUS den White Build; bei anderen Herstellern bleibt die allgemeine Vorschau. Die Bilder veranschaulichen den Aufbau und sind kein Foto des erkannten Mainboardmodells.
+**RGB-Steuerung** öffnet die eingebaute PRISM-Oberfläche 1.6.0. Farben, Helligkeit, Geschwindigkeit, Richtung, 30 PRISM-Effekte und eigene Lichtprofile lassen sich dort einstellen. Die PC-Übersicht zeigt erkannte Komponentennamen. Ein erkanntes MSI-Mainboard verwendet das bereitgestellte MSI-Mainboard-Bild, ASUS den White Build; bei anderen Herstellern bleibt die allgemeine Vorschau. Die Bilder veranschaulichen den Aufbau und sind kein Foto des erkannten Mainboardmodells.
 
-Die Geräteerkennung und Lichtsteuerung verwenden Windows LampArray und optional die offizielle Corsair-iCUE-Schnittstelle. Ein erkannter PC-Bauteil ist nur steuerbar, wenn eine unterstützte Lichtverbindung vorhanden ist. Mainboard- und RAM-Namen allein bestätigen keine RGB-Unterstützung. iCUE und dessen SDK müssen für Corsair eingerichtet sein; die Hersteller-SDK wird bei Bedarf getrennt geladen. Die Ansicht zeigt fehlende Voraussetzungen. Stream Deck und Elgato-Geräte sind von der RGB-Geräteansprache ausgeschlossen.
+Die Geräteerkennung und Lichtsteuerung verwenden Windows LampArray, die optionale Corsair-iCUE-Schnittstelle, MSI Mystic Light, den vorhandenen Kingston-FURY-CTRL-Dienst und geprüfte Lian-Li-HID-Controller. Ein erkannter PC-Bauteil ist nur steuerbar, wenn eine unterstützte Lichtverbindung vorhanden ist. Mainboard- und RAM-Namen allein bestätigen keine RGB-Unterstützung. iCUE und dessen SDK müssen für Corsair eingerichtet sein; die Hersteller-SDK wird bei Bedarf getrennt geladen. Die Ansicht zeigt fehlende Voraussetzungen. Stream Deck und Elgato-Geräte sind von der RGB-Geräteansprache ausgeschlossen.
+
+Alle 14 bisherigen PRISM-Effekte und bestehenden Lichtprofile bleiben erhalten. Zusätzlich gibt es 16 neue berechnete Effekte, MSI-Modi aus der tatsächlich gemeldeten SDK-Liste, 20/21 Kingston-DDR5-Modi je nach FURY-API-Version und einen Lian-Li-Katalog mit 94 Einträgen. Nur für das erkannte Controller-Modell und den gewählten Anschluss unterstützte Lian-Li-Modi lassen sich anwenden. Lian-Li-Erfolg bestätigt die Windows-HID-Übertragung; die Firmware liefert keine Bestätigung des sichtbaren Lichts. Gruppenmodi ohne sicher gemeldete Lüfterzuordnung bleiben gesperrt.
+
+Kingston FURY Beast RGB DDR5-5600 CL40 wird für die bestätigten Teilenummern `KF556C40BBA-8` und `KF556C40BBAK2-16` mit Modellnamen ergänzt. Vier tatsächliche 8-GB-DIMM-Einträge ergeben 32 GB und vier Riegel in der MSI-Vorschau. Die aktuell von Windows gemeldete Taktrate wird getrennt vom 5600-MT/s-Nennwert angezeigt. Die FURY-CTRL-Protokollanbindung ist experimentell: Sie setzt einen laufenden offiziellen, signierten Herstellerdienst voraus, zählt nur dessen echte DDR5-Steckplätze und installiert keinen Treiber. Die MSI-Anbindung wird nach einer eigenen Zustimmung direkt von MSI geladen; MSI Center mit Mystic Light muss installiert sein. Herstellerprogramme und proprietäre DLLs werden nicht mit dem Installer verteilt.
+
+Bei Lian-Li-Controllern werden nur tatsächlich gelieferte RPM-Werte angezeigt und regelmäßig gelesen; fehlende Werte bleiben **—**. Diese Version ändert weder Lüfterkurven noch Lüftermengen.
 
 Jarvis versteht **„Öffne RGB-Steuerung“**, **„RGB blau“**, **„RGB Effekt Regenbogen“**, **„RGB Effekt Komet“**, **„RGB Helligkeit auf 50 Prozent“**, **„RGB aus“**, **„RGB an“** und **„RGB Status“**. Eine Farbwahl verwendet statisches Licht. Einstellungen und Geräteverbindung sind dieselben wie in der RGB-Ansicht; Fehler werden angezeigt und vorgelesen. Die RGB-Oberfläche wird erst beim Öffnen geladen.
 
@@ -203,7 +209,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.10.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.11.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

@@ -22,11 +22,12 @@ export function validateSettings(input) {
 export class EffectEngine {
   constructor(client, { fps = 24, now = () => performance.now() } = {}) {
     this.client = client; this.fps = fps; this.now = now; this.jobs = new Map(); this.timer = null; this.framePromise = null; this.lastError = null;
+    client.on('providerDisconnected', value => { this.stop(value.deviceIds); this.lastError = value.message; });
     client.on('disconnected', error => { this.stop(); this.lastError = error.message; });
     client.on('devicesChanged', () => { this.stop(); this.lastError = 'Die Geräteliste wurde geändert. Bitte Geräte erneut erkennen.'; });
   }
   get running() { return [...this.jobs.values()].some(job => !['static', 'gradient'].includes(job.settings.effect)); }
-  get active() { return [...this.jobs].map(([deviceId, job]) => ({ deviceId, settings: job.settings, zones: job.zones })); }
+  get active() { return [...this.jobs].map(([deviceId, job]) => ({ deviceId, settings: job.settings, zones: job.zones, appliedAt: job.appliedAt })); }
   validateTargets(input) {
     if (!Array.isArray(input.deviceIds) || input.deviceIds.length === 0 || input.deviceIds.length > 128 || input.deviceIds.some(id => !Number.isInteger(id) || id < 0)) throw new BridgeError('Bitte mindestens ein gültiges Gerät auswählen.', 'INVALID_TARGETS', 400);
     if (input.zoneIds !== undefined && (!input.zoneIds || typeof input.zoneIds !== 'object' || Array.isArray(input.zoneIds))) throw new BridgeError('Ungültige Zonenauswahl.', 'INVALID_ZONES', 400);
@@ -56,17 +57,21 @@ export class EffectEngine {
     if (this.framePromise) await this.framePromise;
     // Validate the whole selection before switching any device mode.
     try {
-      for (const { device } of targets) await this.client.selectDirect(device);
+      for (const { device } of targets) { await this.client.selectDirect(device); delete device.activeNativeEffect; }
       const started = this.now();
-      for (const { device, zones } of targets) this.jobs.set(device.id, { device, zones, settings, started });
+      const appliedAt = Date.now();
+      for (const { device, zones } of targets) this.jobs.set(device.id, { device, zones, settings, started, appliedAt });
       await this.tick();
-    } catch (error) { this.stop(); throw error; }
-    if (!this.timer && this.running) {
-      this.timer = setInterval(() => this.tick().catch(error => { this.lastError = error.message; this.stop(); }), 1000 / this.fps);
-      this.timer.unref();
-    }
+    } catch (error) { this.stop(targets.map(({device})=>device.id)); throw error; }
+    finally { this.ensureTimer(); }
     if (!this.running && this.timer) { clearInterval(this.timer); this.timer = null; }
     return { applied: targets.map(({ device }) => device.id), effect: settings.effect, settings, streamed: true };
+  }
+  ensureTimer() {
+    if (!this.timer && this.running) {
+      this.timer = setInterval(() => this.tick().catch(error => { this.lastError = error.message; }), 1000 / this.fps);
+      this.timer.unref();
+    }
   }
   tick() {
     if (this.framePromise) return this.framePromise;
@@ -74,7 +79,9 @@ export class EffectEngine {
     return this.framePromise;
   }
   async renderTick() {
+      let failure = null;
       for (const job of this.jobs.values()) {
+        try {
         const elapsed = (this.now() - job.started) / 1000;
         const frame = job.device.colors.slice();
         if (job.zones) {
@@ -88,7 +95,9 @@ export class EffectEngine {
           colors.forEach((color, index) => { frame[index] = color; });
         }
         await this.client.update(job.device, frame);
+        } catch (error) { this.stop([job.device.id]); failure ||= error; }
       }
+      if (failure) { this.lastError = failure.message; throw failure; }
   }
   stop(deviceIds) {
     if (deviceIds) for (const id of deviceIds) this.jobs.delete(id); else this.jobs.clear();

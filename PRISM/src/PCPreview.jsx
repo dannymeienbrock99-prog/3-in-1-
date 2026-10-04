@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createEffectSampler } from './effect-color.js';
 import { getMotherboardPreview } from './motherboard-preview.js';
+import { getMemoryPreview, getMsiDimmPositions } from './memory-preview.js';
 import './pc-preview.css';
 
 const COMPONENTS = [
@@ -11,7 +12,7 @@ const COMPONENTS = [
   { type: 'strip', label: 'LED-Streifen', x: 41, y: 86.6, width: 61, height: 6 },
 ];
 
-function drawLighting(canvas, config, types, time) {
+function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
   const context = canvas.getContext('2d');
   if (!context) return;
   const w = canvas.width;
@@ -74,7 +75,7 @@ function drawLighting(canvas, config, types, time) {
     });
   }
   if (illuminated.has('ram')) {
-    [0.511, 0.544].forEach((x) => {
+    (msiDimmPositions || [0.511, 0.544]).forEach((x) => {
       for (let i = 0; i < 40; i++) {
         glow(x, 0.148 + i / 40 * 0.287, x, 0.148 + (i + 1.05) / 40 * 0.287, i / 39, 7, 1, i);
       }
@@ -105,7 +106,11 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
   const timeRef = useRef(0);
   const effectRef = useRef(config.effect);
   const [failedImage, setFailedImage] = useState(null);
+  const [failedBoard, setFailedBoard] = useState(false);
   const motherboard = getMotherboardPreview(system);
+  const memory = getMemoryPreview(system);
+  const isMsi = motherboard.brand === 'msi';
+  const dimmCount = isMsi ? memory.visibleModules.length : null;
   const chosenImage = motherboard.image;
   const usesFallback = failedImage === chosenImage;
   const imageSource = usesFallback ? '/pc-base.png' : chosenImage;
@@ -121,7 +126,7 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame;
     let lastTime;
-    const render = () => drawLighting(canvas, config, selectedTypes, timeRef.current);
+    const render = () => drawLighting(canvas, config, selectedTypes, timeRef.current, isMsi ? getMsiDimmPositions(dimmCount) : null);
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const density = Math.min(window.devicePixelRatio || 1, 2);
@@ -151,7 +156,7 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
       cancelAnimationFrame(frame);
       reducedMotion.removeEventListener('change', updateAnimation);
     };
-  }, [config, selectedTypes, running]);
+  }, [config, selectedTypes, running, isMsi, dimmCount]);
 
   return <>
     <div className="pc-preview" aria-label="Interaktive Vorschau der PC-Beleuchtung">
@@ -159,6 +164,12 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
         alt={`${previewLabel}: PC mit drei Lüftern, RAM, Grafikkarte und LED-Streifen`}
         onLoad={() => { if (!usesFallback && failedImage) setFailedImage(null); }}
         onError={() => { if (imageSource !== '/pc-base.png') setFailedImage(chosenImage); }} draggable="false" />
+      {isMsi && !usesFallback && !failedBoard ? <>
+        <img className="pc-preview__msi-board" src={motherboard.boardImage} alt="Das bereitgestellte MSI-Mainboard als Symbolbild" draggable="false" onError={() => setFailedBoard(true)}/>
+        <img className="pc-preview__msi-foreground pc-preview__msi-foreground--gpu" src={imageSource} alt="" aria-hidden="true" draggable="false"/>
+        <img className="pc-preview__msi-foreground pc-preview__msi-foreground--pump" src={imageSource} alt="" aria-hidden="true" draggable="false"/>
+        {getMsiDimmPositions(dimmCount).map((position, index) => <span key={index} className="pc-preview__msi-dimm" style={{ left:`${position * 100}%` }} title={memory.visibleModules[index].modelName || memory.visibleModules[index].partNumber || 'Erkannter RAM-Riegel'} aria-hidden="true"/>)}
+      </> : null}
       <canvas ref={canvasRef} className="pc-preview__lighting" aria-hidden="true" />
       {onSelectType && COMPONENTS.map(({ type, label, x, y, width, height }) => (
         <button type="button" key={type} className="pc-preview__target"
@@ -170,6 +181,8 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
     <div className="pc-preview__board-caption">
       <span className="pc-preview__board-label">{previewLabel}</span>
       {motherboard.modelName ? <span className="pc-preview__board-model">Erkannt: {motherboard.modelName}</span> : null}
+      {memory.summary ? <span className="pc-preview__memory-model">RAM: {memory.summary}</span> : null}
+      {isMsi && !memory.count ? <span className="pc-preview__memory-model">RAM-Steckplätze: keine Modulnamen von Windows gemeldet.</span> : null}
       <span className="pc-preview__board-note">Symbolbild · Mainboard-Design kann je nach Modell abweichen.</span>
     </div>
   </>;

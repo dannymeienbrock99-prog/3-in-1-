@@ -1,6 +1,6 @@
 const PREVIEWS = {
   asus: { label: 'ASUS', image: '/pc-asus.png' },
-  msi: { label: 'MSI', image: '/pc-msi.png' },
+  msi: { label: 'MSI', image: '/pc-msi.png', boardImage: '/motherboard-msi.png' },
   generic: { label: null, image: '/pc-base.png' },
 };
 

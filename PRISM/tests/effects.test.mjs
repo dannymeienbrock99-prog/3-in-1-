@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EFFECTS, renderFrame, validateSettings } from '../server/effects.mjs';
 import { createEffectSampler } from '../src/effect-color.js';
+import { EFFECT_NAMES, EFFECT_DETAILS } from '../src/data.js';
+import { readFileSync } from 'node:fs';
 
 const added = ['colorcycle', 'comet', 'chase', 'scanner', 'ripple', 'fire', 'aurora', 'stripes'];
+const extra = ['rainbowbreathing','rainbowcomet','rainbowsparkle','heartbeat','strobe','lightning','twinkle','meteorshower','stack','pingpong','marquee','duel','police','gradientwave','pulse','embers'];
 const config = (effect, overrides = {}) => validateSettings({ effect, colors: ['#ff0000', '#00ff00', '#0000ff'], brightness: 100, speed: 50, scale: 40, ...overrides });
 const velocity = settings => 0.05 + settings.speed / 100 * 1.8;
 const atPhase = (count, settings, phase) => renderFrame(count, settings, phase / velocity(settings));
@@ -12,13 +15,25 @@ const light = packed => channels(packed).reduce((sum, channel) => sum + channel,
 const peak = frame => frame.indexOf(Math.max(...frame));
 const transitions = frame => frame.slice(1).filter((color, index) => color !== frame[index]).length;
 
-test('all fourteen effects are accepted with the same editable settings', () => {
-  assert.equal(EFFECTS.length, 14);
-  assert.equal(new Set(EFFECTS).size, 14);
+test('all thirty effects are accepted with the same editable settings', () => {
+  assert.equal(EFFECTS.length, 30);
+  assert.equal(new Set(EFFECTS).size, 30);
   for (const effect of EFFECTS) assert.equal(config(effect).effect, effect);
+  assert.deepEqual(Object.keys(EFFECT_NAMES),EFFECTS);
+  assert.deepEqual(Object.keys(EFFECT_DETAILS),EFFECTS);
+  assert.deepEqual(JSON.parse(readFileSync(new URL('../server/effect-catalog.json',import.meta.url),'utf8')),Object.entries(EFFECT_NAMES).map(([id,name])=>({id,name})));
   assert.throws(() => config('missing-effect'), { code: 'INVALID_EFFECT' });
   assert.throws(() => config('fire', { colors: [] }), { code: 'INVALID_COLORS' });
   assert.throws(() => config('fire', { colors: Array(9).fill('#ff0000') }), { code: 'INVALID_COLORS' });
+});
+
+test('the eight existing additional effects preserve captured frames in both directions',()=>{
+  // Captured from the released 1.10.0 shared renderer before adding these 16 patterns.
+  const snapshots={colorcycle:[[9018643,9018643,9018643,9018643,9018643,9018643,9018643],[5678626,5678626,5678626,5678626,5678626,5678626,5678626]],comet:[[66305,66305,329730,66305,66305,66305,66305],[66305,66305,66305,66305,329730,66305,66305]],chase:[[262912,262912,1534493,66305,66305,4264057,131076],[131076,4264057,66305,66305,1534493,262912,262912]],scanner:[[66049,66049,66049,1596194,66305,66049,66049],[66049,66049,66305,1596194,66049,66049,66049]],ripple:[[657410,4464463,931599,657155,931599,4464463,657410],[526593,1705774,3566871,592129,3566871,1705774,526593]],fire:[[6061075,6647565,6191634,6517006,5652500,3810594,6113039],[6113039,3810594,5652500,6517006,6191634,6647565,6061075]],aurora:[[1382659,4007208,7963919,10514995,5515104,1717002,1186052],[1186052,1717002,5515104,10514995,7963919,4007208,1382659]],stripes:[[12162310,2469423,6100911,12162310,2469423,6100911,12162310],[12162310,6100911,2469423,12162310,6100911,2469423,12162310]]};
+  for(const [effect,directions] of Object.entries(snapshots))for(const [index,direction] of ['forward','reverse'].entries()){
+    const settings=config(effect,{colors:['#f02080','#08ccfe','#41ee33'],brightness:73,speed:63,scale:27,direction});
+    assert.deepEqual(renderFrame(7,settings,1.234),directions[index],`${effect}/${direction}`);
+  }
 });
 
 test('the original six effects preserve captured LED frames in both directions', () => {
@@ -151,5 +166,56 @@ test('speed advances all eight new effects while identical phases retain identic
     const slow = config(effect, { speed: 1 }), fast = config(effect, { speed: 100 });
     assert.notDeepEqual(renderFrame(97, fast, 0.51), renderFrame(97, slow, 0.51), effect);
     assert.deepEqual(atPhase(97, fast, 0.371), atPhase(97, slow, 0.371), effect);
+  }
+});
+
+test('sixteen new patterns are deterministic, animate and keep preview and direct device frames identical',()=>{
+  for(const effect of extra){
+    const settings=config(effect,{colors:['#ffffff','#ff4000','#0066ff']});
+    const samples=Array.from({length:30},(_,tick)=>atPhase(97,settings,tick*.137));
+    assert.ok(samples.some(frame=>JSON.stringify(frame)!==JSON.stringify(samples[0])),`${effect} animates`);
+    assert.deepEqual(atPhase(97,settings,.548),samples[4],`${effect} deterministic`);
+    const fast=config(effect,{...settings,speed:100}),slow=config(effect,{...settings,speed:1});
+    assert.deepEqual(atPhase(97,fast,.548),atPhase(97,slow,.548),`${effect} speed follows the same phase`);
+  }
+});
+
+test('new directional patterns mirror their LED paths while keeping the same time and palette',()=>{
+  for(const effect of ['rainbowbreathing','rainbowcomet','meteorshower','stack','pingpong','marquee','duel','police','gradientwave','embers']){
+    const settings=config(effect,{colors:['#e00000','#0000e0'],scale:67});
+    for(const phase of [.137,.548,2.29])assert.deepEqual(atPhase(101,{...settings,direction:'reverse'},phase),atPhase(101,settings,phase).toReversed(),`${effect}/${phase}`);
+  }
+});
+
+test('heartbeat has two separate pulses, pulse has one peak, and strobe has real dark intervals',()=>{
+  const heartbeat=config('heartbeat',{colors:['#ffffff']});
+  const levels=[.18,.27,.36,.7].map(phase=>light(atPhase(1,heartbeat,phase)[0]));
+  assert.ok(levels[0]>levels[1]*2&&levels[2]>levels[1]*1.5&&levels[3]<levels[0]/10);
+  const pulse=config('pulse',{colors:['#ffffff']});
+  assert.ok(light(atPhase(1,pulse,.5)[0])>light(atPhase(1,pulse,.1)[0])*10);
+  const strobe=config('strobe',{colors:['#ff0000','#0000ff'],scale:20});
+  assert.equal(atPhase(1,strobe,.01)[0],0x0000ff);
+  assert.equal(atPhase(1,strobe,.5)[0],0);
+  assert.equal(atPhase(1,strobe,1.01)[0],0xff0000);
+});
+
+test('rainbow comet moves its head, stack fills more blocks, and pingpong separates two palette endpoints',()=>{
+  const comet=config('rainbowcomet');
+  const brightestChannel=frame=>{const values=frame.map(color=>Math.max(...channels(color)));return values.indexOf(Math.max(...values));};
+  assert.equal(brightestChannel(atPhase(101,comet,.25)),25);
+  assert.equal(brightestChannel(atPhase(101,comet,.6)),60);
+  const stack=config('stack',{colors:['#ffffff'],scale:1});
+  assert.ok(atPhase(101,stack,2.5).filter(light).length>atPhase(101,stack,.5).filter(light).length);
+  const pingpong=config('pingpong',{colors:['#ff0000','#0000ff']});
+  assert.equal(atPhase(101,pingpong,0)[0],0x0000ff);
+  assert.equal(atPhase(101,pingpong,0)[100],0xff0000);
+  assert.ok(light(atPhase(101,pingpong,.5)[50])>light(atPhase(101,pingpong,.5)[0]));
+});
+
+test('new custom palette patterns never introduce colors outside a monochrome blue palette',()=>{
+  for(const effect of extra.filter(id=>!id.startsWith('rainbow'))){
+    const settings=config(effect,{colors:['#000010','#0000ff']});
+    const frame=atPhase(97,settings,.137);
+    assert.ok(frame.every(color=>(color&0xffff)===0),effect);
   }
 });

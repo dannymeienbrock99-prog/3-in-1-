@@ -89,3 +89,33 @@ test('mixed fan warnings use a generic fan description',t=>{
  f.jarvis.getFans=()=>Array.from({length:4},(_,i)=>({id:'fan-'+i,name:'Lüfter '+i,kind:i===0?'link':'normal',announce:true,percent:{value:90,fresh:true,updatedUtc:new Date(now).toISOString()},rpm:rpm('rpm-'+i,'Lüfter '+i,1500)}));
  f.jarvis.poll();const warning=f.jarvis.history.find(item=>item.kind==='alert');assert.match(warning.text,/4 Lüfter/);assert.doesNotMatch(warning.text,/iCUE-LINK/);
 });
+
+test('manufacturer RGB names resolve from the dynamic catalog and never select guessed or removed native modes',async t=>{
+ const f=fixture(t),native=[{id:'native:kingston:breath',name:'Kingston Atmen'},{id:'native:kingston:static_color',name:'Kingston Statisch'},{id:'native:lianli:Meteor',name:'Lian Li Meteor'}];
+ f.runtime.rgb.catalog=()=>({effects:[...effects,...native]});
+ const catalog=f.controls.catalog();
+ assert.deepEqual(resolveCommand('Javis, RGB Effekt Kingston Atmen',{catalog})?.action,{action:'rgb-effect',target:'native:kingston:breath'});
+ assert.deepEqual(resolveCommand('RGB Effekt Lian Li Meteor',{catalog})?.action,{action:'rgb-effect',target:'native:lianli:Meteor'});
+ for(const example of commandExamples(catalog).filter(example=>example.expectedAction?.target?.startsWith('native:')))assert.deepEqual(resolveCommand(example.phrase,{catalog})?.action,example.expectedAction);
+ assert.equal((await f.jarvis.execute('Javis, RGB Effekt Kingston Atmen')).ok,true);
+ assert.deepEqual(f.calls.at(-1),{type:'effect',effect:'native:kingston:breath'});
+ f.runtime.rgb.catalog=()=>({effects});
+ const calls=f.calls.length;
+ assert.equal((await f.jarvis.execute('RGB Effekt Kingston Atmen')).ok,false);
+ await assert.rejects(f.controls.executeFromJarvis({action:'rgb-effect',target:'native:kingston:breath'}),/vorhandenes/);
+ assert.equal((await f.jarvis.execute('RGB Effekt Kingston Unbekannt')).ok,false);
+ assert.equal(f.calls.length,calls);
+ f.runtime.rgb.catalog=()=>({effects:[...effects,...[{id:'native:unknown:breath',name:'Unknown Atmen'},{id:'native:kingston:bad mode',name:'Bad Atmen'},{id:'native:msi:style:1',name:'MSI Statisch'}]]});
+ const permitted=f.controls.catalog().voiceActions.find(action=>action.id==='rgb-effect').choices;
+ assert(!permitted.some(effect=>effect.id==='native:unknown:breath'||effect.id==='native:kingston:bad mode'));
+ assert(permitted.some(effect=>effect.id==='native:msi:style:1'));
+});
+
+test('the shared software catalog exposes every additional implemented RGB effect to Jarvis',async t=>{
+ const f=fixture(t),root=path.resolve(__dirname,'../../PRISM');
+ const supplied=JSON.parse(fs.readFileSync(path.join(root,'server/effect-catalog.json'),'utf8'));
+ f.runtime.rgb.catalog=()=>({effects:supplied});
+ assert(supplied.length>=14);
+ for(const id of effects.map(effect=>effect.id))assert(supplied.some(effect=>effect.id===id));
+ for(const effect of supplied)assert.deepEqual(resolveCommand('RGB Effekt '+effect.name,{catalog:f.controls.catalog()})?.action,{action:'rgb-effect',target:effect.id},effect.name);
+});

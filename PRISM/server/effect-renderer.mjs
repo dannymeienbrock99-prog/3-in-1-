@@ -1,5 +1,5 @@
 // Pure color calculations shared by the browser preview and hardware renderer.
-export const EFFECTS = ['static', 'rainbow', 'breathing', 'wave', 'gradient', 'sparkle', 'colorcycle', 'comet', 'chase', 'scanner', 'ripple', 'fire', 'aurora', 'stripes'];
+export const EFFECTS = ['static', 'rainbow', 'breathing', 'wave', 'gradient', 'sparkle', 'colorcycle', 'comet', 'chase', 'scanner', 'ripple', 'fire', 'aurora', 'stripes', 'rainbowbreathing', 'rainbowcomet', 'rainbowsparkle', 'heartbeat', 'strobe', 'lightning', 'twinkle', 'meteorshower', 'stack', 'pingpong', 'marquee', 'duel', 'police', 'gradientwave', 'pulse', 'embers'];
 
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -108,6 +108,117 @@ export function createEffectSampler(config, elapsedSeconds) {
       case 'stripes': {
         const band = Math.floor((orientedPosition * density - travel) * palette.length);
         color = palette[((band % palette.length) + palette.length) % palette.length];
+        break;
+      }
+      case 'rainbowbreathing': {
+        color = hsv(orientedPosition * density + travel * 0.25);
+        intensity *= 0.02 + 0.98 * (0.5 - 0.5 * Math.cos(travel * TAU));
+        break;
+      }
+      case 'rainbowcomet': {
+        const tailLength = 0.06 + settings.scale / 100 * 0.4;
+        let distance = fract(travel - orientedPosition);
+        if (distance > 1 - 1e-10) distance = 0;
+        const tail = clamp(1 - distance / tailLength, 0, 1);
+        color = hsv(travel * 0.2 + distance * 2);
+        intensity *= tail * tail;
+        break;
+      }
+      case 'rainbowsparkle': {
+        const tick = Math.floor(travel * 8), value = noise(index + tick * 83);
+        color = hsv(noise(index * 19 + tick * 31));
+        intensity *= value > 0.88 - settings.scale / 100 * 0.35 ? 1 : 0.015;
+        break;
+      }
+      case 'heartbeat': {
+        const cycle = fract(travel), first = Math.exp(-(((cycle - 0.18) / 0.055) ** 2)), second = 0.72 * Math.exp(-(((cycle - 0.36) / 0.075) ** 2));
+        color = gradient(palette, position);
+        intensity *= 0.015 + 0.985 * Math.min(1, first + second);
+        break;
+      }
+      case 'strobe': {
+        const duty = 0.05 + settings.scale / 100 * 0.35;
+        color = palette[Math.floor(travel) % palette.length];
+        intensity *= fract(travel) < duty ? 1 : 0;
+        break;
+      }
+      case 'lightning': {
+        const burst = Math.floor(travel), within = fract(travel);
+        const enabled = noise(burst * 19 + 7) > 0.7 - settings.scale / 100 * 0.65;
+        const flash = within < 0.05 || within >= 0.12 && within < 0.16 || within >= 0.24 && within < 0.26;
+        color = palette[Math.floor(noise(burst * 29) * palette.length)];
+        intensity *= enabled && flash ? 0.7 + 0.3 * noise(index + burst * 23) : 0.01;
+        break;
+      }
+      case 'twinkle': {
+        const offset = noise(index * 13 + 17), rate = 0.35 + noise(index * 29) * 0.65;
+        const glow = 0.5 + 0.5 * Math.sin((travel * rate + offset) * TAU);
+        color = palette[Math.floor(noise(index * 11 + 3) * palette.length)];
+        intensity *= 0.01 + 0.99 * glow ** (2 + settings.scale / 100 * 6);
+        break;
+      }
+      case 'meteorshower': {
+        const tailLength = 0.04 + settings.scale / 100 * 0.3;
+        let strongest = 0, meteorColor = palette[0];
+        for (let meteor = 0; meteor < 3; meteor++) {
+          const distance = fract(travel * (0.73 + meteor * 0.31) + meteor / 3 - orientedPosition);
+          const trail = clamp(1 - distance / tailLength, 0, 1) ** 2;
+          if (trail > strongest) { strongest = trail; meteorColor = cyclicGradient(palette, meteor / 3 + distance); }
+        }
+        color = meteorColor; intensity *= strongest;
+        break;
+      }
+      case 'stack': {
+        const blocks = 3 + Math.floor(settings.scale / 100 * 12);
+        const step = Math.floor(travel) % (blocks + 1), progress = fract(travel);
+        const boundary = 1 - step / blocks, head = progress * boundary;
+        const stacked = step > 0 && orientedPosition >= boundary;
+        const moving = step < blocks && Math.abs(orientedPosition - head) < 0.65 / blocks;
+        color = palette[Math.max(0, Math.floor(orientedPosition * blocks)) % palette.length];
+        intensity *= stacked || moving ? 1 : 0;
+        break;
+      }
+      case 'pingpong': {
+        const head = 1 - Math.abs(1 - 2 * fract(travel / 2)), width = 0.035 + settings.scale / 100 * 0.18;
+        const a = Math.exp(-3 * ((orientedPosition - head) / width) ** 2), b = Math.exp(-3 * ((orientedPosition - (1 - head)) / width) ** 2);
+        const total = a + b;
+        color = total > 1e-12 ? palette[0].map((value, channel) => (value * a + palette[palette.length - 1][channel] * b) / total) : palette[0];
+        intensity *= Math.min(1, total);
+        break;
+      }
+      case 'marquee': {
+        const cell = Math.floor(orientedPosition * (3 + settings.scale / 100 * 24) - travel * 3);
+        const band = ((Math.floor(cell / 3) % palette.length) + palette.length) % palette.length;
+        color = palette[band]; intensity *= ((cell % 3) + 3) % 3 === 0 ? 1 : 0;
+        break;
+      }
+      case 'duel': {
+        const tailLength = 0.06 + settings.scale / 100 * 0.3, head = fract(travel);
+        const a = clamp(1 - fract(head - orientedPosition) / tailLength, 0, 1) ** 2;
+        const b = clamp(1 - fract(head - (1 - orientedPosition)) / tailLength, 0, 1) ** 2;
+        color = a >= b ? palette[0] : palette[palette.length - 1]; intensity *= Math.max(a, b);
+        break;
+      }
+      case 'police': {
+        const side = orientedPosition < 0.5 ? 0 : 1, active = Math.floor(travel * 2) % 2;
+        color = palette[side % palette.length];
+        intensity *= side === active && fract(travel * 8) < 0.5 ? 1 : 0;
+        break;
+      }
+      case 'gradientwave': {
+        color = cyclicGradient(palette, orientedPosition * density - travel * 0.35);
+        break;
+      }
+      case 'pulse': {
+        const pulse = Math.exp(-(((fract(travel) - 0.5) * 9) ** 2));
+        color = cyclicGradient(palette, travel * 0.25);
+        intensity *= 0.01 + 0.99 * pulse;
+        break;
+      }
+      case 'embers': {
+        const x = orientedPosition * (4 + settings.scale / 100 * 16);
+        const heat = smoothNoise(x - travel * 0.15, travel * 0.3 + 23) ** 3;
+        color = gradient(palette, heat); intensity *= 0.03 + 0.97 * heat;
         break;
       }
     }

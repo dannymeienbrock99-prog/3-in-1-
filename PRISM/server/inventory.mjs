@@ -2,12 +2,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { describeMemoryPart } from './memory-models.mjs';
 
 const execute = promisify(execFile);
 const CLASSES = [
   { key: 'motherboard', label: 'Mainboard', className: 'Win32_BaseBoard', properties: ['Manufacturer', 'Product'] },
   { key: 'cpus', label: 'Prozessor', className: 'Win32_Processor', properties: ['Name', 'NumberOfCores', 'NumberOfLogicalProcessors'] },
-  { key: 'memory', label: 'Arbeitsspeicher', className: 'Win32_PhysicalMemory', properties: ['Manufacturer', 'PartNumber', 'Capacity', 'Speed', 'ConfiguredClockSpeed'] },
+  { key: 'memory', label: 'Arbeitsspeicher', className: 'Win32_PhysicalMemory', properties: ['Manufacturer', 'PartNumber', 'Capacity', 'Speed', 'ConfiguredClockSpeed', 'DeviceLocator', 'BankLabel'] },
   { key: 'gpus', label: 'Grafikkarte', className: 'Win32_VideoController', properties: ['Name', 'DriverVersion'] },
   { key: 'drives', label: 'Laufwerke', className: 'Win32_DiskDrive', properties: ['Model', 'Size', 'InterfaceType'] },
   { key: 'devices', label: 'Windows-Geräte', className: 'Win32_PnPEntity', filter: 'Present = TRUE', properties: ['Name', 'Caption', 'Description', 'Manufacturer', 'PNPClass', 'PNPDeviceID', 'DeviceID', 'Status', 'ConfigManagerErrorCode', 'Present'] },
@@ -55,7 +56,7 @@ function normalizeDevice(item) {
 const normalizers = {
   motherboard: item => ({ manufacturer: text(item.Manufacturer), name: text(item.Product) }),
   cpus: item => ({ name: text(item.Name), cores: positive(item.NumberOfCores), logicalCores: positive(item.NumberOfLogicalProcessors) }),
-  memory: item => ({ manufacturer: text(item.Manufacturer), partNumber: text(item.PartNumber), capacityGb: rounded(item.Capacity, 1024 ** 3), speedMhz: positive(item.ConfiguredClockSpeed) ?? positive(item.Speed) }),
+  memory: item => ({ manufacturer: text(item.Manufacturer), partNumber: text(item.PartNumber), capacityGb: rounded(item.Capacity, 1024 ** 3), speedMhz: positive(item.ConfiguredClockSpeed) ?? positive(item.Speed), ...(text(item.DeviceLocator)||text(item.BankLabel) ? {slot:text(item.DeviceLocator)||text(item.BankLabel)} : {}), ...(describeMemoryPart(text(item.PartNumber))||{}) }),
   gpus: item => ({ name: text(item.Name), driverVersion: text(item.DriverVersion) }),
   drives: item => ({ model: text(item.Model), sizeGb: rounded(item.Size, 1e9), interfaceType: text(item.InterfaceType) }),
   devices: normalizeDevice,

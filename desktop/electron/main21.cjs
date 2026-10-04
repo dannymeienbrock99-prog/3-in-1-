@@ -595,7 +595,10 @@ function initCore() {
   const callbacks = (name) => ({
     onMessage: (message) => {
       connectorManager.markEvent(name);
-      broadcastEchoes.ingest(message, tiktokWriter.sourceFor(message, name), (input, source) => eventCore.ingestChat(input, source))
+      broadcastEchoes.ingest(message, tiktokWriter.sourceFor(message, name), (input, source) => {
+        const accepted=name==='tikfinity'?require('../src/services/chat-narration.cjs').withTikTokSelfNarration(input,{senderUsername:currentConfig().platforms.tikfinity.senderUsername,source}):input;
+        eventCore.ingestChat(accepted,source);
+      })
         .catch(() => bridgeLog('warn', name, 'CHAT_INGEST_FAILED', { message: 'Chatnachricht konnte nicht verarbeitet werden.' }));
     },
     onEvent: (event) => { connectorManager.markEvent(name);if(name==='tikfinity'){community?.onTikFinityEvent(event);tiktokMatch.ingest(event,{source:'tikfinity'});}if(name==='tikfinity'&&currentConfig().streamerbot.tiktokEvents==='bridge')return;

@@ -4,6 +4,15 @@ if(location.hostname==='dashboard.twitch.tv'||location.hostname==='www.twitch.tv
   let root,observer,ready=false,serial=0;const seen=new WeakSet();
   const session=String(Date.now())+'-'+Math.random().toString(36).slice(2);
   const rows=el=>[...(el.matches?.('[data-a-target="chat-line-message"],.chat-line__message')?[el]:[]),...el.querySelectorAll?.('[data-a-target="chat-line-message"],.chat-line__message')||[]];
+  function canonicalLogin(user){const value=user?.getAttribute('data-a-user')||'';return /^[a-z0-9_]{1,25}$/i.test(value)?value.toLowerCase():'';}
+  function hasModeratorBadge(row){
+    // Only Twitch's badge element and badge CDN can supply a narration hint.
+    // Text/emotes in the message body and arbitrary image titles cannot.
+    return [...row.querySelectorAll('img[data-a-target="chat-badge"], [data-a-target="chat-badge"] img')].some(image=>{
+      if(String(image.getAttribute('alt')||'').trim().toLowerCase()!=='moderator')return false;
+      try{const url=new URL(image.getAttribute('src'));return url.protocol==='https:'&&url.hostname==='static-cdn.jtvnw.net'&&/^\/badges\/v1\/[a-f0-9-]{36}\/[123]$/.test(url.pathname)&&!url.username&&!url.password;}catch{return false;}
+    });
+  }
   function ingest(row){
     if(seen.has(row))return;
     const user=row.querySelector('[data-a-target="chat-message-username"],.chat-author__display-name');
@@ -15,7 +24,8 @@ if(location.hostname==='dashboard.twitch.tv'||location.hostname==='www.twitch.tv
     // Neither case means the logged-in composer has disconnected.
     if(!user||!text.trim())return;
     seen.add(row);
-    ipcRenderer.send('twitch-popout:message',{id:row.getAttribute('data-id')||row.getAttribute('data-message-id')||session+':'+(++serial),username:user.getAttribute('data-a-user')||user.textContent.trim(),displayName:user.textContent.trim(),message:text.trim(),timestamp:new Date().toISOString(),isModerator:false,isBroadcaster:false});
+    const login=canonicalLogin(user);
+    ipcRenderer.send('twitch-popout:message',{id:row.getAttribute('data-id')||row.getAttribute('data-message-id')||session+':'+(++serial),canonicalLogin:login,moderatorBadge:!!login&&hasModeratorBadge(row),username:login||user.textContent.trim(),displayName:user.textContent.trim(),message:text.trim(),timestamp:new Date().toISOString(),isModerator:false,isBroadcaster:false});
   }
   function attach(){
     const next=document.querySelector('[data-test-selector="chat-scrollable-area__message-container"],.chat-scrollable-area__message-container');

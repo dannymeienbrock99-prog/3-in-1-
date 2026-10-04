@@ -3,6 +3,27 @@ const crypto = require('crypto');
 const { isAutoBroadcast, broadcastRun } = require('./broadcast/visibility.cjs');
 const PLATFORMS = new Set(['tiktok','twitch','cng','youtube','local']);
 
+function narrationRole(input){
+  const event=input?.schemaVersion?input:input?.raw;
+  if(event?.schemaVersion!==1||event.type!=='chat')return '';
+  const data=event.meta?.rawData,evidence=data?.narration,source=event.meta?.sourceConnector;
+  if(!evidence||!['twitch-popout','tikfinity','manual','automation'].includes(source)&&!isAutoBroadcast({meta:{sourceConnector:source}}))return '';
+  if(event.platform==='tiktok'&&evidence.transport==='tikfinity'){
+    if(source==='twitch-popout')return '';
+    const login=evidence.canonicalLogin,id=evidence.userId;
+    return evidence.role==='self'&&evidence.method==='sender-login'&&typeof login==='string'&&/^[a-z0-9_.]{1,24}$/.test(login)&&login===evidence.senderLogin&&login===String(event.user?.username||'').toLowerCase()&&typeof id==='string'&&/^\d{1,30}$/.test(id)&&id===event.user?.id&&typeof evidence.messageId==='string'&&!!evidence.messageId&&event.eventId==='tiktok:chat:'+evidence.messageId?'self':'';
+  }
+  if(event.platform!=='twitch'||evidence.transport!=='twitch-popout')return '';
+  if(source==='tikfinity')return '';
+  const login=evidence.canonicalLogin,channel=evidence.channel;
+  if(typeof login!=='string'||typeof channel!=='string'||! /^[a-z0-9_]{1,25}$/.test(login)||! /^[a-z0-9_]{1,25}$/.test(channel)||String(event.user?.username||'').toLowerCase()!==login||data.channel!==channel)return '';
+  if(typeof evidence.messageId!=='string'||!evidence.messageId||event.eventId!=='twitch:chat:'+evidence.messageId)return '';
+  if(evidence.role==='owner'&&evidence.method==='channel-login'&&login===channel)return 'owner';
+  if(evidence.role==='self'&&evidence.method==='manual-echo'&&source==='manual')return 'self';
+  if(evidence.role==='moderator'&&evidence.method==='badge'&&data.moderatorBadge===true)return 'moderator';
+  return '';
+}
+
 function normalizeMessage(input={}){
   if(input?.schemaVersion && input?.type==='chat'){
     const p=String(input.platform||'internal').toLowerCase();
@@ -21,6 +42,7 @@ function normalizeMessage(input={}){
       moderatorConfirmedAt:String(input.user?.moderatorConfirmedAt||input.moderatorConfirmedAt||''),
       isBroadcaster:input.user?.isBroadcaster===true||input.isBroadcaster===true,
       roleConfirmedAt:String(input.user?.roleConfirmedAt||input.roleConfirmedAt||''),
+      narrationRole:narrationRole(input),
       subscriber:Boolean(input.user?.isSubscriber),
       vip:Boolean(input.user?.isVip),
       raw:input
@@ -42,6 +64,7 @@ function normalizeMessage(input={}){
     moderatorConfirmedAt:String(input.moderatorConfirmedAt||''),
     isBroadcaster:input.isBroadcaster===true,
     roleConfirmedAt:String(input.roleConfirmedAt||''),
+    narrationRole:narrationRole(input),
     subscriber:Boolean(input.subscriber||input.isSubscriber),
     vip:Boolean(input.vip||input.isVip),
     raw:input.raw||input

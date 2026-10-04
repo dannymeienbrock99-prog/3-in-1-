@@ -1,4 +1,10 @@
-# Batto 3-in-1 · 1.13.0
+# Batto 3-in-1 · 1.13.1
+
+## Eigene Twitch- und TikTok-Nachrichten vorlesen · 1.13.1
+
+Jarvis übernimmt eigene Twitch-Nachrichten auch aus dem verbundenen Twitch-Popout in die Chatansagen. Fehlende Angaben zur Kanalinhaberrolle werden für das Vorlesen anhand des bestätigten Kanalaccounts ergänzt. **Nachrichten aus dem Chat vorlesen → Moderatoren & Kanalinhaber** berücksichtigt so eigene Nachrichten auch bei dieser Chatquelle. Diese Zuordnung gilt für Chatansagen; Chattexte führen weiterhin keine Jarvis-Steuerbefehle aus. Twitch und das Vorlesen müssen verbunden beziehungsweise eingeschaltet sein; Filter und der eingestellte Abstand gelten weiter.
+
+Für TikTok erkennt Jarvis eigene Nachrichten aus der TikFinity-Verbindung anhand des eingerichteten eigenen Chataccounts, eines eindeutigen TikTok-Logins und einer stabilen Benutzer-ID. Ein gleicher Anzeigename genügt nicht. Auch diese Zuordnung dient nur dem Vorlesen und erteilt keine Moderations- oder Befehlsrechte.
 
 ## Streamer.bot, Touch Deck und OBS-Importe · 1.13.0
 
@@ -233,7 +239,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.13.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.13.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

@@ -3,8 +3,9 @@ const {BrowserWindow,ipcMain}=require('electron');
 const path=require('path'),crypto=require('crypto');
 const failure=message=>{const error=new Error(message);error.retryable=false;return error;};
 const DEFAULT_URL='https://dashboard.twitch.tv/popout/u/crazy_batto/stream-manager/chat?uuid=2b809876919445b3ac2c8911f881016b';
+function canonicalLogin(value){return typeof value==='string'&&/^[a-z0-9_]{1,25}$/i.test(value)?value.toLowerCase():'';}
 function channelFromUrl(value){
-  try{const u=new URL(value);if(u.protocol!=='https:')return '';const m=u.hostname==='dashboard.twitch.tv'?u.pathname.match(/^\/popout\/u\/([a-zA-Z0-9_]+)\/stream-manager\/chat\/?$/):u.hostname==='www.twitch.tv'?u.pathname.match(/^\/popout\/([a-zA-Z0-9_]+)\/chat\/?$/):null;return m?m[1].toLowerCase():'';}catch{return '';}
+  try{const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password)return '';const m=u.hostname==='dashboard.twitch.tv'?u.pathname.match(/^\/popout\/u\/([a-zA-Z0-9_]+)\/stream-manager\/chat\/?$/):u.hostname==='www.twitch.tv'?u.pathname.match(/^\/popout\/([a-zA-Z0-9_]+)\/chat\/?$/):null;return m?canonicalLogin(m[1]):'';}catch{return '';}
 }
 class TwitchPopout {
   constructor({getConfig,getParent,onMessage,onStatus}){
@@ -13,15 +14,21 @@ class TwitchPopout {
     this.listen('twitch-popout:status',p=>this.setStatus({...p,capabilities:{readChat:true,sendChat:!!p.connected,events:false}}));
     this.listen('twitch-popout:sent',p=>{const q=this.pending.get(p.id);if(!q)return;if(!p.ok){clearTimeout(q.timer);this.pending.delete(p.id);this.forgetEcho(p.id);q.reject(failure(p.error));}else if(p.phase==='compose'&&!q.composing){q.composing=true;this.window.webContents.insertText(q.text).then(()=>{if(this.pending.has(p.id))this.window?.webContents.send('twitch-popout:submit',{id:p.id});}).catch(error=>{clearTimeout(q.timer);this.pending.delete(p.id);this.forgetEcho(p.id);error.retryable=false;q.reject(error);});}});
     this.listen('twitch-popout:message',p=>{
-      if(typeof p.id!=='string'||typeof p.message!=='string'||p.message.length>10000||this.seen.has(p.id))return;
+      if(!p||typeof p.id!=='string'||!p.id||p.id.length>512||typeof p.message!=='string'||p.message.length>10000||this.seen.has(p.id))return;
       this.seen.add(p.id);if(this.seen.size>20000)this.seen.delete(this.seen.values().next().value);
-      const sender=String(this.getConfig().senderUsername||this.getConfig().channel||'').toLowerCase();
-      const own=String(p.username).toLowerCase()===sender;
+      const channel=channelFromUrl(this.window?.webContents.getURL());
+      const login=canonicalLogin(p.canonicalLogin),cfg=this.getConfig();
+      const sender=canonicalLogin(cfg.senderUsername)||canonicalLogin(cfg.channel)||channel;
+      const own=!!login&&login===sender;
       const echo=own?this.echoes.find(x=>x.text===p.message&&x.until>Date.now()):null;
       if(echo)this.forgetEcho(echo.id);
       if(echo){const q=this.pending.get(echo.id);if(q){clearTimeout(q.timer);this.pending.delete(echo.id);q.resolve({ok:true,mode:'twitch-popout',messageId:p.id,confirmed:true});}}
-      const channel=channelFromUrl(this.window?.webContents.getURL());
-      this.onMessage({...p,platform:'twitch',channel,isModerator:false,isBroadcaster:false,raw:{...p,channel,source:echo?.source}},echo?.source||'twitch-popout');
+      // DOM login/badges are enough to select narration, never to authorize a
+      // moderation action or claim a verified numeric platform identity.
+      const narration=channel&&login?(login===channel?{role:'owner',method:'channel-login'}:echo?.source==='manual'?{role:'self',method:'manual-echo'}:p.moderatorBadge===true?{role:'moderator',method:'badge'}:null):null;
+      const evidence=narration?{...narration,transport:'twitch-popout',canonicalLogin:login,channel,messageId:p.id}:null;
+      const message={...p,username:login||p.username,platform:'twitch',channel,channelId:channel?'login:'+channel:'',identityVerified:false,moderator:false,isModerator:false,isBroadcaster:false,badges:[],raw:{...p,channel,source:echo?.source,narration:evidence}};
+      this.onMessage(message,echo?.source||'twitch-popout');
     });
   }
   getStatus(){return {...this.status,url:this.getConfig().popoutUrl||DEFAULT_URL};}

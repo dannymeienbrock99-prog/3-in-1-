@@ -45,11 +45,19 @@ Unveränderte DirectShow-Leser-DLL aus OBS VirtualCam 2.1.2 (Miau Lightouch / Ca
 ## OBS Tool 2.4.7
 Der eigene lokale Multi-Chat-Quellstand entspricht dem bereitgestellten 2.4.7-Installer. Die Originalquellen werden separat erhalten. Piper-Runtime, Modell, Lizenzen und Quellarchive dieses Programms werden unverändert mitgeliefert; Herkunft und Hashes stehen in desktop/vendor/piper/README.md und manifest.json.
 
-## PRISM 1.6.0 · Hersteller-Anbindungen
+## PRISM 1.7.0 · Hersteller-Anbindungen
 Lian-Li-Protokoll und Effektzuordnungen: sgtaziz/lian-li-linux, Commit d335fdd459b0a308814497d36cf1d8c7dc1a782d, MIT; vollständige Lizenz unter PRISM/licenses/lian-li-linux-MIT.txt. Eigener Windows-HID-Helfer, keine Linux-Treiberinstallation.
 
 MSI Mystic Light SDK 1.0.0.08: https://www.msi.com/Landing/mystic-light-rgb-gaming-pc/download . Die proprietäre SDK-DLL wird nicht verteilt. Bei ausdrücklicher Einrichtung lädt PRISM sie direkt vom Hersteller und prüft die fest hinterlegten SHA-256-Werte. Erfordert lokal installiertes Mystic Light.
 
 Kingston-FURY-CTRL-Protokollreferenz: https://github.com/Beej126/KingstonFuryRgbCLI . Eigene unabhängige Dienstanbindung und Rijndael-256-Protokollcodec; das referenzierte CLI, FuryCTRL.dll und NTIOLib_X64.sys werden nicht eingebunden oder verteilt. Erfordert einen bereits installierten offiziellen Herstellerdienst. Die Anbindung ist experimentell und wurde mit verschlüsselten Protokoll-Testdaten geprüft.
 
-Corsair iCUE SDK bleibt eine optionale, separat eingerichtete Hersteller-Anbindung. Das SDK liefert LED-Farbsteuerung, keinen vollständigen iCUE-Effektkatalog und keine Lüfterdrehzahlen/PWM-Regelung. Die 30 PRISM-Effekte werden von unserer Software berechnet.
+Corsair iCUE SDK bleibt eine optionale, separat eingerichtete Hersteller-Anbindung. Das SDK liefert LED-Farbsteuerung, keinen vollständigen iCUE-Effektkatalog und keine Lüfterdrehzahlen/PWM-Regelung. Die 31 PRISM-Softwareeffekte einschließlich eigener Muster werden von unserer Software berechnet.
+
+## Strimer Wireless · WinUSB und tinyuz
+
+Die Funkpaket-Anordnung basiert ebenfalls auf [sgtaziz/lian-li-linux](https://github.com/sgtaziz/lian-li-linux/tree/d335fdd459b0a308814497d36cf1d8c7dc1a782d), Commit `d335fdd459b0a308814497d36cf1d8c7dc1a782d` (MIT). Die Lizenzkopie bleibt unter `PRISM/licenses/lian-li-linux-MIT.txt`. Die eigene Windows-Anbindung nutzt nur vorhandene WinUSB-Schnittstellen: L-Wireless V1 `0416:8040/8041`, V2 `1A86:E304/E305`; sie verteilt keinen Linux-/USB-Treiber und verändert keine Kopplung oder Kühlkurven.
+
+Die begrenzte eigene C#-Kompression verwendet das tinyuz-Format nach [sisong/tinyuz](https://github.com/sisong/tinyuz/tree/1d74ffa4d453796df352df470733f45dfa099bb1), Commit `1d74ffa4d453796df352df470733f45dfa099bb1`, MIT, Copyright 2012–2022 housisong. Die vollständige Lizenzkopie wird unter `PRISM/licenses/tinyuz-MIT.txt` und im Installer unter `resources/PRISM/licenses` mitgeliefert. Es wird keine fremde tinyuz-Binärdatei eingebunden.
+
+Gekoppelte Kabel mit bekannten Layouts erhalten die 31 Softwareeffekte einschließlich eigener Muster als lokal abgespielte Schleife. Der separate kabelgebundene Lian-Li-Katalog bleibt bei 94 Herstellermodi. Die lokale Metadatenabfrage bestätigte 132-/174-LED-Kabel und `rxType 41`, jedoch keine sichtbaren Hardwarefarben. Weitere Firmwareversionen sind nicht an echter Hardware geprüft. Pause und Aus benötigen eine Funkbestätigung; Programm schließen beendet die Schleife nicht. L-Connect wird separat für die vorhandene Kopplung benötigt und nicht mitverteilt.

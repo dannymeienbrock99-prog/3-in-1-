@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { WindowsLightingClient } from './windows-lighting.mjs';
 import { KingstonServiceClient } from './kingston-service.mjs';
 import { LianLiLightingClient } from './lianli-lighting.mjs';
+import { LianLiWirelessClient } from './lianli-wireless.mjs';
 import { BridgeError, publicController } from './openrgb.mjs';
 import { assertDeviceAllowed } from './device-policy.mjs';
 
@@ -9,7 +10,7 @@ import { assertDeviceAllowed } from './device-policy.mjs';
 export class LightingClient extends EventEmitter {
   constructor({ clients } = {}) {
     super();
-    this.clients = clients || [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient()];
+    this.clients = clients || [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()];
     this.backend = 'windows'; this.host = null; this.port = null; this.protocol = null;
     this.devices = []; this.details = {}; this.routes = new Map(); this.errors = new Map(); this.invalid = false;
     for (const client of this.clients) {
@@ -72,6 +73,8 @@ export class LightingClient extends EventEmitter {
   }
   selectDirect(device) { return this.owner(device).selectDirect(device); }
   update(device, colors) { return this.owner(device).update(device, colors); }
+  applySoftwareEffect(device, settings, zones) { return this.owner(device).applySoftwareEffect(device, settings, zones); }
+  freezeSoftwareEffect(device) { return this.owner(device).freezeSoftwareEffect(device); }
   applyNativeEffect(device, effectId, options) {
     const client = this.owner(device);
     if (!client.applyNativeEffect) throw new BridgeError('Diese Anbindung bietet keine Herstellereffekte an.', 'NATIVE_EFFECT_UNSUPPORTED', 422);

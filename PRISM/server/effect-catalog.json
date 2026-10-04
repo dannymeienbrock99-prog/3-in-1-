@@ -118,5 +118,9 @@
   {
     "id": "embers",
     "name": "Glut"
+  },
+  {
+    "id": "custom",
+    "name": "Eigener Effekt"
   }
 ]

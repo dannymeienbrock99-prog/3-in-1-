@@ -7,6 +7,8 @@ Console.OutputEncoding = new UTF8Encoding(false);
 var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 var controllers = new Dictionary<int, HidDevice>();
 var endpoints = new Dictionary<int, Endpoint>();
+using var wireless = new WirelessSession();
+bool wirelessMode = args.Contains("--wireless");
 
 object Fixtures()
 {
@@ -178,6 +180,8 @@ async Task<object> Telemetry()
 
 try
 {
+    if (args.Contains("--wireless-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(WirelessProtocol.Fixtures(), json)); return; }
+    if (args.Contains("--wireless-scan")) { Console.WriteLine(JsonSerializer.Serialize(await wireless.Scan(), json)); return; }
     if (args.Contains("--fixtures")) { Console.WriteLine(JsonSerializer.Serialize(Fixtures(), json)); return; }
     string? line;
     while ((line = await Console.In.ReadLineAsync()) != null)
@@ -190,13 +194,14 @@ try
             requestId = request.RootElement.GetProperty("requestId").GetInt32();
             string? command = request.RootElement.GetProperty("command").GetString();
             object result = command switch {
-                "enumerate" => OperatingSystem.IsWindows() ? await Enumerate() : throw new PlatformNotSupportedException("Die Lian-Li-Anbindung benötigt Windows."),
+                "enumerate" => OperatingSystem.IsWindows() ? wirelessMode ? await wireless.Scan() : await Enumerate() : throw new PlatformNotSupportedException("Die Lian-Li-Anbindung benötigt Windows."),
+                "animation" when wirelessMode => await wireless.Upload(request.RootElement),
                 "effect" => await Apply(request.RootElement),
                 "telemetry" => await Telemetry(),
                 _ => throw new ArgumentException("Unbekannter Lian-Li-Befehl") };
             Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = true, result }, json));
         }
-        catch (Exception error) { Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = false, error = new { code = "LIANLI_ERROR", message = error.Message } }, json)); }
+        catch (Exception error) { Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = false, error = new { code = error is WirelessAnimationTooLargeException ? "WIRELESS_ANIMATION_TOO_LARGE" : "LIANLI_ERROR", message = error.Message } }, json)); }
     }
 }
 finally { Clear(); }

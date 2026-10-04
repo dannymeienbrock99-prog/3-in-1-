@@ -26,8 +26,8 @@ async function fixture(t,{devices=[device(),device(2)],factoryWrap,replyWrap}={}
  let owned,created=0;const bridgeFactory=options=>{created++;assert.equal(options.port,0);assert.equal(options.embedded,true);owned=createBridge({...options,client});return factoryWrap?factoryWrap(owned):owned;};
  const service=new RgbService({root,directory,bridgeFactory,onChange:s=>changes.push(s),fetchRequest:async(url,options)=>{const call={route:new URL(url).pathname,body:options.body&&JSON.parse(options.body)};calls.push(call);const response=await fetch(url,options);return replyWrap?replyWrap(response,call):response;}});
  t.after(async()=>{await service.close();fs.rmSync(directory,{recursive:true,force:true});});
- async function seed({brightness=61,effect='static',zoneIds={1:[1]},deviceIds=[1]}={}){
-  await service.start();await client.connect();const response=await fetch(new URL(service.url).origin+'/api/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceIds,zoneIds,effect,colors:['#123456','#abcdef'],brightness,speed:23,scale:47,direction:'reverse'})});assert.equal(response.ok,true);await response.json();client.writes.length=0;client.direct.length=0;calls.length=0;
+ async function seed({brightness=61,effect='static',custom,colors=['#123456','#abcdef'],zoneIds={1:[1]},deviceIds=[1]}={}){
+  await service.start();await client.connect();const response=await fetch(new URL(service.url).origin+'/api/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceIds,zoneIds,effect,colors,brightness,speed:23,scale:47,direction:'reverse',...(custom?{custom}:{})})});assert.equal(response.ok,true);await response.json();client.writes.length=0;client.direct.length=0;calls.length=0;
  }
  return {service,client,calls,changes,seed,directory,get bridge(){return owned;},get created(){return created;}};
 }
@@ -216,4 +216,73 @@ test('native-only RGB status reports acknowledged manufacturer settings without 
  const writes=f.client.nativeWrites.length,calls=f.calls.length,result=await f.service.action({type:'status'});
  assert.match(result.text,/Für 2 Geräte sind Herstellereffekte eingestellt/);assert.doesNotMatch(result.text,/Kein bewegter RGB-Effekt aktiv|Ein RGB-Effekt läuft/);
  assert.equal(f.client.nativeWrites.length,writes);assert.equal(f.calls.length,calls);
+});
+
+test('voice settings preserve the shared bounded custom schema and reject malformed definitions',async t=>{
+ const {DEFAULT_CUSTOM,validateCustomSettings}=await import(pathToFileURL(path.join(root,'server/effect-renderer.mjs')).href),f=await fixture(t);
+ const base={effect:'custom',colors:['#ff0000','#00ff00'],brightness:63,speed:40,scale:75,direction:'reverse'};
+ assert.deepEqual(f.service.settings(base).custom,DEFAULT_CUSTOM);
+ const custom={version:1,pattern:'bands',motion:'bounce',repeats:12,cycleSeconds:59.75,pulse:75};
+ assert.deepEqual(f.service.settings({...base,custom}).custom,validateCustomSettings(custom));
+ assert.deepEqual(f.service.settings({...base,custom:{...custom,script:'ignored'}}).custom,custom);
+ for(const invalid of [null,[],false,{version:2},{pattern:'code'},{motion:'usb'},{repeats:1.2},{repeats:13},{cycleSeconds:.2},{cycleSeconds:Infinity},{cycleSeconds:'4'},{pulse:-1},{pulse:'4'}]){
+  assert.throws(()=>validateCustomSettings(invalid));assert.throws(()=>f.service.settings({...base,custom:invalid}),/eigenen RGB-Effekt/);
+ }
+ assert(!Object.hasOwn(f.service.settings({...base,effect:'wave',custom}),'custom'),'old effect settings keep the released shape');
+ assert.throws(()=>f.service.action({type:'speed',speed:40}),/Unbekannte RGB-Aktion/);assert.equal(f.created,0);
+});
+
+test('custom brightness, off and on preserve the pattern and selected physical LED zones',async t=>{
+ const f=await fixture(t),custom={version:1,pattern:'bands',motion:'still',repeats:3,cycleSeconds:7.25,pulse:0};await f.seed({effect:'custom',custom,brightness:47,zoneIds:{1:[1]}});
+ const untouched=f.client.devices[0].colors.slice(0,2),other=f.client.devices[1].colors.slice();
+ await f.service.action({type:'brightness',brightness:29});await f.service.action({type:'off'});await f.service.action({type:'on'});
+ const calls=f.calls.filter(call=>call.route==='/api/apply');assert.equal(calls.length,3);
+ for(const call of calls){assert.equal(call.body.effect,'custom');assert.deepEqual(call.body.custom,custom);assert.deepEqual(call.body.deviceIds,[1]);assert.deepEqual(call.body.zoneIds,{'1':[1]});assert.deepEqual(call.body.colors,['#123456','#abcdef']);}
+ assert.deepEqual(calls.map(call=>call.body.brightness),[29,0,29]);assert.deepEqual(f.client.devices[0].colors.slice(0,2),untouched);assert.deepEqual(f.client.devices[1].colors,other);
+ assert.deepEqual(f.service.snapshot().lastSettings.custom,custom);
+ const saved=JSON.parse(fs.readFileSync(path.join(f.directory,'voice-settings.json'),'utf8'));assert.deepEqual(saved.settings.custom,custom);assert.deepEqual(saved.lastCustomSettings.custom,custom);
+});
+
+test('switching away and returning to a custom effect restores its saved palette and pattern',async t=>{
+ const f=await fixture(t,{devices:[device(1)]}),custom={version:1,pattern:'bands',motion:'still',repeats:8,cycleSeconds:9.5,pulse:0},colors=['#4000ff','#11ffff','#ff1493'];
+ await f.seed({effect:'custom',custom,colors});await f.service.action({type:'effect',effect:'gradient'});
+ assert(!Object.hasOwn(f.service.snapshot().lastSettings,'custom'));await f.service.action({type:'color',color:'#ffffff'});await f.service.action({type:'brightness',brightness:36});
+ await f.service.action({type:'effect',effect:'custom'});
+ const last=f.calls.filter(call=>call.route==='/api/apply').at(-1).body;assert.deepEqual(last.custom,custom);assert.deepEqual(last.colors,colors);assert.equal(last.brightness,36);assert.equal(last.direction,'reverse');assert.deepEqual(last.deviceIds,[1]);assert.deepEqual(last.zoneIds,{'1':[1]});
+ await f.service.action({type:'effect',effect:'gradient'});await f.service.stop();await f.service.start();
+ assert.equal(f.service.snapshot().lastSettings.effect,'gradient');assert.deepEqual(f.service.lastCustomSettings.custom,custom);
+ await f.service.action({type:'effect',effect:'custom'});assert.deepEqual(f.service.snapshot().lastSettings.custom,custom);assert.deepEqual(f.service.snapshot().lastSettings.colors,colors);
+});
+
+test('the first custom voice command supplies editable defaults and custom settings survive a restart',async t=>{
+ const {DEFAULT_CUSTOM}=await import(pathToFileURL(path.join(root,'server/effect-renderer.mjs')).href),f=await fixture(t,{devices:[device(1)]});
+ await f.service.action({type:'effect',effect:'custom'});f.bridge.engine.stop();
+ const saved=JSON.parse(fs.readFileSync(path.join(f.directory,'voice-settings.json'),'utf8'));assert.deepEqual(saved.settings.custom,DEFAULT_CUSTOM);
+ await f.service.stop();await f.service.start();assert.equal(f.service.snapshot().lastSettings.effect,'custom');assert.deepEqual(f.service.snapshot().lastSettings.custom,DEFAULT_CUSTOM);
+});
+
+test('a changed custom marker follows only that device even when timestamps and standard fields are unchanged',async t=>{
+ const f=await fixture(t),first={version:1,pattern:'bands',motion:'still',repeats:2,cycleSeconds:8,pulse:0},changed={...first,repeats:9};
+ await f.seed({effect:'custom',custom:first,deviceIds:[1,2],zoneIds:{1:[1],2:[0]}});await f.service.action({type:'brightness',brightness:42});
+ const job=f.bridge.engine.jobs.get(2);job.settings={...job.settings,custom:changed};const untouched=f.client.devices[0].colors.slice();f.client.writes.length=0;f.client.direct.length=0;f.calls.length=0;
+ await f.service.action({type:'brightness',brightness:24});
+ const applied=f.calls.find(call=>call.route==='/api/apply').body;assert.deepEqual(applied.deviceIds,[2]);assert.deepEqual(applied.zoneIds,{'2':[0]});assert.deepEqual(applied.custom,changed);assert.deepEqual(f.client.direct,[2]);assert.deepEqual(f.client.devices[0].colors,untouched);
+ assert.deepEqual(f.bridge.engine.jobs.get(1).settings.custom,first);
+});
+
+test('a failed custom update retains the exact selection and custom definition for the next command',async t=>{
+ const {BridgeError}=await import(pathToFileURL(path.join(root,'server/openrgb.mjs')).href);
+ const f=await fixture(t),custom={version:1,pattern:'bands',motion:'still',repeats:5,cycleSeconds:12,pulse:0};await f.seed({effect:'custom',custom});
+ const update=f.client.update.bind(f.client);let fail=true;f.client.update=async(item,colors)=>{if(fail){fail=false;throw new BridgeError('Synthetic custom failure','MOCK_CUSTOM_REJECTION',503);}return update(item,colors);};
+ await assert.rejects(f.service.action({type:'brightness',brightness:33}),/Synthetic custom failure/);
+ await f.service.action({type:'brightness',brightness:22});
+ assert(f.calls.filter(call=>call.route==='/api/apply').every(call=>JSON.stringify(call.body.deviceIds)==='[1]'&&JSON.stringify(call.body.custom)===JSON.stringify(custom)));assert.deepEqual(f.service.lastTargets,[1]);
+});
+
+test('uploaded custom effects are acknowledged as transferred and never generate continuous voice frame writes',async t=>{
+ const f=await fixture(t,{devices:[device(60000,{effectUpload:true,provider:'lianli',name:'Synthetic Strimer Wireless'})]}),uploads=[];
+ f.client.applySoftwareEffect=async(item,settings,zones)=>{uploads.push({id:item.id,settings,zones});return {confirmation:'transmitted',acknowledgement:'Synthetic Windows HID transfer'};};
+ const result=await f.service.action({type:'effect',effect:'custom'});
+ assert.match(result.text,/Wireless-Controller übertragen/);assert.equal(uploads.length,1);assert.deepEqual(uploads[0].id,60000);assert.equal(f.bridge.engine.running,true);assert.equal(f.bridge.engine.streaming,false);assert.equal(f.bridge.engine.timer,null);assert.deepEqual(f.client.direct,[]);assert.deepEqual(f.client.writes,[]);
+ await f.service.action({type:'brightness',brightness:37});assert.equal(uploads.length,2);assert.equal(uploads[1].settings.brightness,37);assert.deepEqual(uploads[1].settings.custom,uploads[0].settings.custom);assert.deepEqual(f.service.lastTargets,[60000]);assert.deepEqual(f.client.writes,[]);
 });

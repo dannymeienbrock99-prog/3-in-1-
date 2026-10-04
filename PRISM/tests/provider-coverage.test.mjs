@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildCoverage,probeRazerRuntime,createRazerProbe} from '../server/provider-coverage.mjs';
 
+test('Strimer Wireless coverage counts paired RGB cables independently of USB sender names',()=>{
+  const result=buildCoverage({native:{connected:true,devices:[{id:60000,name:'Lian Li Strimer Wireless 24-Pin',vendor:'Lian Li',provider:'lianli-wireless',directMode:true}],details:{lianliWireless:{status:'ready',message:'Ein gekoppeltes Kabel'},discovery:[{name:'Lian Li Wireless Sender',vendor:'Lian Li',provider:'lianli-wireless',status:'detected'}]}}});
+  const provider=result.providers.find(p=>p.id==='lianli-wireless');assert.equal(provider.deviceCount,1);assert.equal(provider.status,'ready');
+  const brand=result.brands.find(b=>b.id==='lianli');assert.equal(brand.controlledNames.length,1);assert.match(brand.devices.find(d=>d.name.includes('Sender')).source,/Strimer Wireless/);
+});
+
 test('Manufacturer coverage uses independent PC data and never inserts absent model or vendor entries', () => {
   const inventory={motherboard:[{manufacturer:'Micro-Star International',name:'MAG TEST Z790'}],memory:[{manufacturer:'G.Skill',partNumber:'F5-TEST-6000',capacityGb:16}],devices:[{id:'lian',name:'Lian Li UNI FAN Controller',manufacturer:'Lian Li',category:'usb'},{id:'new',name:'未知 RGB 装置 Ω',manufacturer:'Beispiel-ÖEM',category:'usb'},{id:'generic',name:'USB Input Device',manufacturer:'Microsoft',category:'usb'}]};
   const result=buildCoverage({inventory});

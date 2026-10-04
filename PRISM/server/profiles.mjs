@@ -10,5 +10,5 @@ export function validateProfiles(value){
   ids.add(p.id);return {id:p.id,name:p.name.trim(),config:validateSettings(p.config)};
  });
 }
-export async function readProfiles(directory){try{const data=await readFile(path.join(directory,'profiles.json'),'utf8');if(Buffer.byteLength(data)>64*1024)throw Error('Profildatei zu groß.');return validateProfiles(JSON.parse(data));}catch(e){if(e.code==='ENOENT')return [];throw new BridgeError('Gespeicherte Lichtprofile konnten nicht gelesen werden.','PROFILES_UNAVAILABLE',500);}}
+export async function readProfiles(directory){try{const data=await readFile(path.join(directory,'profiles.json'),'utf8');if(Buffer.byteLength(data)>128*1024)throw Error('Profildatei zu groß.');return validateProfiles(JSON.parse(data));}catch(e){if(e.code==='ENOENT')return [];throw new BridgeError('Gespeicherte Lichtprofile konnten nicht gelesen werden.','PROFILES_UNAVAILABLE',500);}}
 export async function saveProfiles(directory,value){const profiles=validateProfiles(value);await mkdir(directory,{recursive:true});const file=path.join(directory,'profiles.json');await writeFile(file+'.tmp',JSON.stringify(profiles),'utf8');await rename(file+'.tmp',file);return profiles;}

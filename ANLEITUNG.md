@@ -1,15 +1,25 @@
-# Batto 3-in-1 · Schnellstart 1.11.0
+# Batto 3-in-1 · Schnellstart 1.12.0
+
+## Strimer Wireless einstellen
+
+1. Strimer-Kabel in L-Connect mit dem vorhandenen L-Wireless-Sender koppeln. Mainboard-Licht-Synchronisierung dort ausschalten.
+2. In Batto **RGB-Steuerung → Geräte suchen** öffnen. Unterstützt werden V1-Sender/Empfänger `0416:8040/8041` und V2 `1A86:E304/E305` mit bereits vorhandenem WinUSB-Treiber. Bei USB-Zugriffsfehlern L-Connect schließen und erneut suchen. Unbekannte Gerätekennungen und LED-Anordnungen bleiben gesperrt.
+3. Das angezeigte Kabel wählen und einen der **31 Softwareeffekte** anwenden. **Eigener Effekt** bietet bis zu acht Farben, Farbverlauf oder Farbblöcke, Bewegung, Wiederholung, Umlaufzeit, Richtung und Puls. Profile speichern auch diese eigenen Einstellungen.
+
+Der Effekt wird als Schleife an das Kabel übertragen. Eine erfolgreiche Übertragung wird von einer Bestätigung des Funkempfängers unterschieden. **Pause** und **Aus** werden erst nach dieser Bestätigung als erledigt angezeigt. Beim Schließen des Programms läuft die Kabelschleife weiter; vorher **Aus** anwenden, wenn das Licht ausgehen soll. Jarvis erhält eigene Effekte beim Wiedereinschalten und bei Helligkeitsänderungen.
+
+Die lokale Geräteabfrage bestätigte ein GPU-Strimer mit **174 LEDs** und ein 24-Pin-Strimer mit **132 LEDs**, beide mit Funkkennung `rxType 41`. Es wurde keine sichtbare Lichtfarbe an Hardware geprüft. Weitere Firmwareversionen sind noch nicht an echter Hardware geprüft. Der Installer verändert keine USB-Treiber, Kopplung, PWM oder Lüfterkurven. Der **94-Effekt-Katalog für kabelgebundene Lian-Li-Controller** bleibt erhalten.
 
 ## RGB-Neuerungen
-Öffne **RGB-Steuerung**. Alle 14 bisherigen Effekte bleiben vorhanden; insgesamt gibt es jetzt 30 PRISM-Effekte. Unter **Effekte deiner Geräte** stehen außerdem die vom erkannten Gerät unterstützten Herstellereffekte. Du kannst einzelne RAM-Riegel/Anschlüsse oder mit der ausdrücklich beschrifteten Schaltfläche alle passenden Ziele einstellen.
+Öffne **RGB-Steuerung**. Alle 30 bisherigen Effekte bleiben vorhanden; insgesamt gibt es jetzt 31 PRISM-Effekte einschließlich **Eigener Effekt**. Unter **Effekte deiner Geräte** stehen außerdem die vom erkannten Gerät unterstützten Herstellereffekte. Du kannst einzelne RAM-Riegel/Anschlüsse oder mit der ausdrücklich beschrifteten Schaltfläche alle passenden Ziele einstellen.
 
-Für MSI unter **RGB verbinden → MSI-Anbindung einrichten** dem einmaligen Download zustimmen und MSI Center mit Mystic Light öffnen. Für Kingston muss der offizielle FURY-CTRL-Dienst laufen; diese Anbindung ist experimentell. Lian Li wird nur für unterstützte HID-Controller angeboten. Nicht verfügbare Einträge im 94-Effekt-Katalog erklären die jeweilige Einschränkung. Aktuelle Drehzahlen stehen beim Controller.
+Für MSI unter **RGB verbinden → MSI-Anbindung einrichten** dem einmaligen Download zustimmen und MSI Center mit Mystic Light öffnen. Für Kingston muss der offizielle FURY-CTRL-Dienst laufen; diese Anbindung ist experimentell. Kabelgebundene Lian-Li-HID-Controller bieten passende Herstellermodi; gekoppelte Strimer-Wireless-Kabel bieten Softwareeffekte über WinUSB. Nicht verfügbare Einträge im 94-Effekt-Katalog erklären die jeweilige Einschränkung. Aktuelle Drehzahlen stehen bei unterstützten Lüftercontrollern.
 
 Die MSI-Vorschau nutzt das bereitgestellte Mainboard-Bild und zeigt die tatsächlich erkannten RAM-Riegel samt Namen und Kapazität. PC-Erkennung allein bestätigt keine RGB-Steuerung.
 
 ## RGB direkt in Batto einstellen
 
-In der Seitenleiste **RGB-Steuerung** öffnen. Die eingebaute PRISM-Ansicht bietet Farben, Helligkeit, 30 PRISM-Effekte und speicherbare Lichtprofile. Die 14 bisherigen Effekte und Profile bleiben erhalten. Für echte Beleuchtung zuerst die unterstützten Geräte verbinden. Windows LampArray, Corsair iCUE, MSI Mystic Light, der offizielle Kingston-FURY-CTRL-Dienst und unterstützte Lian-Li-HID-Controller stellen die jeweilige Lichtverbindung bereit. Die Ansicht nennt fehlende Voraussetzungen und bietet passende Herstellereffekte unter **Effekte deiner Geräte**. Ein erkannter Komponentenname bestätigt noch keine steuerbare RGB-Verbindung. Stream Deck und Elgato-Geräte werden von der RGB-Geräteansprache ausgeschlossen.
+In der Seitenleiste **RGB-Steuerung** öffnen. Die eingebaute PRISM-Ansicht bietet Farben, Helligkeit, 31 PRISM-Effekte und speicherbare Lichtprofile. Die 14 bisherigen Effekte und Profile bleiben erhalten. Für echte Beleuchtung zuerst die unterstützten Geräte verbinden. Windows LampArray, Corsair iCUE, MSI Mystic Light, der offizielle Kingston-FURY-CTRL-Dienst und unterstützte Lian-Li-HID-Controller stellen die jeweilige Lichtverbindung bereit. Die Ansicht nennt fehlende Voraussetzungen und bietet passende Herstellereffekte unter **Effekte deiner Geräte**. Ein erkannter Komponentenname bestätigt noch keine steuerbare RGB-Verbindung. Stream Deck und Elgato-Geräte werden von der RGB-Geräteansprache ausgeschlossen.
 
 Die PC-Übersicht zeigt die erkannten Namen. Für MSI erscheint die MSI-Vorschau, für ASUS der White Build mit weißen Lüftern, RAM, Grafikkarte und Kühlung. Bei anderen Herstellern erscheint die allgemeine Vorschau. Die Bilder dienen als Beispielaufbau.
 

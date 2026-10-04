@@ -1,5 +1,25 @@
 // Pure color calculations shared by the browser preview and hardware renderer.
-export const EFFECTS = ['static', 'rainbow', 'breathing', 'wave', 'gradient', 'sparkle', 'colorcycle', 'comet', 'chase', 'scanner', 'ripple', 'fire', 'aurora', 'stripes', 'rainbowbreathing', 'rainbowcomet', 'rainbowsparkle', 'heartbeat', 'strobe', 'lightning', 'twinkle', 'meteorshower', 'stack', 'pingpong', 'marquee', 'duel', 'police', 'gradientwave', 'pulse', 'embers'];
+export const EFFECTS = ['static', 'rainbow', 'breathing', 'wave', 'gradient', 'sparkle', 'colorcycle', 'comet', 'chase', 'scanner', 'ripple', 'fire', 'aurora', 'stripes', 'rainbowbreathing', 'rainbowcomet', 'rainbowsparkle', 'heartbeat', 'strobe', 'lightning', 'twinkle', 'meteorshower', 'stack', 'pingpong', 'marquee', 'duel', 'police', 'gradientwave', 'pulse', 'embers', 'custom'];
+
+export const DEFAULT_CUSTOM = Object.freeze({ version: 1, pattern: 'gradient', motion: 'scroll', repeats: 1, cycleSeconds: 4, pulse: 0 });
+
+// The browser, saved profiles and hardware engine share the same bounded schema.
+export function validateCustomSettings(input) {
+  if (input !== undefined && (!input || typeof input !== 'object' || Array.isArray(input))) throw new Error('Die Einstellungen für deinen eigenen Effekt sind ungültig.');
+  const value = { ...DEFAULT_CUSTOM, ...input };
+  if (value.version !== 1) throw new Error('Diese Version des eigenen Effekts wird nicht unterstützt.');
+  if (!['gradient', 'bands'].includes(value.pattern)) throw new Error('Wähle einen Farbverlauf oder Farbblöcke.');
+  if (!['still', 'scroll', 'bounce'].includes(value.motion)) throw new Error('Wähle Still, Umlauf oder Hin und her.');
+  if (!Number.isInteger(value.repeats) || value.repeats < 1 || value.repeats > 12) throw new Error('Dein Muster kann 1 bis 12 Mal wiederholt werden.');
+  if (typeof value.cycleSeconds !== 'number' || !Number.isFinite(value.cycleSeconds) || value.cycleSeconds < 0.25 || value.cycleSeconds > 60) throw new Error('Die Umlaufzeit muss zwischen 0,25 und 60 Sekunden liegen.');
+  if (typeof value.pulse !== 'number' || !Number.isFinite(value.pulse) || value.pulse < 0 || value.pulse > 100) throw new Error('Die Pulsstärke muss zwischen 0 und 100 % liegen.');
+  return { version: 1, pattern: value.pattern, motion: value.motion, repeats: value.repeats, cycleSeconds: value.cycleSeconds, pulse: value.pulse };
+}
+
+export function isAnimatedEffect(settings) {
+  if (['static', 'gradient'].includes(settings.effect)) return false;
+  return settings.effect !== 'custom' || (settings.custom?.motion ?? DEFAULT_CUSTOM.motion) !== 'still' || (settings.custom?.pulse ?? DEFAULT_CUSTOM.pulse) > 0;
+}
 
 const TAU = Math.PI * 2;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -45,6 +65,10 @@ export function createEffectSampler(config, elapsedSeconds) {
   const phase = elapsedSeconds * (0.05 + settings.speed / 100 * 1.8) * direction;
   const travel = phase * direction;
   const density = 0.5 + settings.scale / 100 * 5.5;
+  const custom = settings.effect === 'custom' ? { ...DEFAULT_CUSTOM, ...settings.custom } : null;
+  const customTime = custom ? Math.max(0, elapsedSeconds) / custom.cycleSeconds : 0;
+  const rawCustomOffset = custom?.motion === 'scroll' ? fract(customTime) : custom?.motion === 'bounce' ? 0.5 - 0.5 * Math.cos(customTime * TAU) : 0;
+  const customOffset = Math.round(rawCustomOffset * 1e12) / 1e12;
 
   return (position, index = 0) => {
     let color = palette[0], intensity = brightness;
@@ -219,6 +243,12 @@ export function createEffectSampler(config, elapsedSeconds) {
         const x = orientedPosition * (4 + settings.scale / 100 * 16);
         const heat = smoothNoise(x - travel * 0.15, travel * 0.3 + 23) ** 3;
         color = gradient(palette, heat); intensity *= 0.03 + 0.97 * heat;
+        break;
+      }
+      case 'custom': {
+        const point = orientedPosition * custom.repeats - customOffset;
+        color = custom.pattern === 'bands' ? palette[Math.floor(fract(point + 1e-10) * palette.length)] : cyclicGradient(palette, point);
+        intensity *= 1 - custom.pulse / 100 * (0.5 - 0.5 * Math.cos(customTime * TAU));
         break;
       }
     }

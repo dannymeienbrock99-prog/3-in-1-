@@ -22,10 +22,10 @@ function json(response, status, value) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); response.end(JSON.stringify(value));
 }
 
-async function readJson(request) {
+async function readJson(request, limit = 64 * 1024) {
   if (!/^application\/json(?:\s*;.*)?$/i.test(request.headers['content-type'] ?? '')) throw new BridgeError('JSON-Inhalt erwartet.', 'INVALID_CONTENT_TYPE', 415);
   let size = 0; const chunks = [];
-  for await (const chunk of request) { size += chunk.length; if (size > 64 * 1024) throw new BridgeError('Die Anfrage ist zu groß.', 'REQUEST_TOO_LARGE', 413); chunks.push(chunk); }
+  for await (const chunk of request) { size += chunk.length; if (size > limit) throw new BridgeError('Die Anfrage ist zu groß.', 'REQUEST_TOO_LARGE', 413); chunks.push(chunk); }
   try { const value = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(); return value; }
   catch { throw new BridgeError('Ungültiger JSON-Inhalt.', 'INVALID_JSON', 400); }
 }
@@ -69,7 +69,7 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
         }
         if (url.pathname.startsWith('/api/openrgb')) throw new BridgeError('Diese PRISM-Version verwendet direkte Windows-RGB-Steuerung und startet kein OpenRGB.', 'OPENRGB_DISABLED', 410);
         if (request.method !== 'POST') throw new BridgeError('API-Endpunkt oder Methode nicht gefunden.', 'NOT_FOUND', 404);
-        const body = await readJson(request);
+        const body = await readJson(request, embedded && profileDirectory && url.pathname === '/api/profiles' ? 128 * 1024 : 64 * 1024);
         if (embedded && profileDirectory && url.pathname === '/api/profiles') return json(response, 200, await serialize(async () => ({ profiles: await saveProfiles(profileDirectory, body.profiles) })));
         if (url.pathname === '/api/system/refresh') return json(response, 200, await inventory({ force: true }));
         if (url.pathname === '/api/msi/setup') return json(response, 200, await installMsiSdk(body));
@@ -101,16 +101,21 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
         }));
         if (url.pathname === '/api/stop') return json(response, 200, await serialize(async () => {
           if (body.deviceIds !== undefined && (!Array.isArray(body.deviceIds) || body.deviceIds.some(id => !Number.isInteger(id) || id < 0))) throw new BridgeError('Ungültige Geräteauswahl.', 'INVALID_TARGETS', 400);
-          engine.stop(body.deviceIds);
-          if (engine.framePromise) await engine.framePromise;
+          const uploaded = [...engine.jobs.values()].filter(job => job.uploaded && (!body.deviceIds || body.deviceIds.includes(job.device.id))).map(job=>job.device);
+          let targets=[];
           if (body.blackout) {
             if (!client.connected) throw new BridgeError('Die Windows-RGB-Verbindung ist nicht aktiv.', 'RGB_DISCONNECTED');
-            const targets = body.deviceIds ? client.devices.filter(device => body.deviceIds.includes(device.id)) : client.devices.filter(device => device.directMode);
+            targets = body.deviceIds ? client.devices.filter(device => body.deviceIds.includes(device.id)) : client.devices.filter(device => device.directMode);
             if (!targets.length) throw new BridgeError('Bitte ein Gerät mit direkter LED-Steuerung auswählen. Herstellereffekte können am jeweiligen Gerät auf „Aus“ gestellt werden.', 'INVALID_TARGETS', 400);
             if (body.deviceIds && targets.length !== new Set(body.deviceIds).size) throw new BridgeError('Ein ausgewähltes Gerät ist nicht mehr verfügbar.', 'DEVICE_NOT_FOUND', 404);
             for (const device of targets) assertDeviceAllowed(device);
-            for (const device of targets) { await client.selectDirect(device); await client.update(device, device.colors.map(() => 0)); }
           }
+          // Keep autonomous receiver loops active in status until their stop
+          // command succeeds. Ordinary frame jobs can stop immediately.
+          engine.stop([...engine.jobs.values()].filter(job=>!job.uploaded && (!body.deviceIds || body.deviceIds.includes(job.device.id))).map(job=>job.device.id));
+          if (engine.framePromise) await engine.framePromise;
+          if (body.blackout) for (const device of targets) { await client.selectDirect(device); const result=await client.update(device,device.colors.map(()=>0)); if(device.effectUpload && result?.confirmed!==true) throw new BridgeError('Ausschalten wurde übertragen; Funkbestätigung steht aus. Der bisherige Effekt bleibt im Status erhalten.','WIRELESS_ACK_PENDING',409);engine.stop([device.id]); }
+          else for (const device of uploaded) { const result=await client.freezeSoftwareEffect(device);if(result?.confirmed!==true)throw new BridgeError('Pause wurde übertragen; Funkbestätigung steht aus. Der bisherige Effekt bleibt im Status erhalten.','WIRELESS_ACK_PENDING',409);engine.stop([device.id]); }
           lastError = null; engine.lastError = null;
           return { stopped: true, blackout: !!body.blackout };
         }));

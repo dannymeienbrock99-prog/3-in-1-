@@ -1,6 +1,6 @@
 import { BridgeError } from './openrgb.mjs';
 import { assertDeviceAllowed } from './device-policy.mjs';
-import { EFFECTS, renderFrame } from './effect-renderer.mjs';
+import { EFFECTS, renderFrame, validateCustomSettings, isAnimatedEffect } from './effect-renderer.mjs';
 
 export { EFFECTS, renderFrame };
 function number(value, fallback, min, max, name) {
@@ -16,7 +16,12 @@ export function validateSettings(input) {
   const colors = input.colors ?? ['#8b5cf6', '#06b6d4'];
   if (!Array.isArray(colors) || colors.length < 1 || colors.length > 8 || colors.some(value => typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value))) throw new BridgeError('Eine bis acht Farben im Format #RRGGBB erwartet.', 'INVALID_COLORS', 400);
   if (input.direction !== undefined && !['forward', 'reverse'].includes(input.direction)) throw new BridgeError('Ungültige Effektrichtung.', 'INVALID_SETTINGS', 400);
-  return { effect, colors: colors.map(value => value.toLowerCase()), brightness: number(input.brightness, 80, 0, 100, 'Helligkeit'), speed: number(input.speed, 50, 1, 100, 'Tempo'), scale: number(input.scale, 40, 1, 100, 'Effektgröße'), direction: input.direction ?? 'forward' };
+  const settings = { effect, colors: colors.map(value => value.toLowerCase()), brightness: number(input.brightness, 80, 0, 100, 'Helligkeit'), speed: number(input.speed, 50, 1, 100, 'Tempo'), scale: number(input.scale, 40, 1, 100, 'Effektgröße'), direction: input.direction ?? 'forward' };
+  if (effect === 'custom') {
+    try { settings.custom = validateCustomSettings(input.custom); }
+    catch (error) { throw new BridgeError(error.message, 'INVALID_SETTINGS', 400); }
+  }
+  return settings;
 }
 
 export class EffectEngine {
@@ -26,8 +31,9 @@ export class EffectEngine {
     client.on('disconnected', error => { this.stop(); this.lastError = error.message; });
     client.on('devicesChanged', () => { this.stop(); this.lastError = 'Die Geräteliste wurde geändert. Bitte Geräte erneut erkennen.'; });
   }
-  get running() { return [...this.jobs.values()].some(job => !['static', 'gradient'].includes(job.settings.effect)); }
-  get active() { return [...this.jobs].map(([deviceId, job]) => ({ deviceId, settings: job.settings, zones: job.zones, appliedAt: job.appliedAt })); }
+  get running() { return [...this.jobs.values()].some(job => isAnimatedEffect(job.settings)); }
+  get streaming() { return [...this.jobs.values()].some(job => !job.uploaded && isAnimatedEffect(job.settings)); }
+  get active() { return [...this.jobs].map(([deviceId, job]) => ({ deviceId, settings: job.settings, zones: job.zones, appliedAt: job.appliedAt, ...(job.uploaded ? { uploaded: true, confirmation: job.upload?.confirmation ?? 'transmitted', acknowledgement: job.upload?.acknowledgement ?? null } : {}) })); }
   validateTargets(input) {
     if (!Array.isArray(input.deviceIds) || input.deviceIds.length === 0 || input.deviceIds.length > 128 || input.deviceIds.some(id => !Number.isInteger(id) || id < 0)) throw new BridgeError('Bitte mindestens ein gültiges Gerät auswählen.', 'INVALID_TARGETS', 400);
     if (input.zoneIds !== undefined && (!input.zoneIds || typeof input.zoneIds !== 'object' || Array.isArray(input.zoneIds))) throw new BridgeError('Ungültige Zonenauswahl.', 'INVALID_ZONES', 400);
@@ -52,23 +58,44 @@ export class EffectEngine {
   async apply(input) {
     if (!this.client.connected) throw new BridgeError('Für echte RGB-Steuerung bitte zuerst kompatible Windows-RGB-Geräte suchen.', 'RGB_DISCONNECTED');
     const settings = validateSettings(input), targets = this.validateTargets(input);
+    if (targets.some(({device}) => device.effectUpload === true) && typeof this.client.applySoftwareEffect !== 'function') throw new BridgeError('Die Effektübertragung für dieses Gerät ist nicht verfügbar.', 'DIRECT_UNSUPPORTED', 422);
+    const uploads = [];
+    const previousUploads = new Map(targets.map(({device}) => [device.id,this.jobs.get(device.id)]).filter(([,job])=>job?.uploaded));
     this.lastError = null;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this.framePromise) await this.framePromise;
     // Validate the whole selection before switching any device mode.
     try {
-      for (const { device } of targets) { await this.client.selectDirect(device); delete device.activeNativeEffect; }
+      for (const { device } of targets) if (device.effectUpload !== true) { await this.client.selectDirect(device); delete device.activeNativeEffect; }
       const started = this.now();
       const appliedAt = Date.now();
-      for (const { device, zones } of targets) this.jobs.set(device.id, { device, zones, settings, started, appliedAt });
+      for (const { device, zones } of targets) {
+        if (device.effectUpload === true) {
+          const upload = await this.client.applySoftwareEffect(device, settings, zones);
+          const acknowledgement = { deviceId: device.id, confirmation: upload?.confirmation ?? 'transmitted', acknowledgement: upload?.acknowledgement ?? null };
+          delete device.activeNativeEffect;
+          this.jobs.set(device.id, { device, zones, settings, started, appliedAt, uploaded: true, upload: acknowledgement });
+          uploads.push(acknowledgement);
+        } else this.jobs.set(device.id, { device, zones, settings, started, appliedAt });
+      }
       await this.tick();
-    } catch (error) { this.stop(targets.map(({device})=>device.id)); throw error; }
+    } catch (error) {
+      const uploadedIds = new Set(uploads.map(value => value.deviceId));
+      const preservedIds = new Set(uploadedIds);
+      for (const [id,job] of previousUploads) if (this.client.connected && this.client.devices.includes(job.device)) {
+        if (!uploadedIds.has(id)) this.jobs.set(id,job);
+        preservedIds.add(id);
+      }
+      this.stop(targets.filter(({device})=>!preservedIds.has(device.id)).map(({device})=>device.id));
+      if (uploads.length) error.appliedDeviceIds = [...uploadedIds];
+      throw error;
+    }
     finally { this.ensureTimer(); }
-    if (!this.running && this.timer) { clearInterval(this.timer); this.timer = null; }
-    return { applied: targets.map(({ device }) => device.id), effect: settings.effect, settings, streamed: true };
+    if (!this.streaming && this.timer) { clearInterval(this.timer); this.timer = null; }
+    return { applied: targets.map(({ device }) => device.id), effect: settings.effect, settings, streamed: targets.some(({device})=>device.effectUpload !== true), ...(uploads.length ? { uploads } : {}) };
   }
   ensureTimer() {
-    if (!this.timer && this.running) {
+    if (!this.timer && this.streaming) {
       this.timer = setInterval(() => this.tick().catch(error => { this.lastError = error.message; }), 1000 / this.fps);
       this.timer.unref();
     }
@@ -81,6 +108,7 @@ export class EffectEngine {
   async renderTick() {
       let failure = null;
       for (const job of this.jobs.values()) {
+        if (job.uploaded) continue;
         try {
         const elapsed = (this.now() - job.started) / 1000;
         const frame = job.device.colors.slice();
@@ -101,6 +129,6 @@ export class EffectEngine {
   }
   stop(deviceIds) {
     if (deviceIds) for (const id of deviceIds) this.jobs.delete(id); else this.jobs.clear();
-    if (!this.running && this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (!this.streaming && this.timer) { clearInterval(this.timer); this.timer = null; }
   }
 }

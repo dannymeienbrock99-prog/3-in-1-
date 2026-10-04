@@ -60,10 +60,10 @@ export function buildCoverage({ inventory = {}, native = {}, corsair = {}, razer
     if (!observed.some(device=>device.category==='monitor' && instanceId && clean(device.instanceId).toUpperCase()===instanceId)) observed.push({...monitor,id:`monitor:${monitor.instanceId || index}`,category:'monitor',source:'Windows-EDID',controlled:false});
   }
   const controlled = native.connected ? (native.devices || []).filter(device => (device.directMode || device.nativeEffects?.some(effect => effect.supported !== false)) && !isProtectedDevice(device)) : [];
-  const sources = { corsair:'iCUE', windows:'Windows-RGB', msi:'MSI Mystic Light', kingston:'Kingston FURY CTRL', lianli:'Lian Li USB' };
+  const sources = { corsair:'iCUE', windows:'Windows-RGB', msi:'MSI Mystic Light', kingston:'Kingston FURY CTRL', lianli:'Lian Li USB', 'lianli-wireless':'Lian Li Strimer Wireless' };
   if (native.connected) {
     observed.push(...(native.devices || []).map(device => ({...device, id:`rgb:${device.id}`, manufacturer:device.vendor, source:sources[device.provider] || 'RGB-Anbindung', category:device.typeName || 'RGB', controlled:controlled.includes(device)})));
-    observed.push(...(native.details?.discovery || []).filter(device=>device.status !== 'connected' && !(native.devices || []).some(target=>device.deviceId !== undefined && target.id === device.deviceId)).map((device,index) => ({...device, id:`diagnostic:${index}`, manufacturer:device.vendor, source:device.provider === 'corsair' ? 'iCUE · derzeit nicht steuerbar' : 'Windows-RGB · derzeit nicht steuerbar', category:'RGB', controlled:false})));
+    observed.push(...(native.details?.discovery || []).filter(device=>device.status !== 'connected' && !(native.devices || []).some(target=>device.deviceId !== undefined && target.id === device.deviceId)).map((device,index) => ({...device, id:`diagnostic:${index}`, manufacturer:device.vendor, source:`${sources[device.provider] || 'RGB-Anbindung'} · ${device.status === 'detected' ? 'USB-Gerät erkannt' : 'derzeit nicht steuerbar'}`, category:'RGB', controlled:false})));
   }
   const groups = new Map(), unidentified = [];
   for (const device of observed) {
@@ -85,7 +85,7 @@ export function buildCoverage({ inventory = {}, native = {}, corsair = {}, razer
     else if (group.id === 'msi' && !msi.sdkInstalled) integration = {...integration, status:'setup-required', message:'Für MSI-RGB die optionale MSI-Anbindung einrichten und MSI Center mit Mystic Light öffnen.'};
     else if (group.id === 'msi') integration = {...integration, status:'provider-required', message:native.details?.msi?.message || 'Mystic Light meldet aktuell kein steuerbares RGB-Ziel.'};
     else if (group.id === 'kingston') integration = {...integration, status:'provider-required', message:native.details?.kingston?.message || 'FURY-RAM erkannt. Die Herstellereffekte benötigen einen erreichbaren offiziellen FURY-CTRL-Dienst.'};
-    else if (group.id === 'lianli') integration = {...integration, status:'provider-required', message:native.details?.lianli?.message || 'Lian-Li-Geräte erkannt. RGB-Steuerung benötigt einen unterstützten USB-HID-Controller.'};
+    else if (group.id === 'lianli') integration = {...integration, status:'provider-required', message:[native.details?.lianli?.message,native.details?.lianliWireless?.message].filter(Boolean).join(' ') || 'Lian-Li-Geräte erkannt. Für Strimer Wireless den L-Wireless-Controller mit vorhandenem WinUSB-Treiber anschließen und die Kabel in L-Connect koppeln.'};
     else if (group.id === 'razer' && razer.status === 'available') integration = {...integration, status:'runtime-only', message:'Razer Chroma wurde zusätzlich erkannt. Diese Version liest den SDK-Status, bietet über Chroma noch keine Farbübertragung an.'};
     return {...group, status, integration};
   }).sort((a,b) => a.name.localeCompare(b.name,'de-DE'));
@@ -98,7 +98,7 @@ export function buildCoverage({ inventory = {}, native = {}, corsair = {}, razer
       {id:'windows',name:'Windows · Dynamische Beleuchtung',status:native.connected ? native.details?.windows?.status || 'not-verified' : 'disconnected',deviceCount:windowsCount,message:native.connected ? native.details?.windows?.message || 'Kompatible LampArray-Geräte werden separat über Windows gesucht.' : 'Die Windows-RGB-Verbindung ist derzeit nicht aktiv. Die PC-Geräteliste bleibt verfügbar.'},
       {id:'corsair',name:'iCUE · bereitgestellte Hersteller',status:native.connected ? native.details?.corsair?.status || (corsair.sdkInstalled ? 'not-verified' : 'sdkMissing') : corsair.sdkInstalled ? 'disconnected' : 'sdkMissing',deviceCount:corsairCount,message:native.connected ? native.details?.corsair?.message || 'Geräteliste über iCUE, sofern die optionale Anbindung eingerichtet ist.' : 'Keine aktive iCUE-Gerätesitzung. Die erkannten Windows-Namen bestätigen noch keine RGB-Steuerung.'},
       {id:'razer',name:'Razer Chroma · Erkennung',status:razer.status || 'unavailable',version:razer.version || null,message:razer.message || 'Keine antwortende Chroma-Schnittstelle gefunden. Es wird keine Chroma-Sitzung geöffnet.'},
-      ...[['msi','MSI · Mystic Light'],['kingston','Kingston · FURY CTRL'],['lianli','Lian Li · USB-Controller']].map(([id,name]) => ({id,name,status:native.connected ? native.details?.[id]?.status || 'not-verified' : 'disconnected',deviceCount:controlled.filter(device=>device.provider===id).length,message:native.details?.[id]?.message || 'RGB-Gerätesuche prüft die Hersteller-Anbindung.'})),
+      ...[['msi','MSI · Mystic Light'],['kingston','Kingston · FURY CTRL'],['lianli','Lian Li · USB-Controller'],['lianli-wireless','Lian Li · Strimer Wireless']].map(([id,name]) => {const key=id==='lianli-wireless'?'lianliWireless':id;return {id,name,status:native.connected ? native.details?.[key]?.status || 'not-verified' : 'disconnected',deviceCount:controlled.filter(device=>device.provider===id).length,message:native.details?.[key]?.message || 'RGB-Gerätesuche prüft die Hersteller-Anbindung.'};}),
     ] };
 }
 

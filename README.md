@@ -1,8 +1,16 @@
-# Batto 3-in-1 · 1.11.0
+# Batto 3-in-1 · 1.12.0
 
-## RGB, RAM und Lüfter · 1.11.0
+## Strimer Wireless und eigener Effekt · 1.12.0
 
-**RGB-Steuerung** öffnet die eingebaute PRISM-Oberfläche 1.6.0. Farben, Helligkeit, Geschwindigkeit, Richtung, 30 PRISM-Effekte und eigene Lichtprofile lassen sich dort einstellen. Die PC-Übersicht zeigt erkannte Komponentennamen. Ein erkanntes MSI-Mainboard verwendet das bereitgestellte MSI-Mainboard-Bild, ASUS den White Build; bei anderen Herstellern bleibt die allgemeine Vorschau. Die Bilder veranschaulichen den Aufbau und sind kein Foto des erkannten Mainboardmodells.
+**RGB-Steuerung → Geräte suchen** erkennt jetzt gekoppelte Strimer-Wireless-Kabel über den vorhandenen Windows-WinUSB-Treiber: L-Wireless V1 `0416:8040/8041` und V2 `1A86:E304/E305`. Sender und Empfänger werden getrennt geprüft; nur eindeutig zugeordnete Kabel mit bekannter LED-Anordnung sind steuerbar. Die lokale Abfrage hat ein GPU-Kabel mit **174 LEDs**, ein 24-Pin-Kabel mit **132 LEDs** und deren Funkkennung `rxType 41` geliefert. Dabei wurden ausschließlich Gerätemetadaten gelesen, keine sichtbaren Lichtfarben geprüft. Unbekannte Gerätekennungen und LED-Anordnungen bleiben gesperrt; weitere Firmwareversionen sind nicht an echter Hardware geprüft.
+
+Alle bisherigen 30 Softwareeffekte bleiben erhalten. Dazu kommt **Eigener Effekt**: bis zu acht Farben, Farbverlauf oder Farbblöcke, Bewegung, Wiederholung, Umlaufzeit, Richtung und Puls einstellen und als Profil speichern. Insgesamt stehen **31 PRISM-Softwareeffekte** bereit. Bei Strimer Wireless wird ein Effekt einmal an das gewählte Kabel übertragen und dort als Schleife abgespielt. **Pause** und **Aus** gelten erst nach einer Funkbestätigung als erledigt; ohne Bestätigung bleibt der bisherige Effekt im Status. Programm schließen beendet die Kabelschleife nicht. Der vorhandene Katalog mit **94 Herstellereffekten für kabelgebundene Lian-Li-Controller** bleibt unverändert und ist von diesen Softwareeffekten getrennt.
+
+Die Kabel zuerst in L-Connect mit dem vorhandenen Sender koppeln und Mainboard-Licht-Synchronisierung ausschalten. Der Installer ersetzt oder installiert keinen USB-Treiber und ändert weder Kopplung noch Lüfterkurven. Bei einem USB-Zugriffsfehler L-Connect schließen und erneut suchen. Jarvis verwendet die gleiche Geräteauswahl; gespeicherte Einstellungen des eigenen Effekts bleiben bei Licht an/aus und Helligkeitsänderungen erhalten.
+
+## RGB, RAM und Lüfter · 1.12.0
+
+**RGB-Steuerung** öffnet die eingebaute PRISM-Oberfläche 1.7.0. Farben, Helligkeit, Geschwindigkeit, Richtung, 31 PRISM-Effekte und eigene Lichtprofile lassen sich dort einstellen. Die PC-Übersicht zeigt erkannte Komponentennamen. Ein erkanntes MSI-Mainboard verwendet das bereitgestellte MSI-Mainboard-Bild, ASUS den White Build; bei anderen Herstellern bleibt die allgemeine Vorschau. Die Bilder veranschaulichen den Aufbau und sind kein Foto des erkannten Mainboardmodells.
 
 Die Geräteerkennung und Lichtsteuerung verwenden Windows LampArray, die optionale Corsair-iCUE-Schnittstelle, MSI Mystic Light, den vorhandenen Kingston-FURY-CTRL-Dienst und geprüfte Lian-Li-HID-Controller. Ein erkannter PC-Bauteil ist nur steuerbar, wenn eine unterstützte Lichtverbindung vorhanden ist. Mainboard- und RAM-Namen allein bestätigen keine RGB-Unterstützung. iCUE und dessen SDK müssen für Corsair eingerichtet sein; die Hersteller-SDK wird bei Bedarf getrennt geladen. Die Ansicht zeigt fehlende Voraussetzungen. Stream Deck und Elgato-Geräte sind von der RGB-Geräteansprache ausgeschlossen.
 
@@ -209,7 +217,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.11.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.12.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

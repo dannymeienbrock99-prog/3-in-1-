@@ -15,9 +15,9 @@ const light = packed => channels(packed).reduce((sum, channel) => sum + channel,
 const peak = frame => frame.indexOf(Math.max(...frame));
 const transitions = frame => frame.slice(1).filter((color, index) => color !== frame[index]).length;
 
-test('all thirty effects are accepted with the same editable settings', () => {
-  assert.equal(EFFECTS.length, 30);
-  assert.equal(new Set(EFFECTS).size, 30);
+test('the thirty released effects and custom editor are accepted with editable settings', () => {
+  assert.equal(EFFECTS.length, 31);
+  assert.equal(new Set(EFFECTS).size, 31);
   for (const effect of EFFECTS) assert.equal(config(effect).effect, effect);
   assert.deepEqual(Object.keys(EFFECT_NAMES),EFFECTS);
   assert.deepEqual(Object.keys(EFFECT_DETAILS),EFFECTS);

@@ -3,6 +3,14 @@ const fs=require('node:fs'),fsp=require('node:fs/promises'),path=require('node:p
 const {pathToFileURL}=require('node:url');
 const EFFECT_NAMES={static:'Statisch',rainbow:'Regenbogen',breathing:'Atmen',wave:'Welle',gradient:'Farbverlauf',sparkle:'Funkeln',colorcycle:'Farbwechsel',comet:'Komet',chase:'Lauflicht',scanner:'Scanner',ripple:'Wasserwelle',fire:'Feuer',aurora:'Nordlicht',stripes:'Farbstreifen'};
 const DEFAULT_SETTINGS={effect:'rainbow',colors:['#a78bfa','#f34793','#3278ff','#00c6c9'],brightness:80,speed:50,scale:50,direction:'forward'};
+const DEFAULT_CUSTOM={version:1,pattern:'gradient',motion:'scroll',repeats:1,cycleSeconds:4,pulse:0};
+function customSettings(input){
+ if(input!==undefined&&(!input||typeof input!=='object'||Array.isArray(input)))throw Error('Ungültige Einstellungen für den eigenen RGB-Effekt.');
+ const value={...DEFAULT_CUSTOM,...input};
+ if(value.version!==1||!['gradient','bands'].includes(value.pattern)||!['still','scroll','bounce'].includes(value.motion)||!Number.isInteger(value.repeats)||value.repeats<1||value.repeats>12||!Number.isFinite(value.cycleSeconds)||value.cycleSeconds<.25||value.cycleSeconds>60||!Number.isFinite(value.pulse)||value.pulse<0||value.pulse>100)throw Error('Ungültige Einstellungen für den eigenen RGB-Effekt.');
+ return {version:1,pattern:value.pattern,motion:value.motion,repeats:value.repeats,cycleSeconds:value.cycleSeconds,pulse:value.pulse};
+}
+const cloneSettings=value=>({...value,colors:[...value.colors],...(value.effect==='custom'?{custom:customSettings(value.custom)}:{})});
 const PROVIDER_NAMES={kingston:'Kingston',msi:'MSI',corsair:'Corsair',lianli:'Lian Li',windows:'Windows'};
 const GENERIC_NATIVE={
  kingston:{static:['static_color'],rainbow:['rainbow_1'],breathing:['breath'],colorcycle:['dynamic_color'],comet:['comet'],chase:['running'],fire:['flame']},
@@ -21,7 +29,7 @@ function stateOf(device){
 }
 function activities(active,devices){
  const records=[];
- for(const item of active||[])if(Number.isInteger(item.deviceId)&&item.settings){const s=item.settings,zones=Array.isArray(item.zones)?[...item.zones]:null;records.push({id:item.deviceId,native:false,zones,stamp:Number.isFinite(item.appliedAt)?item.appliedAt:0,marker:JSON.stringify(['direct',s.effect,s.colors,s.brightness,s.speed,s.scale,s.direction,zones,item.appliedAt||0])});}
+ for(const item of active||[])if(Number.isInteger(item.deviceId)&&item.settings){const s=item.settings,zones=Array.isArray(item.zones)?[...item.zones]:null;records.push({id:item.deviceId,native:false,zones,stamp:Number.isFinite(item.appliedAt)?item.appliedAt:0,marker:JSON.stringify(['direct',s.effect,s.colors,s.brightness,s.speed,s.scale,s.direction,s.effect==='custom'?s.custom:null,zones,item.appliedAt||0])});}
  for(const device of devices){const state=stateOf(device);if(state&&nativeModes(device).some(effect=>effect.id===state.effectId))records.push({id:device.id,native:true,zones:null,stamp:Number.isFinite(state.appliedAt)?state.appliedAt:0,marker:JSON.stringify(['native',state.effectId,state.colors,state.brightness,state.speed,state.direction,state.appliedAt||0])});}
  return records;
 }
@@ -30,7 +38,7 @@ function confirmed(result,ids,effectId){
  if(received.length!==ids.length||new Set(received).size!==ids.length||ids.some(id=>!received.includes(id))||(effectId!==undefined&&result.effectId!==effectId))throw Error('Die RGB-Anwendung konnte nicht vollständig bestätigt werden.');
 }
 class RgbService{
- constructor({root,directory,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
+ constructor({root,directory,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastCustomSettings=null;this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
  softwareEffects(){
   const effects=Object.entries(EFFECT_NAMES).map(([id,name])=>({id,name})),ids=new Set(effects.map(effect=>effect.id));
   try{const supplied=JSON.parse(fs.readFileSync(path.join(this.root,'server/effect-catalog.json'),'utf8'));if(Array.isArray(supplied))for(const effect of supplied){if(effect&&typeof effect.id==='string'&&/^[a-z][a-z0-9]{0,63}$/.test(effect.id)&&typeof effect.name==='string'&&!ids.has(effect.id)){effects.push({id:effect.id,name:clean(effect.name)});ids.add(effect.id);}}}catch{}
@@ -55,7 +63,7 @@ class RgbService{
     const address=await bridge.listen();
     if(this.closed){await this.dispose(bridge);throw Error('Die RGB-Steuerung ist geschlossen.');}
     this.bridge=bridge;this.url=`http://127.0.0.1:${address.port}/?embedded=1`;this.error='';
-    try{const saved=JSON.parse(await fsp.readFile(path.join(this.directory,'voice-settings.json'),'utf8'));this.lastSettings=this.settings(saved.settings);if(Number.isFinite(saved.lastBrightness)&&saved.lastBrightness>0&&saved.lastBrightness<=100)this.lastBrightness=saved.lastBrightness;}catch{}
+    try{const saved=JSON.parse(await fsp.readFile(path.join(this.directory,'voice-settings.json'),'utf8'));this.lastSettings=this.settings(saved.settings);if(Number.isFinite(saved.lastBrightness)&&saved.lastBrightness>0&&saved.lastBrightness<=100)this.lastBrightness=saved.lastBrightness;if(saved.lastCustomSettings?.effect==='custom')try{this.lastCustomSettings=this.settings(saved.lastCustomSettings);}catch{}if(this.lastSettings.effect==='custom')this.lastCustomSettings=cloneSettings(this.lastSettings);}catch{}
     this.changed();return this.snapshot();
    }catch(e){this.error=e.message;this.changed();throw e;}
    finally{this.starting=null;}
@@ -65,7 +73,7 @@ class RgbService{
   if(!value||!this.softwareEffects().some(effect=>effect.id===value.effect)||!Array.isArray(value.colors)||value.colors.length<1||value.colors.length>8||value.colors.some(c=>typeof c!=='string'||!/^#[0-9a-f]{6}$/i.test(c)))throw Error('Ungültige RGB-Einstellungen.');
   for(const [key,min,max]of [['brightness',0,100],['speed',1,100],['scale',1,100]])if(!Number.isFinite(value[key])||value[key]<min||value[key]>max)throw Error('Ungültige RGB-Einstellungen.');
   if(!['forward','reverse'].includes(value.direction))throw Error('Ungültige Effektrichtung.');
-  return {effect:value.effect,colors:[...value.colors],brightness:value.brightness,speed:value.speed,scale:value.scale,direction:value.direction};
+  return {effect:value.effect,colors:[...value.colors],brightness:value.brightness,speed:value.speed,scale:value.scale,direction:value.direction,...(value.effect==='custom'?{custom:customSettings(value.custom)}:{})};
  }
  validate(input){
   if(!input||typeof input!=='object'||Array.isArray(input)||!['color','effect','brightness','off','on','status'].includes(input.type))throw Error('Unbekannte RGB-Aktion.');
@@ -155,19 +163,26 @@ class RgbService{
   if(input.type==='status'){const s=this.snapshot(),native=s.nativeActive.length?`Für ${s.nativeActive.length} Geräte sind Herstellereffekte eingestellt.`:'';return {ok:true,text:s.connected?`${s.deviceCount} RGB-Geräte erkannt. ${s.effectRunning?'Ein RGB-Effekt läuft. '+native:native||'Kein bewegter RGB-Effekt aktiv.'}`.trim():'RGB-Steuerung bereit. Noch keine RGB-Geräte verbunden.'};}
   try{
    const before=this.bridge.status(),active=before.active||[];
-   if(active[0]?.settings)this.lastSettings=this.settings(active[0].settings);
-   if(this.lastSettings.brightness>0)this.lastBrightness=this.lastSettings.brightness;
    if(!before.connected)await this.request('discover',{});
    const {devices}=await this.request('devices');
    if(!Array.isArray(devices))throw Error('Die RGB-Geräteliste ist ungültig.');
    const compatible=devices.filter(d=>(d.directMode||nativeModes(d).length)&&!d.protected);
    if(!compatible.length)throw Error('Keine steuerbaren RGB-Geräte erkannt. Öffne RGB-Steuerung und prüfe die Windows- oder iCUE-Anbindung.');
    const {deviceIds,zoneIds}=this.chooseTargets(active,compatible,input);
+   const selectedActive=active.filter(item=>deviceIds.includes(item.deviceId)&&item.settings).reduce((latest,item)=>!latest||(item.appliedAt||0)>(latest.appliedAt||0)?item:latest,null);
+   if(selectedActive){this.lastSettings=this.settings(selectedActive.settings);if(this.lastSettings.effect==='custom')this.lastCustomSettings=cloneSettings(this.lastSettings);}
+   if(this.lastSettings.brightness>0)this.lastBrightness=this.lastSettings.brightness;
    // A failed driver write must not widen the next command to unrelated devices.
    this.lastTargets=deviceIds;this.lastZoneIds=zoneIds;
-   const settings={...this.lastSettings,colors:[...this.lastSettings.colors]},native=parseNative(input.effect);
-   if(input.type==='color'){settings.effect='static';settings.colors=[input.color.toLowerCase()];}
-   if(input.type==='effect'&&!native)settings.effect=input.effect;
+   const settings=cloneSettings(this.lastSettings),native=parseNative(input.effect);
+   if(input.type==='color'){settings.effect='static';settings.colors=[input.color.toLowerCase()];delete settings.custom;}
+   if(input.type==='effect'&&!native){
+    if(input.effect==='custom'){
+     if(settings.effect!=='custom'&&this.lastCustomSettings){settings.colors=[...this.lastCustomSettings.colors];settings.direction=this.lastCustomSettings.direction;settings.custom=customSettings(this.lastCustomSettings.custom);}
+     else settings.custom=customSettings(settings.custom);
+    }else delete settings.custom;
+    settings.effect=input.effect;
+   }
    if(input.type==='brightness')settings.brightness=input.brightness;
    if(input.type==='on')settings.brightness=settings.brightness>0?settings.brightness:this.lastBrightness;
    const selected=deviceIds.map(id=>compatible.find(device=>device.id===id));
@@ -177,20 +192,22 @@ class RgbService{
    // Validate every provider and selected zone before the first write. Hardware
    // failures can still be partial; exact acknowledgements are required below.
    await this.validatePlan(plan);
+   let uploaded=false;
    for(const step of plan){
     const result=await this.request(step.route,step.body);confirmed(result,step.body.deviceIds,step.route==='native-effect'?step.body.effectId:undefined);
+    uploaded||=Array.isArray(result.uploads)&&result.uploads.length>0;
     if(step.route==='native-effect'){
      if(step.resume)this.lastNativeSettings.set(step.device.id,step.resume);
      else if(!['off','all_off'].includes(step.effect.id.toLowerCase())){const {deviceIds:ignored,...saved}=step.body;this.lastNativeSettings.set(step.device.id,{...saved,colors:[...saved.colors]});}
     }
    }
    if(input.type==='off'&&direct.length)await this.request('stop',{deviceIds:direct.map(device=>device.id)});
-   if(input.type!=='off'){this.lastSettings=settings;if(settings.brightness>0)this.lastBrightness=settings.brightness;}
+   if(input.type!=='off'){this.lastSettings=this.settings(settings);if(settings.brightness>0)this.lastBrightness=settings.brightness;if(settings.effect==='custom')this.lastCustomSettings=cloneSettings(this.lastSettings);}
    this.lastTargets=deviceIds;this.lastZoneIds=zoneIds;this.error='';this.revision++;
-   try{await fsp.mkdir(this.directory,{recursive:true});const file=path.join(this.directory,'voice-settings.json');await fsp.writeFile(file+'.tmp',JSON.stringify({settings:this.lastSettings,lastBrightness:this.lastBrightness}));await fsp.rename(file+'.tmp',file);}catch{this.error='RGB geändert; die Einstellung konnte nicht gespeichert werden.';}
+   try{await fsp.mkdir(this.directory,{recursive:true});const file=path.join(this.directory,'voice-settings.json');await fsp.writeFile(file+'.tmp',JSON.stringify({settings:this.lastSettings,lastBrightness:this.lastBrightness,...(this.lastCustomSettings?{lastCustomSettings:this.lastCustomSettings}:{})}));await fsp.rename(file+'.tmp',file);}catch{this.error='RGB geändert; die Einstellung konnte nicht gespeichert werden.';}
    this.changed();
    this.rememberSelections();
-   const text=input.type==='off'?'RGB-Beleuchtung ausgeschaltet.':input.type==='on'?'RGB-Beleuchtung eingeschaltet.':input.type==='color'?'RGB-Farbe angewendet.':input.type==='effect'?`RGB-Effekt ${this.catalog().effects.find(effect=>effect.id===input.effect)?.name||EFFECT_NAMES[input.effect]} angewendet.`:`RGB-Helligkeit auf ${input.brightness} Prozent gestellt.`;
+   const text=uploaded?'RGB-Befehle an den Wireless-Controller übertragen.':input.type==='off'?'RGB-Beleuchtung ausgeschaltet.':input.type==='on'?'RGB-Beleuchtung eingeschaltet.':input.type==='color'?'RGB-Farbe angewendet.':input.type==='effect'?`RGB-Effekt ${this.catalog().effects.find(effect=>effect.id===input.effect)?.name||EFFECT_NAMES[input.effect]} angewendet.`:`RGB-Helligkeit auf ${input.brightness} Prozent gestellt.`;
    return {ok:true,text};
   }catch(e){this.rememberSelections();this.error=e.message;this.changed();throw e;}
  }

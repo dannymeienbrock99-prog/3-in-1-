@@ -2,7 +2,7 @@
 
 ## Strimer Wireless und eigene Muster
 
-Gekoppelte Strimer-Wireless-Kabel werden zusätzlich über den vorhandenen Windows-WinUSB-Treiber erkannt: V1 `0416:8040/8041`, V2 `1A86:E304/E305`. Sender, Empfänger, Kabelkennung und LED-Anordnung werden geprüft. Die lokale Metadatenabfrage meldete ein GPU-Kabel mit **174 LEDs**, ein 24-Pin-Kabel mit **132 LEDs** und deren Funkkennung `rxType 41`. Sie bestätigte keine sichtbaren LED-Farben. Unbekannte Kennungen und Anordnungen bleiben gesperrt; weitere Firmwareversionen sind noch nicht an echter Hardware geprüft. Der Installer ersetzt keine Treiber und verändert keine Kopplung oder Lüftereinstellungen.
+Gekoppelte Strimer-Wireless-Kabel werden zusätzlich über den vorhandenen Windows-WinUSB-Treiber erkannt: V1 `0416:8040/8041`, V2 `1A86:E304/E305`. Sender, Empfänger, Kabelkennung und LED-Anordnung werden geprüft. Die lokale Metadatenabfrage meldete ein GPU-Kabel mit **174 LEDs**, ein 24-Pin-Kabel mit **132 LEDs**. Sie bestätigte keine sichtbaren LED-Farben. Unbekannte Kennungen und Anordnungen bleiben gesperrt; weitere Firmwareversionen sind noch nicht an echter Hardware geprüft. Der Installer ersetzt keine Treiber und verändert keine Kopplung oder Lüftereinstellungen.
 
 Kabel zunächst in L-Connect koppeln und Mainboard-Licht-Synchronisierung ausschalten. Bei USB-Zugriffsfehlern L-Connect schließen und **Geräte suchen** erneut ausführen. Unterstützte Kabel bieten die bisherigen 30 Softwareeffekte sowie **Eigener Effekt**: acht Farben, Farbverlauf oder Farbblöcke, Bewegung, Wiederholung, Umlaufzeit, Richtung und Puls. Alle **31 Effekte** und eigene Einstellungen lassen sich als Profile speichern. Jarvis erhält eigene Einstellungen beim Wiedereinschalten und Ändern der Helligkeit.
 

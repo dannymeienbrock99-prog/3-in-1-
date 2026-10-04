@@ -8,7 +8,7 @@
 
 Der Effekt wird als Schleife an das Kabel übertragen. Eine erfolgreiche Übertragung wird von einer Bestätigung des Funkempfängers unterschieden. **Pause** und **Aus** werden erst nach dieser Bestätigung als erledigt angezeigt. Beim Schließen des Programms läuft die Kabelschleife weiter; vorher **Aus** anwenden, wenn das Licht ausgehen soll. Jarvis erhält eigene Effekte beim Wiedereinschalten und bei Helligkeitsänderungen.
 
-Die lokale Geräteabfrage bestätigte ein GPU-Strimer mit **174 LEDs** und ein 24-Pin-Strimer mit **132 LEDs**, beide mit Funkkennung `rxType 41`. Es wurde keine sichtbare Lichtfarbe an Hardware geprüft. Weitere Firmwareversionen sind noch nicht an echter Hardware geprüft. Der Installer verändert keine USB-Treiber, Kopplung, PWM oder Lüfterkurven. Der **94-Effekt-Katalog für kabelgebundene Lian-Li-Controller** bleibt erhalten.
+Die lokale Geräteabfrage bestätigte ein GPU-Strimer mit **174 LEDs** und ein 24-Pin-Strimer mit **132 LEDs**. Es wurde keine sichtbare Lichtfarbe an Hardware geprüft. Weitere Firmwareversionen sind noch nicht an echter Hardware geprüft. Der Installer verändert keine USB-Treiber, Kopplung, PWM oder Lüfterkurven. Der **94-Effekt-Katalog für kabelgebundene Lian-Li-Controller** bleibt erhalten.
 
 ## RGB-Neuerungen
 Öffne **RGB-Steuerung**. Alle 30 bisherigen Effekte bleiben vorhanden; insgesamt gibt es jetzt 31 PRISM-Effekte einschließlich **Eigener Effekt**. Unter **Effekte deiner Geräte** stehen außerdem die vom erkannten Gerät unterstützten Herstellereffekte. Du kannst einzelne RAM-Riegel/Anschlüsse oder mit der ausdrücklich beschrifteten Schaltfläche alle passenden Ziele einstellen.

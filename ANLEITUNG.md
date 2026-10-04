@@ -1,4 +1,12 @@
-# Batto 3-in-1 · Schnellstart 1.9.2
+# Batto 3-in-1 · Schnellstart 1.9.3
+
+## Lüfterkurven repariert · 1.9.3
+
+Der Kurveneditor zeigt alle Punkte ohne abgeschnittene innere Liste. Spaltenüberschriften passen zu Temperatur und Lüfterleistung; die Bedienelemente eignen sich auch für Touch. Leere Werte, doppelte Temperaturen und ungültige Prozentwerte werden angezeigt. Die Kurve wird nach Temperatur geordnet.
+
+Ungespeicherte Änderungen bleiben beim Aktualisieren erhalten. Kopieren und Exportieren verwenden die sichtbare Kurve. Fehlgeschlagenes Speichern verändert keine bisherigen Einstellungen. In den Profilzuordnungen lässt sich die zugehörige Kurve direkt ansehen; beim erneuten Profilimport bleiben bekannte Lüfternamen erhalten.
+
+**Wertetabelle kopieren → iCUE öffnen** hilft beim Übertragen: In iCUE beim Gerät unter Kühlung eine eigene Kurve erstellen, Temperaturbezug und Punkte eintragen und den gewünschten Lüftern zuordnen. Der JSON-Export ist ein Batto-Entwurf, keine importierbare iCUE-Profildatei. Die öffentliche Corsair-Schnittstelle bietet keinen dokumentierten Schreibzugriff auf Kühlkurven; echte Kühlprofilwechsel bleiben in iCUE beziehungsweise der offiziellen Corsair-Stream-Deck-Aktion.
 
 ## OBS-Sammlungen direkt auswählen · 1.9.2
 

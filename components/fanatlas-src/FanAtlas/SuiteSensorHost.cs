@@ -30,17 +30,18 @@ internal sealed class SuiteSensorHost : IAsyncDisposable
         {
             state = Snapshot(),
             curves = state.CustomCurves.Concat(state.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, Points = c.Points.ToArray() }).ToArray(),
-            fans = state.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveName }).ToArray(),
+            fans = state.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveId, f.CurveName }).ToArray(),
+            profile = new { state.Profile.Name, state.Profile.ImportedAt },
             csvPaths = state.CsvPaths.ToArray(), overlayUrl = bridge.OverlayUrl,
             sources = new { icue = IcueDiscovery.Status, nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages.ToArray(), error = pollError }
         });
         bridge.Configure = (command, body) => Locked(() =>
         {
-            var curve = SuiteState.Configure(state, sensors, command, body);
+            var curve = SuiteState.ConfigureAndSave(state, sensors, command, body);
             if (command == "profile") selectedId = "";
             if (curve != null) selectedId = curve.Id;
-            StateStore.Save(state); Publish();
-            return (object)new { ok = true, hardwareApplied = false };
+            Publish();
+            return (object)new { ok = true, hardwareApplied = false, curveId = curve?.Id };
         });
     }
 

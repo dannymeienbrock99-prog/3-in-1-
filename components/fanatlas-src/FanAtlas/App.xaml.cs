@@ -15,6 +15,7 @@ public partial class App : Application
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
         if (e.Args.Length >= 2 && e.Args[0] == "--fan-tests") { Shutdown(FanDiscoveryTests.Run(e.Args[1])); return; }
+        if (e.Args.Length >= 2 && e.Args[0] == "--curve-tests") { Shutdown(CurveTests.Run(e.Args[1])); return; }
         if (e.Args.Contains("--suite"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;

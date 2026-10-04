@@ -13,6 +13,8 @@ dotnet publish components/audio-control/BattoAudioControl.csproj -c Release -r w
 New-Item -ItemType Directory -Force work | Out-Null
 $fanTest = Start-Process -FilePath (Join-Path $PSScriptRoot 'FanAtlas/FanAtlas.exe') -ArgumentList '--fan-tests',('"' + (Join-Path $PSScriptRoot 'work/fan-tests.txt') + '"') -WindowStyle Hidden -Wait -PassThru
 if ($fanTest.ExitCode -ne 0) { throw 'iCUE fan tests failed' }
+$curveTest = Start-Process -FilePath (Join-Path $PSScriptRoot 'FanAtlas/FanAtlas.exe') -ArgumentList '--curve-tests',('"' + (Join-Path $PSScriptRoot 'work/curve-tests.txt') + '"') -WindowStyle Hidden -Wait -PassThru
+if ($curveTest.ExitCode -ne 0) { throw 'Fan curve persistence tests failed' }
 $plugin = 'streamdeck/de.crazybatto.suite.sdPlugin'
 dotnet publish components/fanatlas-src/FanAtlas.Deck/FanAtlas.Deck.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o "$plugin/bin"; Check-Exit
 Copy-Item assets/fan.png "$plugin/bin/fan.png"
@@ -34,6 +36,7 @@ npm run test:widgets; Check-Exit
 npm run test:touch; Check-Exit
 node --test test/dual-stream*.test.cjs test/obs-scene-import.test.cjs test/obs-collection.test.cjs test/scene-groups.test.cjs; Check-Exit
 npm run test:core; Check-Exit
+node --test test/fan-*.test.cjs; Check-Exit
 node --test test/connector-lifecycle.test.cjs test/settings-import-startup.test.cjs test/youtube-lifecycle.test.cjs test/twitch-popout-lifecycle.test.cjs test/presentation-startup.test.cjs; Check-Exit
 $env:BATTO_DECK_TEST_OUTPUT = Join-Path $PSScriptRoot 'work/deck-native-check'
 try { node test/deck-native-responsive.cjs; Check-Exit } finally { Remove-Item Env:BATTO_DECK_TEST_OUTPUT -ErrorAction SilentlyContinue }
@@ -51,5 +54,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.2.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.9.3.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

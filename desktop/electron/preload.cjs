@@ -7,7 +7,7 @@ const on = (channel, callback) => {
 };
 
 contextBridge.exposeInMainWorld('batto', {
-  suite: (command,value) => {if(!['control','catalog','reset-likes','import-status','import-obs-settings','state','command','settings','preview-event','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
+  suite: (command,value) => {if(!['control','catalog','reset-likes','import-status','import-obs-settings','state','command','settings','preview-event','listen','stop','devices','scenes','fan-config','profile','csv','voice-folder','copy-obs','open-obs','export-layout','import-layout','export-curve','copy-curve','open-icue','plugin','forget-memory'].includes(command))throw Error('Unbekannte Aktion');return ipcRenderer.invoke('suite:'+command,value);},
   touch:(command,value)=>{if(!['state','catalog','save','press','icon','import','export','mobile-start','mobile-stop','mobile-pin','detach','attach','edit-main','always-on-top','presence','packages','package-import','pack-icons','pack-icon','plugin-settings','clipboard-set','clipboard-get','audio-targets','audio-state','volume'].includes(command))throw Error('Unbekannte Touch-Deck-Aktion');return ipcRenderer.invoke('touch:action',{command,value});},
   onTouchState:cb=>on('touch:state',cb),onTouchEdit:cb=>on('touch:edit',cb),
   onTouchPresentation:cb=>on('touch:presentation',cb),

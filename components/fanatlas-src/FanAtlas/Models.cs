@@ -45,7 +45,8 @@ public class FanCurve
     public static string? Validate(FanCurve c)
     {
         if (string.IsNullOrWhiteSpace(c.Name) || c.Name.Length > 100) return "Bitte einen Namen mit 1 bis 100 Zeichen eingeben.";
-        if (string.IsNullOrWhiteSpace(c.SensorLabel)) return "Bitte den Temperaturbezug angeben, z. B. CPU oder Kühlmittel.";
+        if (string.IsNullOrWhiteSpace(c.SensorLabel) || c.SensorLabel.Length > 200) return "Bitte einen Temperaturbezug mit 1 bis 200 Zeichen angeben, z. B. CPU oder Kühlmittel.";
+        if (c.Points == null || c.Points.Any(p => p == null)) return "Kurvenpunkte fehlen.";
         if (c.Points.Count < 2 || c.Points.Count > 20) return "Eine Kurve braucht 2 bis 20 Punkte.";
         for (int i = 0; i < c.Points.Count; i++)
         {

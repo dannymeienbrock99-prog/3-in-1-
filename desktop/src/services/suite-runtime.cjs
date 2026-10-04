@@ -9,7 +9,7 @@ const {controlAudio}=require('./jarvis-audio.cjs');
 const {JarvisModeration}=require('./jarvis-moderation.cjs');
 const TEST=process.env.BATTO_TEST_INSTANCE==='1',FAN_PORT=TEST?17668:17658,SUITE_PORT=TEST?17666:17656;
 class FanClient{
- constructor({root,data}){this.root=root;this.data=data;this.snapshot=null;this.catalog=null;this.error='Messwertdienst startet';this.child=null;this.busy=false;}
+ constructor({root,data}){this.root=root;this.data=data;this.snapshot=null;this.catalog=null;this.error='Messwertdienst startet';this.child=null;this.busy=false;this.pollPromise=null;}
  async request(route,body){const d=JSON.parse(await fsp.readFile(path.join(this.data,'bridge.json'),'utf8'));if(d.port!==FAN_PORT||!/^[A-Fa-f0-9]{64}$/.test(d.token))throw Error('Ungültige Messwertverbindung');
   const response=await fetch(`http://127.0.0.1:${d.port}${route}`,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+d.token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(5000)});
   const value=await response.json();if(!response.ok)throw Error(value.message||'Messwertdienst nicht erreichbar');return value;}
@@ -18,8 +18,8 @@ class FanClient{
   const exe=path.join(this.root,'FanAtlas.exe');if(!fs.existsSync(exe)){this.error='Messwertkomponente fehlt. Bitte Installation reparieren.';return;}
   this.child=spawn(exe,['--suite'],{windowsHide:true,env:{...process.env,BATTO_FAN_DATA:this.data},stdio:'ignore'});this.child.on('error',e=>{this.error=e.message});
  }
- async poll(){if(this.busy)return;this.busy=true;try{this.catalog=await this.request('/api/catalog');this.snapshot=this.catalog.state;if(Date.now()-Date.parse(this.snapshot.generatedUtc)>10000)throw Error('Messwertdienst antwortet nicht mehr aktuell');this.error='';}catch(e){this.error=e.message;this.snapshot=null;}finally{this.busy=false;}}
- async configure(command,value){const result=await this.request('/api/configure/'+command,value);await this.poll();return result;}
+ poll(){if(this.pollPromise)return this.pollPromise;this.busy=true;this.pollPromise=(async()=>{try{this.catalog=await this.request('/api/catalog');this.snapshot=this.catalog.state;if(Date.now()-Date.parse(this.snapshot.generatedUtc)>10000)throw Error('Messwertdienst antwortet nicht mehr aktuell');this.error='';}catch(e){this.error=e.message;this.snapshot=null;}finally{this.busy=false;this.pollPromise=null;}})();return this.pollPromise;}
+ async configure(command,value){const result=await this.request('/api/configure/'+command,value);if(this.pollPromise)await this.pollPromise;await this.poll();return result;}
  close(){if(this.child&&!this.child.killed)this.child.kill();}
 }
 class VoiceClient extends EventEmitter{

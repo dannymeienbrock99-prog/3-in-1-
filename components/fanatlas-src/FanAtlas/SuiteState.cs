@@ -6,6 +6,25 @@ namespace FanAtlas;
 // Shared by the standalone editor and the windowless suite service.
 internal static class SuiteState
 {
+    // A rejected write must not leave an unsaved curve/layout in the live state.
+    // Polling may save discovery updates later, so rolling back only the response is insufficient.
+    internal static FanCurve? ConfigureAndSave(AppState state, IEnumerable<SensorRow> sensors, string command, JsonElement body)
+    {
+        var candidate = JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(state, StateStore.Json), StateStore.Json)
+            ?? throw new InvalidDataException("Einstellungen konnten nicht vorbereitet werden.");
+        var curve = Configure(candidate, sensors, command, body);
+        StateStore.Save(candidate);
+        // Keep unrelated objects alive: the standalone editor holds tile and curve references.
+        switch (command)
+        {
+            case "profile": state.Profile = candidate.Profile; break;
+            case "curve": state.CustomCurves = candidate.CustomCurves; break;
+            case "csv": state.CsvPaths = candidate.CsvPaths; break;
+            case "stage": state.Stage = candidate.Stage; break;
+        }
+        return curve;
+    }
+
     internal static BridgeSnapshot Snapshot(AppState state, IEnumerable<SensorRow> readings, string selectedId)
     {
         var rows = readings.ToList();
@@ -31,7 +50,9 @@ internal static class SuiteState
             case "profile":
                 string path = body.GetProperty("path").GetString() ?? "";
                 if (!path.EndsWith(".cueprofile", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Bitte ein iCUE-Profil wählen.");
-                state.Profile = ProfileReader.Read(path); break;
+                var profile = ProfileReader.Read(path);
+                IcueDiscovery.RefreshAliases(profile, state.Profile);
+                state.Profile = profile; break;
             case "csv":
                 var paths = body.GetProperty("paths").Deserialize<List<string>>() ?? new();
                 if (paths.Count > 20 || paths.Any(p => string.IsNullOrEmpty(p) || !Path.IsPathFullyQualified(p) || !new[] { ".csv", ".log" }.Contains(Path.GetExtension(p).ToLowerInvariant()))) throw new InvalidDataException("Bitte höchstens 20 CSV-/Logdateien wählen.");

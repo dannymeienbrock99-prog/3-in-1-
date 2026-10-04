@@ -25,13 +25,31 @@ public static class IcueDiscovery
                     state.Profile = ProfileReader.Read(file);
                 }
             }
-            var props = ReadXml(Path.Combine(folder, "sensors", "UserProps"));
-            ApplyAliases(state.Profile, props);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or XmlException or InvalidDataException) { /* Profile import remains available. */ }
+        RefreshAliases(state.Profile);
         int count = LinkFans(state.Profile).Count;
         Status = count > 0 ? $"iCUE LINK: {count} Lüfter im gespeicherten Profil. Live-Werte benötigen ein laufendes iCUE-Sensorprotokoll." : "iCUE LINK: Noch kein Profil gefunden. iCUE-Profil oder Sensorprotokoll verbinden.";
         DiscoverLogs(state);
+    }
+    public static void RefreshAliases(ProfileData profile, ProfileData? previous = null)
+    {
+        // Profile exports omit iCUE's user labels. Keep known labels for the same
+        // physical fan until UserProps supplies the latest ones (hub IDs may change).
+        if (previous != null)
+        {
+            foreach (var fan in profile.Fans)
+            {
+                var matches = previous.Fans.Where(f => f.Key == fan.Key || fan.Serial.Length > 0 && f.Serial == fan.Serial).ToArray();
+                var named = matches.LastOrDefault(f => (f.Aliases ?? new()).Contains(f.Name, StringComparer.OrdinalIgnoreCase));
+                if (named != null) fan.Name = named.Name;
+                fan.Aliases = matches.SelectMany(f => f.Aliases ?? new()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
+        }
+        if (Environment.GetEnvironmentVariable("BATTO_DISABLE_ICUE_DISCOVERY") == "1") return;
+        string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Corsair", "CUE5", "sensors", "UserProps");
+        try { ApplyAliases(profile, ReadXml(file)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or XmlException or InvalidDataException) { /* Existing labels remain usable until iCUE makes the file available. */ }
     }
     public static void ApplyAliases(ProfileData profile, XDocument props)
     {
@@ -41,7 +59,10 @@ public static class IcueDiscovery
             var exact = names.LastOrDefault(n => n.Id == fan.Key);
             if (exact != null) fan.Name = exact.Name!;
             // Moving a LINK fan to another hub changes its key, but not its fan serial.
-            fan.Aliases = names.Where(n => n.Id == fan.Key || fan.Serial.Length > 0 && ProfileReader.Part(n.Id!, "sensorSN") == fan.Serial).Select(n => n.Name!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var aliases = names.Where(n => n.Id == fan.Key || fan.Serial.Length > 0 && ProfileReader.Part(n.Id!, "sensorSN") == fan.Serial).Select(n => n.Name!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            // UserProps may contain only currently connected devices. An absent fan
+            // must keep the labels restored from its previous profile.
+            if (aliases.Count > 0) fan.Aliases = aliases;
         }
     }
     private static XDocument ReadXml(string path)

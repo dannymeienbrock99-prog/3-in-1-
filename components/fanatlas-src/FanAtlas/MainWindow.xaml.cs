@@ -152,12 +152,10 @@ public partial class MainWindow : Window
         if (picker.ShowDialog(this) != true) return;
         try
         {
-            var profile = ProfileReader.Read(picker.FileName);
-            State.Profile = profile; draft = null; selectedOriginal = null; dirty = false;
-            RefreshProfile(); RefreshCurves(); Stage.Attach(this);
+            ConfigureSuite("profile", JsonSerializer.SerializeToElement(new { path = picker.FileName }));
             if (CurveList.Items.Count > 0) CurveList.SelectedIndex = 0;
             if (FanList.Items.Count > 0) FanList.SelectedIndex = 0;
-            if (SaveState()) SetStatus($"Profil gelesen: {profile.Fans.Count} Zuordnungen, {profile.Curves.Count} Kurven. iCUE wurde nicht verändert.");
+            SetStatus($"Profil gelesen: {State.Profile.Fans.Count} Zuordnungen, {State.Profile.Curves.Count} Kurven. iCUE wurde nicht verändert.");
             Pages.SelectedIndex = 1;
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Profil konnte nicht gelesen werden", MessageBoxButton.OK, MessageBoxImage.Error); }
@@ -383,7 +381,7 @@ public partial class MainWindow : Window
             SetStatus("Stream Deck: Entwurf ausgewählt. iCUE-Steuerung unverändert.");
             return (true, "Entwurf ausgewählt; keine Hardwareänderung. Für echte Wechsel die offizielle iCUE-Aktion verwenden.");
         }).Task);
-        bridge.Catalog = () => Dispatcher.InvokeAsync(() => (object)new { state = CreateSnapshot(), curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, c.Points }), fans = State.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveName }), csvPaths = State.CsvPaths, overlayUrl = OverlayUrl, sources = new { icue = IcueDiscovery.Status, nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages } }).Task;
+        bridge.Catalog = () => Dispatcher.InvokeAsync(() => (object)new { state = CreateSnapshot(), curves = State.CustomCurves.Concat(State.Profile.Curves).Select(c => new { c.Id, c.Name, c.SensorLabel, c.IsCustom, c.Points }), fans = State.Profile.Fans.Select(f => new { f.Key, f.Name, f.CurveId, f.CurveName }), profile = new { State.Profile.Name, State.Profile.ImportedAt }, csvPaths = State.CsvPaths, overlayUrl = OverlayUrl, sources = new { icue = IcueDiscovery.Status, nvidia = nvidia.Status, hwinfo = hwinfo.Status, csv = csv.Messages } }).Task;
         bridge.Configure = (command, body) => Dispatcher.InvokeAsync(() => ConfigureSuite(command, body)).Task;
         PublishBridge(); await bridge.Start(); SaveState(); if (!headless) Stage.Refresh();
     }
@@ -401,7 +399,7 @@ public partial class MainWindow : Window
     internal async Task StartHeadless() { await StartBridge(); timer.Start(); await PollOnce(); }
     private object ConfigureSuite(string command, JsonElement body)
     {
-        var curve = SuiteState.Configure(State, Sensors, command, body);
+        var curve = SuiteState.ConfigureAndSave(State, Sensors, command, body);
         switch (command) {
             case "stage": if (!headless) Stage.Attach(this); break;
             case "profile":
@@ -410,6 +408,6 @@ public partial class MainWindow : Window
             case "curve":
                 dirty = false; RefreshCurves(curve!.Id); selectedOriginal = curve; LoadDraft(curve.Copy()); break;
         }
-        if (!SaveState()) throw new InvalidDataException("Einstellungen konnten nicht gespeichert werden."); PublishBridge(); return new { ok = true, hardwareApplied = false };
+        PublishBridge(); return new { ok = true, hardwareApplied = false, curveId = curve?.Id };
     }
 }

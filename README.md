@@ -1,4 +1,12 @@
-# Batto 3-in-1 · 1.9.2
+# Batto 3-in-1 · 1.9.3
+
+## Lüfterkurven repariert · 1.9.3
+
+Der Kurveneditor zeigt alle Punkte ohne abgeschnittene innere Liste. Spaltenüberschriften passen zu Temperatur und Lüfterleistung; die Bedienelemente eignen sich auch für Touch. Leere Werte, doppelte Temperaturen und ungültige Prozentwerte werden angezeigt. Die Kurve wird nach Temperatur geordnet.
+
+Ungespeicherte Änderungen bleiben beim Aktualisieren erhalten. Kopieren und Exportieren verwenden die sichtbare Kurve. Fehlgeschlagenes Speichern verändert keine bisherigen Einstellungen. In den Profilzuordnungen lässt sich die zugehörige Kurve direkt ansehen; beim erneuten Profilimport bleiben bekannte Lüfternamen erhalten.
+
+**Wertetabelle kopieren → iCUE öffnen** hilft beim Übertragen: In iCUE beim Gerät unter Kühlung eine eigene Kurve erstellen, Temperaturbezug und Punkte eintragen und den gewünschten Lüftern zuordnen. Der JSON-Export ist ein Batto-Entwurf, keine importierbare iCUE-Profildatei. Die öffentliche Corsair-Schnittstelle bietet keinen dokumentierten Schreibzugriff auf Kühlkurven; echte Kühlprofilwechsel bleiben in iCUE beziehungsweise der offiziellen Corsair-Stream-Deck-Aktion.
 
 ## OBS-Sammlungen direkt auswählen · 1.9.2
 
@@ -183,7 +191,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.9.2.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.9.3.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

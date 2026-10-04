@@ -37,7 +37,10 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Verknüpfung auf dem Desktop"; GroupDescription: "Verknüpfungen:"; Flags: unchecked
 [Files]
-Source: "{#AppSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#AppSource}\*"; DestDir: "{app}"; Excludes: "\resources\VirtualCam\x64\*.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
+; These versioned DLLs can remain loaded by a camera consumer during an update.
+; Skip identical files; still install newer versions or changed same-version files.
+Source: "{#AppSource}\resources\VirtualCam\x64\*.dll"; DestDir: "{app}\resources\VirtualCam\x64"; Flags: replacesameversion
 [Icons]
 Name: "{group}\Batto 3-in-1"; Filename: "{app}\Batto 3-in-1.exe"; IconFilename: "{app}\resources\app-icon.ico"
 Name: "{group}\Kurzanleitung"; Filename: "{app}\resources\Extras\ANLEITUNG.html"

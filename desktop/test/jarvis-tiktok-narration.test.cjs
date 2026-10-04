@@ -3,6 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {withTikTokSelfNarration}=require('../src/services/chat-narration.cjs');
 const {normalizeTikFinityPacket}=require('../src/adapters/tikfinity.cjs');
 const {normalizeChat}=require('../src/core/events/normalizer.cjs');
+const {EventCore}=require('../src/core/events/event-core.cjs');
 const {ChatCore,normalizeMessage}=require('../src/core/chat-core.cjs');
 const {chatForJarvis}=require('../src/services/suite-host.cjs');
 const {JarvisCore,cleanSettings,allowedChat}=require('../src/services/jarvis-core.cjs');
@@ -15,6 +16,7 @@ const through=(message,source='tikfinity')=>chatForJarvis(normalizeMessage(norma
 test('TikFinity canonical handles with stable IDs identify own narration without granting platform roles',()=>{
  const input=normalizeTikFinityPacket(packet()).value,own=withTikTokSelfNarration(input,{source:'tikfinity',senderUsername:' @OWNER_HANDLE '});
  assert.equal(own.raw.narration.canonicalLogin,'owner_handle');assert.equal(own.raw.narration.senderLogin,'owner_handle');assert.equal(own.raw.narration.userId,input.userId);
+ assert.equal(own.id,input.id);assert.equal(own.raw.narration.messageId,input.id,'existing provider IDs remain unchanged');
  assert.equal(own.userId,input.userId);assert.equal(own.username,input.username);assert.equal(own.identityVerified,input.identityVerified);assert.equal(own.moderator,false);assert.equal(own.isBroadcaster,false);
  assert.equal(input.raw.narration,undefined,'provider packet stays unchanged');
  const message=through(own);assert.equal(message.narrationRole,'self');assert.equal(allowedChat(message,settings),true);assert.equal(message.moderator,false);assert.equal(message.isBroadcaster,false);
@@ -60,12 +62,24 @@ test('the host strips provider-supplied narration even when it cannot create its
  assert.equal(withTikTokSelfNarration(null),null);
 });
 
-test('a missing provider message ID is assigned once before normalization for reliable narration deduplication',t=>{
- const own=mark(packet({msgId:undefined}));assert.match(own.id,/^[a-f0-9-]{36}$/);assert.equal(own.raw.narration.messageId,own.id);
- const normalized=normalizeChat(own,'tikfinity');assert.equal(normalized.eventId,'tiktok:chat:'+own.id);
+test('independently normalized idless provider replays retain the existing event ID and are spoken only once',t=>{
+ const replay=packet({msgId:undefined,createTime:1728126000});
+ const originalId=normalizeChat(normalizeTikFinityPacket(replay).value,'tikfinity').eventId;
+ const own=mark(replay),again=mark(structuredClone(replay));assert.match(own.id,/^[a-f0-9]{24}$/);assert.equal(own.raw.narration.messageId,own.id);assert.equal(again.id,own.id);
+ const eventCore=new EventCore();t.after(()=>eventCore.stop());
+ const first=eventCore.ingestChat(own,'tikfinity'),second=eventCore.ingestChat(again,'tikfinity');
+ assert.equal(first.ok,true);assert.equal(first.event.eventId,originalId);assert.equal(second.duplicate,true);assert.equal(second.event.eventId,originalId);
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'batto-tiktok-narration-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
  const spoken=[],core=new JarvisCore({directory,speak:text=>spoken.push(text)});core.update({chatMode:'moderators',chatSource:'connected',chatPlatforms:['tiktok']});core.execute=()=>assert.fail('Narration never executes chat commands');
- const message=chatForJarvis(normalizeMessage(normalized));core.onChat([message]);core.onChat([message]);assert.deepEqual(spoken,['owner_handle sagt: Meine Nachricht']);assert.equal(core.chatPending.length,0);
+ core.onChat([chatForJarvis(normalizeMessage(first.event))]);core.onChat([chatForJarvis(normalizeMessage(second.event))]);assert.deepEqual(spoken,['owner_handle sagt: Meine Nachricht']);assert.equal(core.chatPending.length,0);
+});
+
+test('idless messages retain timestamp-based IDs and do not deduplicate by text alone',t=>{
+ const eventCore=new EventCore();t.after(()=>eventCore.stop());
+ const first=mark(packet({msgId:undefined,createTime:1728126000})),later=mark(packet({msgId:undefined,createTime:1728126001}));
+ assert.notEqual(first.id,later.id);assert.equal(eventCore.ingestChat(first,'tikfinity').ok,true);assert.equal(eventCore.ingestChat(later,'tikfinity').ok,true);
+ const untimed=normalizeTikFinityPacket(packet({msgId:undefined})).value,originalId=normalizeChat(untimed,'tikfinity').eventId;
+ const own=withTikTokSelfNarration(untimed,{source:'tikfinity',senderUsername:'owner_handle'});assert.equal(normalizeChat(own,'tikfinity').eventId,originalId,'the adapter-provided timestamp keeps the preexisting ID');
 });
 
 test('narration evidence remains bound to the real message, sender and connector',()=>{

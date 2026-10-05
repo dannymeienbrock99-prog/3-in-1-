@@ -4,6 +4,7 @@ const {EventEmitter}=require('node:events');
 const {FanAlertEngine}=require('./fan-alerts.cjs');
 const {JarvisEvents,eventSettings,DEFAULT_EVENTS,DEFAULT_TEMPLATES,TEMPLATE_FIELDS,validateTemplates,validateTemplate,renderTemplate}=require('./jarvis-events.cjs');
 const {resolveCommand,commandExamples,normalizeCommand}=require('./jarvis-commands.cjs');
+const customization=require('./jarvis-customization.cjs');
 const normalize=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9%]+/g,' ').trim();
 const DEFAULTS={address:'',voiceEnabled:true,microphoneEnabled:false,wakeWord:true,headphones:false,speechRate:160,speechVolume:100,speechMuted:false,greeting:'Wie kann ich helfen?',gamingMode:true,events:DEFAULT_EVENTS,
  chatEnabled:true,chatMode:'moderators',chatSource:'window',chatTemplate:'{username} sagt: {message}',chatPlatforms:['twitch','youtube','tiktok','cng'],chatAllowlist:[],chatMaxLength:280,chatCooldown:5,
@@ -22,6 +23,8 @@ function cleanSettings(input={}){
  s.greeting=String(input.greeting??s.greeting).replace(/[\x00-\x1f]/g,' ').slice(0,120);s.events=eventSettings(input.events);
  s.address=String(input.address??s.address).slice(0,40);if(s.address==='Sir Crazy')s.address='';s.speechRate=finite(input.speechRate,120,210,160);s.chatMaxLength=finite(input.chatMaxLength,40,500,280);s.chatCooldown=finite(input.chatCooldown,2,60,5);
  s.speechVolume=finite(input.speechVolume,0,100,100);
+ s.voiceCustomization=customization.cleanVoice(input.voiceCustomization);
+ s.commandCustomization=customization.cleanCustomization(input.commandCustomization);
  s.chatMode=['moderators','allowlist','all'].includes(input.chatMode)?input.chatMode:'moderators';
  s.chatSource=input.chatSource==='connected'?'connected':'window';s.chatTemplate=validChatTemplate(input.chatTemplate)?input.chatTemplate.trim():DEFAULTS.chatTemplate;
  s.chatPlatforms=Array.isArray(input.chatPlatforms)?input.chatPlatforms.filter(p=>DEFAULTS.chatPlatforms.includes(p)):s.chatPlatforms;
@@ -81,10 +84,11 @@ class JarvisCore extends EventEmitter{
  save(name,value){fs.mkdirSync(this.directory,{recursive:true});const file=path.join(this.directory,name);fs.writeFileSync(file+'.tmp',JSON.stringify(value,null,2));fs.renameSync(file+'.tmp',file);}
  update(settings){if(settings.chatTemplate!==undefined&&!validChatTemplate(settings.chatTemplate))throw Error('Chat-Text: Nutze nur {username} und {message}, höchstens 400 Zeichen.');if(settings.events&&Object.hasOwn(settings.events,'templates'))validateTemplates(settings.events.templates);const previous=this.settings;const next={...previous,...settings};for(const key of ['events','fanAlerts','sceneAliases'])if(settings[key])next[key]={...previous[key],...settings[key]};if(settings.events?.templates)next.events.templates={...previous.events.templates,...settings.events.templates};const validated=cleanSettings(next);this.save('jarvis-settings.json',validated);this.settings=validated;this.pruneChat(this.clock());if(JSON.stringify(previous.sensorRules)!==JSON.stringify(this.settings.sensorRules))this.alerts=new AlertEngine();this.emit('settings',this.settings);return this.settings;}
  previewEvent(value={}){const type=value?.type;if(!Object.hasOwn(DEFAULT_TEMPLATES,type))throw Error('Bitte eine vorhandene Ereignisansage auswählen.');const valid=validateTemplate(type,value.template);if(!valid.ok)throw Error(valid.error);const text=renderTemplate(valid.text,{username:'Beispielperson',likecount:'1.000',giftname:'Beispielgeschenk',giftcount:'1',coins:'50',submonth:'3',platform:'TikTok'});return this.say('Vorschau mit erfundenen Beispieldaten. '+text,'preview');}
+ previewVoice(value={}){const text=typeof value.text==='string'?value.text.trim():'';if(!text||text.length>500)throw Error('Gib einen Testtext mit höchstens 500 Zeichen ein.');const options=cleanSettings({...this.settings,speechRate:value.speechRate??this.settings.speechRate,speechVolume:value.speechVolume??this.settings.speechVolume,voiceCustomization:value.voiceCustomization??this.settings.voiceCustomization});this.speak(text,{voiceSettings:{speechRate:options.speechRate,speechVolume:options.speechVolume,voiceCustomization:options.voiceCustomization}});return this.say(text,'preview',false);}
  say(text,kind='answer',speech=true){const entry={id:crypto.randomUUID(),time:this.clock(),kind,text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);if(speech&&this.settings.voiceEnabled)this.speak(text,{priority:kind==='alert'?2:kind==='chat'?0:1});return {ok:true,text,kind};}
  input(text,source){const entry={id:crypto.randomUUID(),time:this.clock(),kind:'user',source:['voice','typed','streamdeck'].includes(source)?source:'typed',text};this.history.push(entry);this.history=this.history.slice(-100);this.emit('message',entry);}
  unavailable(text,kind='unrecognized'){return {...this.say(text,kind),ok:false};}
- cancelPendingModeration(){this.pendingRevision++;this.pendingModeration=null;this.aiRequest?.abort();}
+ cancelPendingModeration(){this.pendingRevision++;this.pendingModeration=null;this.pendingAction=null;this.aiRequest?.abort();}
  remember(command,intent){if(!this.settings.learn)return;const key=normalize(command).slice(0,200);const old=this.memory.find(m=>m.command===key);if(old){old.count++;old.last=this.clock();}else this.memory.push({command:key,intent,count:1,last:this.clock()});this.memory=this.memory.sort((a,b)=>b.last-a.last).slice(0,200);this.save('jarvis-memory.json',this.memory);}
  onChat(batch){
   if(!Array.isArray(batch))return;
@@ -167,7 +171,7 @@ class JarvisCore extends EventEmitter{
  }
  async execute(input,{source='typed'}={}){
   if(typeof input!=='string'||input.length>1500)throw Error('Befehl zu lang.');
-  const original=input.trim();const text=original.replace(/^(?:hey\s+)?(?:jarvis|javis|dschavis)[,!:.\s]*/i,'');const q=normalizeCommand(text);const prefix=this.settings.address?this.settings.address+', ':'';
+  const original=input.trim();let text=original.replace(/^(?:hey\s+)?(?:jarvis|javis|dschavis)[,!:.\s]*/i,'');let q=normalizeCommand(text);const prefix=this.settings.address?this.settings.address+', ':'';
   if(original)this.input(original,source);
   if(!q)return this.say(prefix+'ich höre. Frage zum Beispiel nach der GPU-Temperatur.');
   if(/^(stopp|stop|ruhe|sei still|schweigen|sei ruhig|hor auf zu sprechen|sprich nicht weiter)$/.test(q)){this.cancelPendingModeration();this.stopSpeech();return this.say('Sprachausgabe gestoppt.','status',false);}
@@ -182,7 +186,24 @@ class JarvisCore extends EventEmitter{
     for(const [key,name] of Object.entries(aliases))if(name&&!scenes.some(scene=>[scene.id,scene.name].some(value=>normalize(value)===normalize(name))))delete aliases[key];
    }
    if(!catalog){let scenes=[];try{scenes=await this.obs?.scenes()||[];}catch{}catalog={actions:[{id:'scene',choices:scenes.map(id=>({id,name:id}))}]};if(!aliases.pause)aliases.pause=scenes.find(s=>/pause|bin gleich|zuruck/.test(normalize(s)))||'';}
-   const intent=resolveCommand(original,{catalog,sceneAliases:aliases});
+   const mapped=customization.mapAlias(original,this.commandExamples(),this.settings.commandCustomization);
+   if(mapped.error)return this.unavailable(mapped.error,'clarification');
+   text=mapped.text;q=normalizeCommand(text);
+   let intent=resolveCommand(text,{catalog,sceneAliases:aliases});
+   const pendingAction=this.pendingAction;this.pendingAction=null;
+   let confirmed=false;
+   if(intent?.kind==='confirmation'&&pendingAction){
+    if(pendingAction.expiresAt<this.clock())return this.unavailable('Die Bestätigung ist abgelaufen. Nenne den Befehl erneut.','clarification');
+    const current=resolveCommand(pendingAction.text,{catalog,sceneAliases:aliases});
+    if(customization.identity(current,pendingAction.text)!==pendingAction.id)return this.unavailable('Die verfügbare Funktion hat sich geändert. Nenne den Befehl erneut.','clarification');
+    intent=current;text=pendingAction.text;q=normalizeCommand(text);confirmed=true;
+   }
+   const commandId=customization.identity(intent,text);
+   if(!customization.RESERVED.test(q)&&this.settings.commandCustomization.disabled.includes(commandId))return this.unavailable('Dieser Befehl ist in deiner Befehlsverwaltung ausgeschaltet.','status');
+   if(!confirmed&&customization.needsConfirmation(intent,this.settings.commandCustomization)){
+    this.pendingModeration=null;this.pendingAction={text,id:commandId,expiresAt:this.clock()+45000};
+    return this.say('Befehl „'+text+'“ ausführen? Sage „Bestätigen“ oder „Abbrechen“. Die Bestätigung gilt 45 Sekunden.','clarification');
+   }
    const pending=this.pendingModeration;this.pendingModeration=null;
    if(intent?.kind==='cancel-confirmation')return this.say('Abgebrochen. Es wird keine vorgemerkte Moderation ausgeführt.','status');
    if(intent?.kind==='confirmation'){
@@ -223,6 +244,7 @@ class JarvisCore extends EventEmitter{
     this.remember(text,'audio:'+intent.targetQuery);return this.say(prefix+result.text);
    }
    const selected=this.resolveSensors(text);
+   if(selected.length&&this.settings.commandCustomization.disabled.includes(customization.identity({kind:'sensor'},text)))return this.unavailable('Dieser Messwertbefehl ist ausgeschaltet.','status');
    if(selected.length){const available=selected.filter(s=>fresh(s,this.clock()));this.remember(text,'sensors:'+selected.map(s=>s.id).join(','));return this.say(prefix+(available.length?available.map(s=>spoken(s,this.settings.sensorRules[s.id])).join('. ')+'.'+(available.length<selected.length?' Weitere passende Sensoren liefern gerade keine aktuellen Werte.':''):'dafür liegen gerade keine aktuellen Messwerte vor.'));}
    if(/temperatur|spannung|strom|volt|ampere|watt|\bpin|gpu|cpu|arbeitsspeicher|\bram\b|lufter|messwert|pc werte/.test(q))return this.say(prefix+'dafür finde ich keinen passenden verfügbaren Sensor. Wähle die Messquelle oder gib dem Sensor einen Sprachnamen.');
    // Unknown control requests must not be answered by a model as if an action happened.
@@ -233,10 +255,10 @@ class JarvisCore extends EventEmitter{
   }catch(e){if(aiRequest?.signal.aborted)return {ok:false,text:'Die Antwort wurde abgebrochen.'};this.say(prefix+String(e.message||'Die Aktion ist fehlgeschlagen.'),'error');return {ok:false,text:String(e.message)};}finally{if(this.aiRequest===aiRequest)this.aiRequest=null;this.commandBusy=false;}
  }
  commandExamples(){
-  const catalog=this.getCommandCatalog?.()||{},signature=JSON.stringify([catalog.actions,catalog.voiceActions]);
+  const catalog=this.getCommandCatalog?.()||{},signature=JSON.stringify([catalog.actions,catalog.voiceActions,this.settings.commandCustomization.disabled]);
   // Reuse the complete command list while only sensor values or toggle states
   // change. Saved names and available capabilities invalidate the list.
-  if(this.commandExamplesCache?.signature!==signature)this.commandExamplesCache={signature,items:commandExamples(catalog)};
+  if(this.commandExamplesCache?.signature!==signature)this.commandExamplesCache={signature,items:customization.decorateExamples(commandExamples(catalog),this.settings.commandCustomization)};
   return this.commandExamplesCache.items;
  }
  snapshot(){let examples=[];try{examples=this.commandExamples();}catch{}return {settings:this.settings,history:this.history,memory:this.memory,knownSensors:this.getSensors().length,commandExamples:examples,eventDefaults:{...DEFAULT_EVENTS,templates:{...DEFAULT_TEMPLATES}},eventTemplateFields:TEMPLATE_FIELDS};}

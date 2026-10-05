@@ -7,6 +7,7 @@ Console.OutputEncoding = new UTF8Encoding(false);
 var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 var controllers = new Dictionary<int, HidDevice>();
 var endpoints = new Dictionary<int, Endpoint>();
+var strimerChannelCounts = new Dictionary<int,int>();
 using var wireless = new WirelessSession();
 bool wirelessMode = args.Contains("--wireless");
 
@@ -35,7 +36,7 @@ object Fixtures()
 void Clear()
 {
     foreach (var device in controllers.Values) device.Dispose();
-    controllers.Clear(); endpoints.Clear();
+    controllers.Clear(); endpoints.Clear(); strimerChannelCounts.Clear();
 }
 
 async Task<object> Enumerate()
@@ -53,9 +54,24 @@ async Task<object> Enumerate()
             var controllerDevices = new List<object>();
             hid = new HidDevice(found.Path, found.Vid, found.Pid, found.Product, found.Caps);
             var model = Protocol.ModelName(found.Pid);
-            var reported = $"Lian Li UNI FAN {model}";
+            var reported = StrimerProtocol.IsController(found.Vid,found.Pid) ? "Lian Li Strimer Plus V2 · L-Connect-Controller" : $"Lian Li UNI FAN {model}";
             int[]? rpms = null;
-            if (Protocol.IsEne(found.Vid, found.Pid))
+            if(StrimerProtocol.IsController(found.Vid,found.Pid))
+            {
+                hid.Feature([0xe0,0x50,0x00]);await Task.Delay(40);
+                var firmware=hid.Input(0xe0,5);
+                if(!StrimerProtocol.ValidFirmware(firmware))throw new IOException("Die Strimer-Firmware passt nicht zur geprüften Protokollfamilie. Keine Beleuchtungsänderung erlaubt.");
+                hid.Feature([0xe0,0x50,0x01]);await Task.Delay(40);
+                int count=hid.Input(0xe0,1)[0];
+                if(!StrimerProtocol.ValidSecondChannelCount(count))throw new IOException("Die angeschlossenen Strimer-Kanäle konnten nicht eindeutig geprüft werden. Keine Ausgabe erlaubt.");
+                strimerChannelCounts[nativeId]=count;
+                var e=new Endpoint(50000+nativeId*16,nativeId,found.Pid,0,"all",[]);endpoints[e.Id]=e;
+                controllerDevices.Add(new {id=e.Id,name=reported,vendor="Lian Li",provider="lianli",type=4,category="strip",directMode=false,directModeId=(int?)null,ledCount=0,physicalLedCount=(int?)null,colors=Array.Empty<int>(),leds=Array.Empty<object>(),zones=Array.Empty<object>(),modes=Array.Empty<object>(),
+                    nativeEffects=StrimerProtocol.Modes().Select(m=>new{id=m.Id,name=m.Name}),controllerId=nativeId,controllerFamily="strimer-plus-v2",port=0,ring="all",vendorId=found.Vid,productId=found.Pid,
+                    interfaceNumber=1,usagePage=(int)found.Caps.UsagePage,usage=(int)found.Caps.Usage,outputReportByteLength=(int)found.Caps.OutputReportByteLength,featureReportByteLength=(int)found.Caps.FeatureReportByteLength,inputReportByteLength=(int)found.Caps.InputReportByteLength,
+                    firmwareVerified=true,channel2Count=count,wholeControllerOnly=true,physicalOutputVerified=false,fanCount=(int?)null,detectedFanIds=Array.Empty<int>(),warning="Die native Ausgabe ändert alle angeschlossenen Strimer-Kanäle dieses Controllers. Getrennte Ausgabe bleibt Vorschau. Physische Ausgabe in Batto noch nicht geprüft."});
+            }
+            else if (Protocol.IsEne(found.Vid, found.Pid))
             {
                 if (found.Caps.FeatureReportByteLength is < 6 or > 1024 || found.Caps.InputReportByteLength is < 10 or > 1024 || found.Caps.OutputReportByteLength is < 50 or > 1024)
                     throw new IOException("ENE HID-Berichte werden von diesem Windows-Treiber nicht vollständig unterstützt.");
@@ -101,6 +117,7 @@ async Task<object> Enumerate()
         catch (Exception error)
         {
             hid?.Dispose();
+            strimerChannelCounts.Remove(nativeId);
             foreach (var id in endpoints.Values.Where(e => e.ControllerId == nativeId).Select(e => e.Id).ToArray()) endpoints.Remove(id);
             warnings.Add($"Lian Li {Protocol.ModelName(found.Pid)}: {error.Message}");
             discovery.Add(new { name = $"Lian Li UNI FAN {Protocol.ModelName(found.Pid)}", vendor = "Lian Li", vendorId = found.Vid, productId = found.Pid, provider = "lianli", status = "unavailable" });
@@ -131,18 +148,26 @@ async Task<object> Apply(JsonElement request)
     int id = request.GetProperty("deviceId").GetInt32();
     if (!endpoints.TryGetValue(id, out var endpoint) || !controllers.TryGetValue(endpoint.ControllerId, out var hid)) throw new IOException("Lian-Li-Gerät nicht mehr verfügbar. Erneut suchen.");
     var settings = new EffectOptions(request.GetProperty("effectId").GetString()!, request.GetProperty("colors").EnumerateArray().Select(x => x.GetString()!).ToArray(), request.GetProperty("brightness").GetInt32(), request.GetProperty("speed").GetInt32(), request.GetProperty("direction").GetString()!);
-    var packets = Protocol.Effect(endpoint, settings);
+    bool strimer=StrimerProtocol.IsController(hid.Vid,hid.Pid);
+    string? scope=request.TryGetProperty("controllerScope",out var scopeValue)&&scopeValue.ValueKind==JsonValueKind.String?scopeValue.GetString():null;
+    bool confirmed=request.TryGetProperty("confirmWholeController",out var confirmedValue)&&confirmedValue.ValueKind==JsonValueKind.True;
+    var packets = strimer ? StrimerProtocol.Effect(strimerChannelCounts[endpoint.ControllerId],settings,scope,confirmed) : Protocol.Effect(endpoint, settings);
     if (packets.Any(p => p.Feature ? p.Bytes.Length > hid.Caps.FeatureReportByteLength : p.Bytes.Length > hid.Caps.OutputReportByteLength)) throw new IOException("Dieser Windows-Treiber unterstützt die benötigte Berichtgröße nicht.");
     if (endpoint.Pid == 0x7372)
     {
         var actual = Protocol.ParseTlHandshake(await hid.TlQuery(0xa1)).Where(f => f.Port == endpoint.Port).Select(f => f.Fan).Order().ToArray();
         if (!actual.SequenceEqual(endpoint.FanIds)) throw new IOException("Die angeschlossenen TL-Lüfter haben sich geändert. Bitte erneut suchen.");
     }
+    if(strimer)
+    {
+        hid.Feature([0xe0,0x50,0x01]);await Task.Delay(40);int actual=hid.Input(0xe0,1)[0];
+        if(actual!=strimerChannelCounts[endpoint.ControllerId])throw new IOException("Die angeschlossenen Strimer-Kanäle haben sich geändert. Erneut suchen; keine Ausgabe gesendet.");
+    }
     // Entire request is validated before its first write.
     foreach (var packet in packets)
     {
         if (packet.Feature) hid.Feature(packet.Bytes); else await hid.Output(packet.Bytes);
-        await Task.Delay(20);
+        await Task.Delay(strimer?40:20);
     }
     return new { deviceId = id, effectId = settings.EffectId, transmitted = true, acknowledgement = "Windows-HID-Übertragung" };
 }
@@ -152,6 +177,7 @@ async Task<object> Telemetry()
     var values = new List<object>(); bool layoutChanged = false;
     foreach (var (controllerId, hid) in controllers)
     {
+        if(StrimerProtocol.IsController(hid.Vid,hid.Pid))continue;
         var selected = endpoints.Values.Where(e => e.ControllerId == controllerId).ToArray();
         try
         {
@@ -180,6 +206,7 @@ async Task<object> Telemetry()
 
 try
 {
+    if (args.Contains("--strimer-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(StrimerProtocol.Fixtures(), json)); return; }
     if (args.Contains("--wireless-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(WirelessProtocol.Fixtures(), json)); return; }
     if (args.Contains("--wireless-scan")) { Console.WriteLine(JsonSerializer.Serialize(await wireless.Scan(), json)); return; }
     if (args.Contains("--fixtures")) { Console.WriteLine(JsonSerializer.Serialize(Fixtures(), json)); return; }

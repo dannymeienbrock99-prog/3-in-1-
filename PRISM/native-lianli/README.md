@@ -39,6 +39,12 @@ opening any hardware. `../tests/lianli-lighting.test.mjs` checks those bytes plu
 selection isolation, model/ring filters, invalid requests, zero RPM, timeouts
 and changed layouts.
 
+## Kabelgebundener Strimer Plus V2 · HID
+
+`StrimerProtocol.cs` ergänzt den MIT-Encoder aus derselben oben genannten Quelle und demselben Commit. Die Lizenz liegt weiterhin unter `../licenses/lian-li-linux-MIT.txt`. Nur VID/PID `0CF2:A200`, HID-Interface 1, Usage `FF72/A1`, Feature/Input/Output-Berichtgrößen `7/65/255`, Firmwarepayload `E0 52 FF 40` sowie eine verifizierte zweite Kanalgruppe mit vier oder sechs Anschlüssen werden akzeptiert. Der Original-USB-Deskriptor ist über `../STRIMER-CAPABILITIES.md` verlinkt. Keine Treiber werden ersetzt.
+
+25 native Modi werden für den gesamten Controller angeboten. Jede Ausgabe benötigt `controllerScope: "all"` und `confirmWholeController: true`, weil die Übernahme eine globale Kanalmaske verwendet. Vor Lichtpaketen wird die angeschlossene Kanalzahl erneut geprüft. Einzelne virtuelle Stränge können getrennt bearbeitet werden; eine getrennte native Ausgabe wird nicht behauptet. Es gibt keine Lüfter-, Pumpen-, PWM-, Mainboard-Sync- oder Leistungsbefehle. `--strimer-fixtures` erzeugt ausschließlich Paket-/Gate-Testdaten und öffnet keine Geräte. Eine sichtbare Ausgabe auf echter Strimer-Plus-V2-Hardware wurde in Batto nicht geprüft.
+
 ## Strimer Wireless · WinUSB
 
 Der eigene Wireless-Modus (`--wireless`) verwendet den vorhandenen Windows-WinUSB-Treiber. Er erkennt V1-Sender `0416:8040` und Empfänger `0416:8041` sowie V2-Sender `1A86:E304` und Empfänger `1A86:E305`. Registry und SetupAPI liefern installierte Schnittstellen; USB-Deskriptor, Gerätetyp und Endpunkte OUT `01` / IN `81` werden vor Protokollzugriffen geprüft. Es werden keine Treiber installiert, Geräte zurückgesetzt oder fremde USB-Geräte geöffnet.

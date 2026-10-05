@@ -5,7 +5,7 @@ let stageStructure='',logSignature='',assignmentSignature='',sensorStructure='';
 let curveDirty=false,curveSaving=false;
 let settingsDirty=false,settingsSignature='',commandExamplesSignature='',commandFilterSignature='',commandRenderSignature='',commandPage=0,commandPending=false,microphoneDevices=[];
 const fallbackCommandExamples=[{phrase:'Pause',description:'Zur Pause-Szene wechseln'},{phrase:'Öffne das Touch Deck',description:'Touch Deck anzeigen'},{phrase:'Kamera aus',description:'Kamerabild ausblenden'},{phrase:'Auto Broadcast an',description:'Geplante Bot-Nachrichten aktivieren'},{phrase:'Jarvis leiser',description:'Sprachausgabe leiser stellen'},{phrase:'GPU Temperatur',description:'Temperatur der Grafikkarte ansagen'}];
-$('view-jarvis').addEventListener('input',e=>{if(!e.target.closest('#j-command-form,.jarvis-command-help'))settingsDirty=true;});
+$('view-jarvis').addEventListener('input',e=>{if(!e.target.closest('#j-command-form,.jarvis-command-help,.jarvis-customization'))settingsDirty=true;});
 const visibleView=id=>!window.BattoResources?.suspended&&!document.hidden&&$('view-'+id)?.classList.contains('active');
 function textOnly(el,text){if(el.textContent!==text)el.textContent=text;}
 const clone=x=>JSON.parse(JSON.stringify(x)),sensors=()=>state?.fan?.state?.sensors||[],fan=()=>scene?.tiles.find(t=>t.id===selectedFan);

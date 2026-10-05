@@ -35,7 +35,10 @@ class Service:
         self.listening=False;emit({'type':'transcript','text':text})
     def output(self):
         while not self.quit.is_set():
-            try:text,stamp,listen_after,generation=self.jobs.get(timeout=.5)
+            try:
+                job=self.jobs.get(timeout=.5)
+                text,stamp,listen_after,generation=job[:4]
+                preview=job[4] if len(job)>4 else None
             except queue.Empty:continue
             while self.listening and generation==self.generation and not self.quit.is_set():time.sleep(.1)
             if time.monotonic()-stamp>30 or generation!=self.generation:continue
@@ -45,7 +48,14 @@ class Service:
                     self.state('preparing','Mikrofon wird vorbereitet …')
                     turn_microphone=self.ready_microphone(generation)
                     if turn_microphone is None:continue
-                if text:self.speaker.speak(text,self.settings,self.cancel,self.state)
+                if text:
+                    speech_settings=self.settings
+                    if isinstance(preview,dict):
+                        from speech_profile import profile_settings
+                        speech_settings={**self.settings,**profile_settings(preview.get('voiceCustomization')),
+                            'speech_rate':max(120,min(210,int(preview.get('speechRate',160)))),
+                            'speech_volume':max(0,min(100,float(preview.get('speechVolume',100))))}
+                    self.speaker.speak(text,speech_settings,self.cancel,self.state)
             except Exception as e:emit({'type':'error','text':str(e)})
             finally:
                 self.speaking=False;self.busy.clear()
@@ -92,10 +102,12 @@ class Service:
         if command=='speak':
             text=str(job.get('text',''))[:1600]
             if text.strip():
-                try:self.jobs.put_nowait((text,time.monotonic(),False,self.generation))
+                try:self.jobs.put_nowait((text,time.monotonic(),False,self.generation,job.get('voiceSettings')))
                 except queue.Full:emit({'type':'notice','text':'Sprachwarteschlange voll; ältere Meldungen werden nicht nachgeholt.'})
         elif command=='settings':
+            from speech_profile import profile_settings
             v=job.get('value',{});self.settings.update(wake_word=v.get('wakeWord',True),ambient=v.get('microphoneEnabled') is True,continuous=v.get('microphoneEnabled') is True and v.get('wakeWord',True) is False,headphones=v.get('headphones',False),speech_rate=max(120,min(210,int(v.get('speechRate',160)))),microphone=v.get('microphone'),speech_volume=max(0,min(100,float(v.get('speechVolume',100)))),speech_muted=v.get('speechMuted') is True,gaming_mode=v.get('gamingMode',True) is not False)
+            self.settings.update(profile_settings(v.get('voiceCustomization')))
         elif command=='microphone':self.enable(job.get('enabled') is True)
         elif command=='listen':
             self.stop()

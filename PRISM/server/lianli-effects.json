@@ -2,6 +2,8 @@
   "source": "https://github.com/sgtaziz/lian-li-linux",
   "commit": "d335fdd459b0a308814497d36cf1d8c7dc1a782d",
   "license": "MIT",
+  "strimerSource": "https://github.com/sgtaziz/lian-li-linux/blob/d335fdd459b0a308814497d36cf1d8c7dc1a782d/crates/lianli-devices/src/strimer_plus.rs",
+  "strimerMapping": {"Off":0,"Static":1,"Breathing":2,"RainbowMorph":4,"Rainbow":5,"Wave":24,"Snooker":25,"Mixing":26,"PingPong":27,"Runway":28,"Paint":29,"Tide":30,"BlowUp":31,"Meteor":32,"ShockWave":33,"Ripple":34,"Voice":35,"BulletStack":36,"Drizzling":37,"FadeOut":38,"ColorTransfer":39,"CrossOver":40,"Twinkle":41,"Contest":42,"Parallel":43},
   "modes": [
     {
       "id": "Off",

@@ -66,7 +66,7 @@ export class EffectEngine {
     if (this.framePromise) await this.framePromise;
     // Validate the whole selection before switching any device mode.
     try {
-      for (const { device } of targets) if (device.effectUpload !== true) { await this.client.selectDirect(device); delete device.activeNativeEffect; }
+      for (const { device } of targets) if (device.effectUpload !== true) { await this.client.selectDirect(device); delete device.activeNativeEffect; delete device.nativeSettings; }
       const started = this.now();
       const appliedAt = Date.now();
       for (const { device, zones } of targets) {
@@ -74,6 +74,7 @@ export class EffectEngine {
           const upload = await this.client.applySoftwareEffect(device, settings, zones);
           const acknowledgement = { deviceId: device.id, confirmation: upload?.confirmation ?? 'transmitted', acknowledgement: upload?.acknowledgement ?? null };
           delete device.activeNativeEffect;
+          delete device.nativeSettings;
           this.jobs.set(device.id, { device, zones, settings, started, appliedAt, uploaded: true, upload: acknowledgement });
           uploads.push(acknowledgement);
         } else this.jobs.set(device.id, { device, zones, settings, started, appliedAt });

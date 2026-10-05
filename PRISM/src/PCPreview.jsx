@@ -10,9 +10,13 @@ const COMPONENTS = [
   { type: 'ram', label: 'Arbeitsspeicher', x: 52.7, y: 29, width: 9, height: 33 },
   { type: 'gpu', label: 'Grafikkarte', x: 39, y: 61.8, width: 57, height: 16 },
   { type: 'strip', label: 'LED-Streifen', x: 41, y: 86.6, width: 61, height: 6 },
+  { type: 'strimer', label: 'Strimer-Kabel', x: 61, y: 69, width: 13, height: 32 },
 ];
+const LAYOUT_KEY='batto.rgb.pc-layout.v1';
+const deviceIdentity=device=>`${device.provider||''}|${device.name||''}|${device.category||''}`;
+function readLayout(){try{const raw=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}');return Object.fromEntries(COMPONENTS.map(component=>{const value=raw[component.type]||{},next={};for(const [key,min,max]of [['x',0,100],['y',0,100],['width',2,100],['height',2,100]])next[key]=Number.isFinite(value[key])?Math.max(min,Math.min(max,value[key])):component[key];next.deviceId=['string','number'].includes(typeof value.deviceId)?value.deviceId:null;next.deviceIdentity=typeof value.deviceIdentity==='string'?value.deviceIdentity:null;return [component.type,next];}));}catch{return Object.fromEntries(COMPONENTS.map(component=>[component.type,{...component,deviceId:null,deviceIdentity:null}]));}}
 
-function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
+function drawLighting(canvas, config, types, time, msiDimmPositions = null, layout = {}) {
   const context = canvas.getContext('2d');
   if (!context) return;
   const w = canvas.width;
@@ -21,7 +25,10 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
   const sampleColor = createEffectSampler(config, time);
   const illuminated = new Set(types);
   let ledIndex = 0;
+  let currentType;
   const glow = (x1, y1, x2, y2, position, width = 3, strength = 1, index) => {
+    const base=COMPONENTS.find(component=>component.type===currentType),placed=layout[currentType];
+    if(base&&placed){const sx=placed.width/base.width,sy=placed.height/base.height;x1=placed.x/100+(x1-base.x/100)*sx;x2=placed.x/100+(x2-base.x/100)*sx;y1=placed.y/100+(y1-base.y/100)*sy;y2=placed.y/100+(y2-base.y/100)*sy;}
     const sample = sampleColor(position, index ?? ledIndex++);
     const { color } = sample;
     const alpha = sample.alpha * strength;
@@ -37,6 +44,7 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
   };
 
   if (illuminated.has('fans')) {
+    currentType='fans';
     [0.235, 0.477, 0.715].forEach((centerY) => {
       const radiusX = 0.0844;
       const radiusY = radiusX * w / h;
@@ -57,6 +65,7 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
     });
   }
   if (illuminated.has('motherboard')) {
+    currentType='motherboard';
     ledIndex = 0;
     // A rounded rectangle follows the perimeter of the pump block.
     const left = 0.315, right = 0.426, top = 0.227, bottom = 0.370;
@@ -75,6 +84,7 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
     });
   }
   if (illuminated.has('ram')) {
+    currentType='ram';
     (msiDimmPositions || [0.511, 0.544]).forEach((x) => {
       for (let i = 0; i < 40; i++) {
         glow(x, 0.148 + i / 40 * 0.287, x, 0.148 + (i + 1.05) / 40 * 0.287, i / 39, 7, 1, i);
@@ -82,6 +92,7 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
     });
   }
   if (illuminated.has('gpu')) {
+    currentType='gpu';
     ledIndex = 0;
     for (let i = 0; i < 44; i++) {
       glow(0.115 + i / 44 * 0.288, 0.619, 0.115 + (i + 1.05) / 44 * 0.288, 0.619, i / 47, 4);
@@ -92,27 +103,37 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null) {
     }
   }
   if (illuminated.has('strip')) {
+    currentType='strip';
     ledIndex = 0;
     for (let i = 0; i < 16; i++) {
       const x = 0.132 + i / 15 * 0.567;
       glow(x - 0.006, 0.866, x + 0.006, 0.866, i / 15, 9);
     }
   }
+  if(illuminated.has('strimer')){currentType='strimer';for(let strand=0;strand<8;strand++)for(let i=0;i<30;i++){const x=.575+strand*.009,y=.55+i/30*.28;glow(x,y,x,y+.010,i/29,3,1,strand*30+i);}}
   context.shadowBlur = 0;
 }
 
-export function PCPreview({ config = {}, selectedTypes = [], running = true, onSelectType, system }) {
+export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], running = true, onSelectType, onSelectDevice, system, devices = [], preview = false }) {
   const canvasRef = useRef(null);
   const timeRef = useRef(0);
   const effectRef = useRef(config.effect);
   const [failedImage, setFailedImage] = useState(null);
   const [failedBoard, setFailedBoard] = useState(false);
+  const [layout,setLayout]=useState(readLayout),[editing,setEditing]=useState(null),[arrange,setArrange]=useState(false),[storageError,setStorageError]=useState('');
+  const drag=useRef(null),area=useRef(null);
   const motherboard = getMotherboardPreview(system);
   const memory = getMemoryPreview(system);
   const isMsi = motherboard.brand === 'msi';
   const dimmCount = isMsi ? memory.visibleModules.length : null;
   const chosenImage = motherboard.image;
   const usesFallback = failedImage === chosenImage;
+  const matching=component=>devices.filter(device=>component.type==='strimer'?/strimer/i.test(device.name||''):device.category===component.type&&!/strimer/i.test(device.name||''));
+  const assignedDevice=type=>devices.find(device=>String(device.id)===String(layout[type].deviceId)&&deviceIdentity(device)===layout[type].deviceIdentity);
+  const visibleComponents=COMPONENTS.filter(component=>preview||matching(component).length||assignedDevice(component.type)||component.type==='motherboard'&&motherboard.modelName||component.type==='ram'&&memory.count||component.type==='gpu'&&Array.isArray(system?.gpus)&&system.gpus.length);
+  const illuminatedTypes=visibleComponents.filter(component=>layout[component.type]?.deviceId!==null?assignedDevice(component.type)&&selectedIds.some(id=>String(id)===String(layout[component.type].deviceId)):selectedTypes.includes(component.type)).map(component=>component.type);
+  useEffect(()=>{try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(layout));setStorageError('');}catch{setStorageError('Positionen konnten nicht gespeichert werden.');}},[layout]);
+  useEffect(()=>setFailedBoard(false),[motherboard.brand]);
   const imageSource = usesFallback ? '/pc-base.png' : chosenImage;
   const previewLabel = motherboard.brand === 'asus' && !usesFallback
     ? 'ASUS White Build · Mainboard-Vorschau'
@@ -126,7 +147,9 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame;
     let lastTime;
-    const render = () => drawLighting(canvas, config, selectedTypes, timeRef.current, isMsi ? getMsiDimmPositions(dimmCount) : null);
+    let lastPaint;
+    let visible=true;
+    const render = () => drawLighting(canvas, config, illuminatedTypes, timeRef.current, isMsi ? getMsiDimmPositions(dimmCount) : null, layout);
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const density = Math.min(window.devicePixelRatio || 1, 2);
@@ -137,31 +160,40 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
     const tick = (now) => {
       if (lastTime !== undefined) timeRef.current += Math.min((now - lastTime) / 1000, 0.06);
       lastTime = now;
-      render();
+      if(lastPaint===undefined||now-lastPaint>=33){render();lastPaint=now;}
       frame = requestAnimationFrame(tick);
     };
     const updateAnimation = () => {
       cancelAnimationFrame(frame);
       lastTime = undefined;
+      lastPaint = undefined;
       render();
-      if (running && !reducedMotion.matches && !['static', 'gradient'].includes(config.effect)) frame = requestAnimationFrame(tick);
+      if (visible && !document.hidden && running && !reducedMotion.matches && !['static', 'gradient'].includes(config.effect)) frame = requestAnimationFrame(tick);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
+    const visibility=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting!==false;updateAnimation();},{rootMargin:'100px'});
+    visibility.observe(canvas);
     resize();
     updateAnimation();
     reducedMotion.addEventListener('change', updateAnimation);
+    document.addEventListener('visibilitychange',updateAnimation);
     return () => {
       observer.disconnect();
+      visibility.disconnect();
       cancelAnimationFrame(frame);
       reducedMotion.removeEventListener('change', updateAnimation);
+      document.removeEventListener('visibilitychange',updateAnimation);
     };
-  }, [config, selectedTypes, running, isMsi, dimmCount]);
+  }, [config, selectedTypes, selectedIds, running, isMsi, dimmCount, layout, devices, preview]);
+
+  function select(component){setEditing(component.type);const device=assignedDevice(component.type);if(device)onSelectDevice?.(device.id);else onSelectType?.(component.type);}
+  function move(event){if(!drag.current||!arrange)return;const bounds=area.current.getBoundingClientRect(),start=drag.current;setLayout(current=>({...current,[start.type]:{...current[start.type],x:Math.max(0,Math.min(100,start.x+(event.clientX-start.clientX)/bounds.width*100)),y:Math.max(0,Math.min(100,start.y+(event.clientY-start.clientY)/bounds.height*100))}}));}
 
   return <>
-    <div className="pc-preview" aria-label="Interaktive Vorschau der PC-Beleuchtung">
+    <div ref={area} className={`pc-preview ${arrange?'pc-preview--arrange':''}`} aria-label="Interaktive Vorschau der PC-Beleuchtung">
       <img key={imageSource} className="pc-preview__base" src={imageSource}
-        alt={`${previewLabel}: PC mit drei Lüftern, RAM, Grafikkarte und LED-Streifen`}
+        alt={`${previewLabel}: Symbolbild für die bearbeitbare Beleuchtungsvorschau`}
         onLoad={() => { if (!usesFallback && failedImage) setFailedImage(null); }}
         onError={() => { if (imageSource !== '/pc-base.png') setFailedImage(chosenImage); }} draggable="false" />
       {isMsi && !usesFallback && !failedBoard ? <>
@@ -171,12 +203,12 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
         {getMsiDimmPositions(dimmCount).map((position, index) => <span key={index} className="pc-preview__msi-dimm" style={{ left:`${position * 100}%` }} title={memory.visibleModules[index].modelName || memory.visibleModules[index].partNumber || 'Erkannter RAM-Riegel'} aria-hidden="true"/>)}
       </> : null}
       <canvas ref={canvasRef} className="pc-preview__lighting" aria-hidden="true" />
-      {onSelectType && COMPONENTS.map(({ type, label, x, y, width, height }) => (
+      {onSelectType && visibleComponents.map(component => {const {type,label}=component,{x,y,width,height}=layout[type];return (
         <button type="button" key={type} className="pc-preview__target"
           style={{ left: `${x - width / 2}%`, top: `${y - height / 2}%`, width: `${width}%`, height: `${height}%` }}
           aria-label={`${label} in der Vorschau auswählen`}
-          aria-pressed={selectedTypes.includes(type)} title={label} onClick={() => onSelectType(type)} />
-      ))}
+          aria-pressed={illuminatedTypes.includes(type)} title={label} onClick={()=>select(component)} onPointerDown={event=>{if(arrange){event.currentTarget.setPointerCapture(event.pointerId);drag.current={type,x,y,clientX:event.clientX,clientY:event.clientY};setEditing(type);}}} onPointerMove={move} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}><span>{arrange?label:null}</span></button>
+      );})}
     </div>
     <div className="pc-preview__board-caption">
       <span className="pc-preview__board-label">{previewLabel}</span>
@@ -184,7 +216,10 @@ export function PCPreview({ config = {}, selectedTypes = [], running = true, onS
       {memory.summary ? <span className="pc-preview__memory-model">RAM: {memory.summary}</span> : null}
       {isMsi && !memory.count ? <span className="pc-preview__memory-model">RAM-Steckplätze: keine Modulnamen von Windows gemeldet.</span> : null}
       <span className="pc-preview__board-note">Symbolbild · Mainboard-Design kann je nach Modell abweichen.</span>
+      <span className="pc-preview__board-note">{preview?'Beispielaufbau.':'Nur erkannte oder ausdrücklich zugeordnete Komponenten sind auswählbar; das Hintergrundbild ist keine Stückliste.'}</span>
+      <label className="pc-arrange-toggle"><input type="checkbox" checked={arrange} onChange={event=>setArrange(event.target.checked)}/>Komponenten verschieben</label>
     </div>
+    {editing&&visibleComponents.some(component=>component.type===editing)?<section className="pc-component-editor" aria-label="Vorschau-Komponente bearbeiten"><div className="pc-component-heading"><h3>{COMPONENTS.find(component=>component.type===editing).label} anordnen</h3><button className="secondary" onClick={()=>{setLayout(current=>({...current,[editing]:{...COMPONENTS.find(component=>component.type===editing),deviceId:null}}));}}>Position zurücksetzen</button></div><div className="pc-component-values">{[['x','Mitte links'],['y','Mitte oben'],['width','Breite'],['height','Höhe']].map(([key,label])=><label key={key}>{label} %<input type="number" aria-label={`${label} der PC-Komponente`} min={key==='width'||key==='height'?2:0} max="100" step=".5" value={Math.round(layout[editing][key]*10)/10} onChange={event=>setLayout(current=>({...current,[editing]:{...current[editing],[key]:Math.max(key==='width'||key==='height'?2:0,Math.min(100,+event.target.value))}}))}/></label>)}</div><label className="pc-device-mapping">Gerät zuordnen<select aria-label="Gerät der PC-Komponente" value={assignedDevice(editing)?.id??''} onChange={event=>{const value=event.target.value,device=devices.find(item=>String(item.id)===value);setLayout(current=>({...current,[editing]:{...current[editing],deviceId:device?.id??null,deviceIdentity:device?deviceIdentity(device):null}}));if(device)onSelectDevice?.(device.id);}}><option value="">Automatisch nach Komponententyp</option>{devices.map(device=><option key={device.id} value={device.id}>{device.name}</option>)}</select></label><p>Die Zuordnung wählt ein RGB-Gerät für die Effekteinstellungen aus. Position und Größe ändern ausschließlich die Vorschau.</p>{storageError?<p role="status">{storageError}</p>:null}</section>:null}
   </>;
 }
 

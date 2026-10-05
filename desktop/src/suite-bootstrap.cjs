@@ -15,6 +15,7 @@ handle('rgb-stop',()=>runtime.rgb.stop());
 handle('command',value=>runtime.jarvis.execute(value));
 handle('settings',value=>runtime.jarvis.update(value));
 handle('preview-event',value=>runtime.jarvis.previewEvent(value));
+handle('preview-voice',value=>runtime.jarvis.previewVoice(value));
 handle('import-status',()=>require('./services/obs-settings-import.cjs').status(app.getPath('userData')));
 handle('import-obs-settings',()=>{
  const importer=require('./services/obs-settings-import.cjs');

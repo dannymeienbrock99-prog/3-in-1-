@@ -1,0 +1,6 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path');
+const DEFAULT_EDITOR={panelWidth:400,zoom:{tiktok:1,twitch:1}};
+function validateEditor(value={}){if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Ungültige Editor-Einstellung.');const finite=(v,min,max,fallback)=>{if(v===undefined)return fallback;if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)throw Error('Editor-Größe liegt außerhalb des erlaubten Bereichs.');return v;};return {panelWidth:Math.round(finite(value.panelWidth,300,600,400)),zoom:{tiktok:finite(value.zoom?.tiktok,.5,3,1),twitch:finite(value.zoom?.twitch,.5,3,1)}};}
+class EditorSettings{constructor(directory){this.file=path.join(directory,'dual-editor.json');try{this.value=validateEditor(JSON.parse(fs.readFileSync(this.file,'utf8')));}catch{this.value=validateEditor();}}snapshot(){return structuredClone(this.value);}update(value){const next=validateEditor(value);fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(this.file+'.tmp',JSON.stringify(next,null,2));fs.renameSync(this.file+'.tmp',this.file);this.value=next;return this.snapshot();}}
+module.exports={EditorSettings,validateEditor,DEFAULT_EDITOR};

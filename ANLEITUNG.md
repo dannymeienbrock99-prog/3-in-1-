@@ -1,4 +1,4 @@
-# Batto 3-in-1 · Schnellstart 1.13.1
+# Batto 3-in-1 · Schnellstart 1.14.0
 
 ## Streamer.bot auf diesem PC einrichten
 

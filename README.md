@@ -1,4 +1,14 @@
-# Batto 3-in-1 · 1.13.1
+# Batto 3-in-1 · 1.14.0
+
+## Gestaltung, Vorschau und eigene Befehle · 1.14.0
+
+**RGB-Steuerung** verwendet die Batto-Gestaltung mit anpassbaren Farben und dem mitgelieferten ASUS-Video. Komponenten in der PC-Vorschau lassen sich zuordnen, positionieren und vergrößern. Änderungen bleiben zunächst in der Vorschau; **Auf Geräte anwenden** bestätigt die Ausgabe, **Live-Modus** ist eine bewusste zusätzliche Auswahl. Szenen lassen sich bearbeiten, duplizieren, kategorisieren, als Favorit markieren und importieren/exportieren. Die bisherigen Effekte bleiben erhalten. Strimer-Animationen stellen die einzelnen Stränge dar; eine Vorschau ist keine Zusage zur Unterstützung eines Controllers.
+
+**Chatfarben → Farbschema** bietet gemeinsame und getrennte Plattformprofile, Rollenfarben, Favoriten, Transparenz, Abstände und Schriftgrößen. Das entkoppelte Chatfenster kann die Hauptansicht übernehmen oder eine eigene Gestaltung verwenden.
+
+**Jarvis-Einstellungen → Befehle verwalten**: Befehle ein-/ausschalten, eigene Formulierungen einem vorhandenen Befehl zuordnen und zusätzliche Bestätigungen wählen. Moderation verlangt weiterhin eine separate Bestätigung. **Stimme & Aussprache testen** bietet Sprechstil, Tempo, Lautstärke, Satzpausen und ein Aussprache-Wörterbuch. **Stimme testen** verwendet deinen Entwurf, ohne ihn zu speichern oder das Mikrofon einzuschalten.
+
+**Dual Stream → Quelle anordnen** besitzt einen breiteren, über die Trennlinie verstellbaren Editor. Quellen können im Bild verschoben und am Griff vergrößert werden. Vorschauzoom wird je Plattform gespeichert; **Editor vergrößern** öffnet eine große Bearbeitungsansicht, Escape schließt sie. Editorbreite und Zoom ändern keine laufende Ausgabe.
 
 ## Eigene Twitch- und TikTok-Nachrichten vorlesen · 1.13.1
 
@@ -239,7 +249,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.13.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.14.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 
@@ -279,3 +289,4 @@ Die Touch-Oberfläche wurde in isolierten Electron-Fenstern auf QR-Wechsel, PINr
 ## Herkunft und Rechte
 
 OBS-Quelle: der eigene lokale Multi-Chat-Quellstand zu `Batto-OBS-Tool-2.1-Setup-2.4.7.exe`, auf Basis des Multi-Chat-Commits `ced4ff2`. Renderer, Styles und Hauptprozess wurden mit dem entpackten 2.4.7-Installer verglichen. Das Originalrepository `Multi-Chat` und die ursprüngliche lokale Arbeitskopie werden nicht verändert. Die unveränderten Styles und Hauptbilder sind in `desktop/reference-2.4.7.json` geprüft. FanAtlas und Jarvis wurden aus den eigenen Vorprojekten zusammengeführt. Das Windows-Utils-Beispielplugin und Herstellerinstaller werden nicht mitverteilt. Bereitgestellte Bilder bleiben ihren jeweiligen Rechteinhabern zugeordnet. [Drittanbieter und Modelle](THIRD-PARTY.md).
+

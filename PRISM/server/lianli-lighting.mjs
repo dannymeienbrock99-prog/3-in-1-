@@ -14,7 +14,9 @@ const isDual = pid => [0xa101, 0xa102, 0xa104].includes(pid);
 const isV2 = pid => [0xa103, 0xa104, 0xa105].includes(pid);
 const isEne = (vid, pid) => vid === 0x0cf2 && pid >= 0xa100 && pid <= 0xa106;
 const isTl = (vid, pid) => vid === 0x0416 && pid === 0x7372;
+const isStrimer = (vid,pid) => vid === 0x0cf2 && pid === 0xa200;
 export function lianliSupportedEffects({ productId, ring = 'all' }) {
+  if(productId===0xa200)return LIANLI_EFFECT_CATALOG.filter(mode=>Object.hasOwn(catalog.strimerMapping,mode.id)).map(mode=>({...mode,firmwareModeId:catalog.strimerMapping[mode.id]}));
   if (!familyNames.has(productId)) return [];
   const candidates = productId === 0x7372 ? catalog.tlFanModes : productId === 0xa102 ? catalog.slInfinityModes : isDual(productId)
     ? [...catalog.dualModes, ...(productId === 0xa104 ? catalog.alV2Extra : [])]
@@ -37,6 +39,10 @@ export function validateLianLiNativeEffect(device, effectId, options = {}) {
   const settings = { colors: options.colors ?? ['#ffffff'], brightness: options.brightness ?? 100, speed: options.speed ?? 50, direction: options.direction ?? 'forward' };
   if (!Array.isArray(settings.colors) || settings.colors.length < 1 || settings.colors.length > (effect.colorsMax ?? effect.maxColors ?? 4) || settings.colors.some(color => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) throw new BridgeError('Ungültige Lian-Li-Farbpalette.', 'INVALID_COLORS', 400);
   if (!Number.isInteger(settings.brightness) || settings.brightness < 0 || settings.brightness > 100 || !Number.isInteger(settings.speed) || settings.speed < 1 || settings.speed > 100 || !['forward', 'reverse'].includes(settings.direction)) throw new BridgeError('Ungültige Lian-Li-Einstellungen.', 'INVALID_SETTINGS', 400);
+  if(isStrimer(device.vendorId,device.productId)){
+    if(options.controllerScope!=='all'||options.confirmWholeController!==true||device.wholeControllerOnly!==true)throw new BridgeError('Bestätige ausdrücklich alle Strimer-Kanäle dieses Controllers. Eine getrennte native Ausgabe ist nicht verfügbar.','WHOLE_CONTROLLER_REQUIRED',422);
+    settings.controllerScope='all';settings.confirmWholeController=true;
+  }
   return { effectId, ...settings, colors: [...settings.colors] };
 }
 
@@ -92,20 +98,23 @@ export class LianLiLightingClient extends EventEmitter {
     const ids = new Set();
     const devices = result.devices.filter(device => !isProtectedDevice(device)).map(device => {
       if (!Number.isInteger(device.id) || device.id < 50000 || device.id >= 50256 || ids.has(device.id)
-        || (!isEne(device.vendorId, device.productId) && !isTl(device.vendorId, device.productId)) || !Number.isInteger(device.port) || device.port < 0 || device.port > 3
+        || (!isEne(device.vendorId, device.productId) && !isTl(device.vendorId, device.productId) && !isStrimer(device.vendorId,device.productId)) || !Number.isInteger(device.port) || device.port < 0 || device.port > 3
         || !(isDual(device.productId) ? ['inner', 'outer'] : ['all']).includes(device.ring)) throw new BridgeError('Ungültige Lian-Li-Gerätekennung.', 'NATIVE_INVALID_DATA');
       ids.add(device.id);
+      const strimer=isStrimer(device.vendorId,device.productId);
+      if(strimer&&(device.interfaceNumber!==1||device.usagePage!==0xff72||device.usage!==0xa1||device.outputReportByteLength!==255||device.featureReportByteLength!==7||device.inputReportByteLength!==65||device.firmwareVerified!==true||![4,6].includes(device.channel2Count)||device.wholeControllerOnly!==true||device.port!==0||device.ring!=='all'))throw new BridgeError('Strimer-Interface, Firmware oder Kanalprüfung fehlt. Keine native Ausgabe erlaubt.','NATIVE_INVALID_DATA');
       const possible = lianliSupportedEffects(device);
       if (!Array.isArray(device.nativeEffects) || device.nativeEffects.length < 1 || device.nativeEffects.length > 94 || device.nativeEffects.some(effect => !possible.some(item => item.id === effect.id)) || new Set(device.nativeEffects.map(effect => effect.id)).size !== device.nativeEffects.length) throw new BridgeError('Ungültiger Lian-Li-Effektkatalog.', 'NATIVE_INVALID_DATA');
       const fanIds = device.detectedFanIds ?? [];
       if (!Array.isArray(fanIds) || fanIds.length > 16 || fanIds.some(id => !Number.isInteger(id) || id < 0 || id > 15) || new Set(fanIds).size !== fanIds.length
         || isTl(device.vendorId, device.productId) && (fanIds.length < 1 || device.fanCount !== fanIds.length)) throw new BridgeError('Ungültige Lian-Li-Lüfterpositionen.', 'NATIVE_INVALID_DATA');
-      const maxColors = device.productId === 0xa104 ? 6 : 4;
-      const nativeEffects = device.nativeEffects.map(effect => ({ id: effect.id, name: possible.find(item => item.id === effect.id).name, colorsMax: maxColors, maxColors,
+      const maxColors = device.productId === 0xa104 || strimer ? 6 : 4;
+      const nativeEffects = device.nativeEffects.map(effect => ({ id: effect.id, name: possible.find(item => item.id === effect.id).name, colorsMax: strimer&&['Off','Static','Breathing'].includes(effect.id)?1:strimer&&['Mixing','Runway'].includes(effect.id)?2:maxColors, maxColors: strimer&&['Off','Static','Breathing'].includes(effect.id)?1:strimer&&['Mixing','Runway'].includes(effect.id)?2:maxColors,
         supportsBrightness: effect.id !== 'Off', supportsSpeed: !['Off', 'Static', 'StaticColorful'].includes(effect.id), directions: ['forward', 'reverse'],
-        controls: { colors: !['Off'].includes(effect.id) && !(device.productId === 0xa104 && ['Rainbow','RainbowMorph','MeteorRainbow'].includes(effect.id)),
+        controls: { colors: !['Off'].includes(effect.id) && !(device.productId === 0xa104 && ['Rainbow','RainbowMorph','MeteorRainbow'].includes(effect.id)) && !(strimer&&['Rainbow','RainbowMorph','BulletStack','Twinkle'].includes(effect.id)),
           brightness: effect.id !== 'Off', speed: !['Off', 'Static', 'StaticColorful'].includes(effect.id), direction: !['Off', 'Static', 'StaticColorful'].includes(effect.id) },
-        firmwareModeId: possible.find(item => item.id === effect.id).firmwareModeId }));
+        firmwareModeId: possible.find(item => item.id === effect.id).firmwareModeId,
+        ...(strimer?{brightnessLevels:5,speedLevels:5,warning:'Helligkeit und Tempo werden in fünf Controllerstufen übertragen. Die sichtbare Ausgabe wurde in Batto noch nicht physisch geprüft.'}:{}) }));
       const resultDevice = { ...device, name: String(device.name || `Lian Li UNI FAN ${familyNames.get(device.productId)} · Anschluss ${device.port + 1}`), vendor: 'Lian Li', provider: 'lianli', backend: 'lianli', type: 21,
         directMode: false, directModeId: null, ledCount: 0, physicalLedCount: null, colors: [], leds: [], zones: [], modes: [], ledGranularity: 'area', layoutValid: false,
         nativeEffects, detectedFanIds: [...fanIds], fanCount: isTl(device.vendorId, device.productId) ? fanIds.length : null, telemetryCapturedAt: new Date().toISOString() };
@@ -113,6 +122,7 @@ export class LianLiLightingClient extends EventEmitter {
         || device.fanRpms != null && (!Array.isArray(device.fanRpms) || device.fanRpms.length !== fanIds.length || new Set(device.fanRpms.map(fan => fan.index)).size !== fanIds.length
           || device.fanRpms.some(fan => !fanIds.includes(fan.index) || !Number.isInteger(fan.rpm) || fan.rpm < 0 || fan.rpm > 65535))) throw new BridgeError('Ungültige Lian-Li-Drehzahlquelle.', 'NATIVE_INVALID_DATA');
       resultDevice.rpm = device.rpm ?? null; resultDevice.fanRpms = device.fanRpms ?? null;
+      if(strimer){resultDevice.wholeControllerOnly=true;resultDevice.physicalOutputVerified=false;resultDevice.separateChannelOutput=false;resultDevice.capabilitySource=catalog.strimerSource;}
       resultDevice.nativeEffectCatalog = lianliCatalogForDevice(resultDevice); return resultDevice;
     });
     this.details = { ...(result.environment ?? {}), discovery: Array.isArray(result.discovery) ? result.discovery.filter(item => !isProtectedDevice(item)).slice(0, 32) : [], warnings: Array.isArray(result.warnings) ? result.warnings.map(String).slice(0, 64) : [] };

@@ -16,6 +16,7 @@ from config import ROOT, MODELS, DATA, reference_path
 from worker_rpc import Worker
 from legacy_voice import sapi_voices
 from audio_devices import device_list, candidates, open_input
+from speech_profile import pronunciation
 
 def input_devices():
     return [(row['index'], {key:value for key,value in row.items() if key!='index'})
@@ -269,19 +270,22 @@ class Speaker:
 
     def speak(self, text, settings, cancel, on_state):
         if settings.get('tts') == 'silent' or cancel.is_set(): return
-        clean = speech_text(text)
+        clean = speech_text(pronunciation(text, settings.get('pronunciation_dictionary', [])))
         self.output_settings = settings
         if not clean: return
         if settings.get('tts') == 'sapi':
             from legacy_voice import Speaker as Legacy
             Legacy._sapi(self, clean, settings, cancel, on_state); return
         with self.lock:
-            for sentence in re.split(r'(?<=[.!?])\s+|\n+', clean):
+            sentences = [sentence for sentence in re.split(r'(?<=[.!?])\s+|\n+', clean) if sentence.strip()]
+            for index, sentence in enumerate(sentences):
                 words = sentence.split()
                 for start in range(0, len(words), 40):
                     if cancel.is_set(): return
                     result = self.synthesize(' '.join(words[start:start+40]), settings, cancel)
                     self.play(result['path'], cancel, on_state)
+                if index < len(sentences) - 1:
+                    cancel.wait(max(0, min(1500, float(settings.get('sentence_pause_ms', 180)))) / 1000)
 
 class SpeechStream:
     """Bounded sentence queue fed before the LLM has finished its answer."""

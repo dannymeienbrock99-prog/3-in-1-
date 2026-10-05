@@ -30,7 +30,7 @@ export function SystemInventory({system,busy,onRefresh}){
    <div className="surface inventory">{rows.map(([label,key,values])=>{const error=errors.find(e=>e.component===key);return <div key={key}><span>{label}</span><div className="inventory-values">{values.filter(Boolean).length?values.filter(Boolean).map((value,i)=><strong className={i>0&&key==='memory'?'memory-module':''} key={i}>{value}</strong>):<strong className="muted">Von Windows nicht gemeldet</strong>}{error?<small>{error.message}</small>:null}</div></div>;})}</div>
    {partial?<div className="help-note inventory-warning" role="status"><Info size={19}/><div><p>{system.error||'Einzelne Windows-Geräteinformationen konnten nicht gelesen werden.'}</p>{warnings.length?<ul>{warnings.map((warning,i)=><li key={i}>{typeof warning==='string'?warning:warning.message}</li>)}</ul>:null}<p>Bereits erkannte Komponenten bleiben sichtbar. „PC erneut erkennen“ wiederholt die Abfrage.</p></div></div>:null}
   </>}
-  <div className="inventory-boundary"><ShieldCheck size={18}/><p>Die PC-Liste zeigt verbaute Hardware. Ob ihre Beleuchtung steuerbar ist, wird separat geprüft. Stream Deck und Elgato-Geräte sind von PRISMs RGB-Steuerung ausgeschlossen.</p></div>
+  <div className="inventory-boundary"><ShieldCheck size={18}/><p>Die PC-Liste zeigt verbaute Hardware. Ob ihre Beleuchtung steuerbar ist, wird separat geprüft. Stream Deck und Elgato-Geräte sind von der RGB-Steuerung ausgeschlossen.</p></div>
   {system?<HardwareDevices system={system}/>:null}
  </section>;
 }

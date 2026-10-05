@@ -16,7 +16,8 @@ internal sealed class HidDevice : IDisposable
     readonly FileStream stream;
     internal HidDevice(string path, int vid, int pid, string product, HidCaps caps)
     {
-        if (!Protocol.IsEne(vid, pid) && !Protocol.IsTl(vid, pid)) throw new ArgumentException("Controller is not allowed");
+        if (!Protocol.IsEne(vid, pid) && !Protocol.IsTl(vid, pid) && !StrimerProtocol.IsController(vid,pid)) throw new ArgumentException("Controller is not allowed");
+        if(StrimerProtocol.IsController(vid,pid)&&!StrimerProtocol.ValidDescriptor(path,caps))throw new ArgumentException("Strimer HID-Interface oder Reportgrößen passen nicht zur geprüften Schnittstelle.");
         Vid = vid; Pid = pid; Product = product; Caps = caps;
         handle = Native.CreateFile(path, 0xc0000000, 3, IntPtr.Zero, 3, 0x40000000, IntPtr.Zero);
         if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -84,7 +85,8 @@ internal sealed class HidDevice : IDisposable
                 var identity = System.Text.RegularExpressions.Regex.Match(path, @"vid_([0-9a-f]{4})&pid_([0-9a-f]{4})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 if (!identity.Success) continue;
                 int vid = Convert.ToInt32(identity.Groups[1].Value, 16), pid = Convert.ToInt32(identity.Groups[2].Value, 16);
-                if (!Protocol.IsEne(vid, pid) && !Protocol.IsTl(vid, pid)) continue;
+                if (!Protocol.IsEne(vid, pid) && !Protocol.IsTl(vid, pid) && !StrimerProtocol.IsController(vid,pid)) continue;
+                if(StrimerProtocol.IsController(vid,pid)&&!System.Text.RegularExpressions.Regex.IsMatch(path,@"&mi_01(?:&|#)",System.Text.RegularExpressions.RegexOptions.IgnoreCase))continue;
                 using var query = Native.CreateFile(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
                 if (query.IsInvalid) continue;
                 var attributes = new HidAttributes { Size = Marshal.SizeOf<HidAttributes>() };
@@ -93,6 +95,7 @@ internal sealed class HidDevice : IDisposable
                 HidCaps caps;
                 try { if (Native.HidP_GetCaps(preparsed, out caps) != 0x110000) continue; }
                 finally { Native.HidD_FreePreparsedData(preparsed); }
+                if(StrimerProtocol.IsController(vid,pid)&&!StrimerProtocol.ValidDescriptor(path,caps))continue;
                 var buffer = new byte[512];
                 string product = Native.HidD_GetProductString(query, buffer, buffer.Length) ? System.Text.Encoding.Unicode.GetString(buffer).TrimEnd('\0') : "";
                 if (System.Text.RegularExpressions.Regex.IsMatch(product, "stream[\\s_-]*deck|elgato", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;

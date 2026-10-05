@@ -2,6 +2,7 @@
 const {app,ipcMain,BrowserWindow,dialog,safeStorage,clipboard}=require('electron'),fs=require('node:fs'),path=require('node:path'),{fileURLToPath}=require('node:url'),{randomUUID}=require('node:crypto');
 const {DualStream}=require('./service.cjs'),windows=require('./windows.cjs');let service,closePromise;const pendingImports=new WeakMap();
 const obsFiles=require('./obs-import-files.cjs');
+const {EditorSettings}=require('./editor-settings.cjs');let editorStore;
 function obsDirectory(){return path.join(app.getPath('appData'),'obs-studio','basic','scenes');}
 function previewCollection(sender,file){
  pendingImports.delete(sender);const data=obsFiles.readCollectionFile(file);let preview;
@@ -9,11 +10,12 @@ function previewCollection(sender,file){
  const token=randomUUID();pendingImports.set(sender,{data,token,revision:service.revision,expires:Date.now()+15*60*1000});
  return {...preview,token,baseRevision:service.revision};
 }
-function snapshot(){return {...service.snapshot(),...windows.status()};}
+function snapshot(){editorStore??=new EditorSettings(service.directory);return {...service.snapshot(),editor:editorStore.snapshot(),...windows.status()};}
 function publish(){if(!service)return;const value=snapshot();for(const win of BrowserWindow.getAllWindows())if(!win.isDestroyed()&&!win.webContents.isDestroyed()){try{win.webContents.send('dual:state',value);}catch{}}}
 function sender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}const main=require('../../electron/main21.cjs').getMainWindow(),detached=windows.existing(),source=path.resolve(file),allowed=(main?.webContents===e.sender&&source===path.resolve(__dirname,'../renderer/index.html'))||(detached?.webContents===e.sender&&source===path.resolve(__dirname,'../renderer/dual-window.html'));if(!allowed||e.senderFrame!==e.sender.mainFrame)throw Error('Diese Oberfläche ist nicht berechtigt.');if(!service)throw Error('Dual Stream startet noch.');return detached?.webContents===e.sender;}
 ipcMain.handle('dual:action',async(e,{command,value}={})=>{const detached=sender(e);
  if(command==='state')return snapshot();
+ if(command==='editor'){editorStore??=new EditorSettings(service.directory);const editor=editorStore.update(value);publish();return editor;}
  if(command==='detach'){await windows.open();return snapshot();}
  if(command==='attach'){await windows.attach();return snapshot();}
  if(command==='always-on-top'){windows.alwaysOnTop(value);return snapshot();}

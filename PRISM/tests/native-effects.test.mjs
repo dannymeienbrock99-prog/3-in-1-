@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyNativeEffect, validateNativeEffect } from '../server/native-effects.mjs';
+import {EventEmitter} from 'node:events';
+import { applyNativeEffect, validateNativeEffect, nativeLightingState } from '../server/native-effects.mjs';
+import {EffectEngine} from '../server/effects.mjs';
 const device = (id, extra={}) => ({id,name:`FURY Slot ${id}`,vendor:'Kingston',provider:'kingston',nativeEffects:[{id:'static_color',name:'Statisch',colorsMax:1}],...extra});
 test('native selection is fully validated before stopping or writing any RGB',async()=>{
   let stopped=0,writes=0;
@@ -18,6 +20,17 @@ test('native effect stops only selected software targets, waits for pending fram
   assert(events.findIndex(x=>x[0]==='frame-done')<events.findIndex(x=>x[0]==='write'));
   assert.deepEqual(events.find(x=>x[0]==='stop'),['stop',[40002]]);
   assert.equal(devices[0].activeNativeEffect,undefined);assert.equal(devices[1].activeNativeEffect.colors[0],'#ff0000');
+  assert.deepEqual(devices[1].nativeSettings,{effectId:'static_color',colors:['#ff0000'],brightness:80,speed:50,direction:'forward'});
+});
+
+test('native restore snapshots contain only known lighting settings and direct selection clears stale native state',async t=>{
+ const target=device(40001,{type:3,directMode:true,ledCount:4,colors:[0,0,0,0],zones:[],nativeSettings:{effectId:'static_color',colors:['#ffffff'],brightness:30,speed:40,direction:'forward'},activeNativeEffect:'static_color'});
+ const state=nativeLightingState(target);assert.equal(state.effectId,'static_color');assert.deepEqual(state.colors,['#ffffff']);assert.equal(Object.hasOwn(state,'0'),false);state.colors[0]='#000000';assert.equal(target.nativeSettings.colors[0],'#ffffff');
+ assert.equal(nativeLightingState({...target,nativeSettings:undefined}),null);assert.equal(nativeLightingState({...target,activeNativeEffect:'other'}),null);
+ const client=Object.assign(new EventEmitter(),{connected:true,devices:[target],selectDirect:async()=>{},update:async()=>{}});
+ const engine=new EffectEngine(client);t.after(()=>engine.stop());
+ await engine.apply({effect:'static',colors:['#123456'],brightness:70,speed:40,scale:50,direction:'forward',deviceIds:[target.id]});
+ assert.equal(target.activeNativeEffect,undefined);assert.equal(target.nativeSettings,undefined);assert.equal(nativeLightingState(target),null);assert.equal(engine.active[0].settings.colors[0],'#123456');
 });
 test('native partial failure reports acknowledged devices, with no success on failed target',async()=>{
   const devices=[device(40000),device(40001)];

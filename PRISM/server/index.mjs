@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BridgeError, publicController } from './openrgb.mjs';
 import { LightingClient } from './lighting-client.mjs';
 import { msiSetupStatus, installMsiSdk } from './msi-setup.mjs';
-import { applyNativeEffect } from './native-effects.mjs';
+import { applyNativeEffect, nativeLightingState } from './native-effects.mjs';
 import { APP_VERSION } from './version.mjs';
 import { assertDeviceAllowed, PROTECTED_DEVICES } from './device-policy.mjs';
 import { corsairSetupStatus, installCorsairSdk } from './corsair-setup.mjs';
@@ -38,7 +38,7 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
   client.on('disconnected', error => { lastError = error.message; });
   client.on('devicesChanged', () => { lastError = 'Geräte wurden geändert. Bitte Geräte erneut erkennen.'; });
   client.on('controlLost', error => { engine.stop(); lastError = error.message; });
-  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, effectRunning: engine.running, active: engine.active, nativeActive:client.connected ? client.devices.filter(device=>device.activeNativeEffect).map(device=>({deviceId:device.id,provider:device.provider,...device.activeNativeEffect})) : [], effects: EFFECTS, error: engine.lastError || lastError });
+  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, effectRunning: engine.running, active: engine.active, nativeActive:client.connected ? client.devices.map(nativeLightingState).filter(Boolean) : [], effects: EFFECTS, error: engine.lastError || lastError });
 
   const server = http.createServer(async (request, response) => {
     try {

@@ -171,6 +171,7 @@ function applyAppearance() {
   window.BattoProgramBackground?.apply(appearance,S.view);
   applyChatBackground();
   window.applyChatWidgets?.();
+  window.BattoChatAppearanceUI?.mountQuick();
 }
 
 async function saveAndSync(patch, message = '') {
@@ -197,7 +198,7 @@ function tikFinityBridgeText(status={}) {
   return 'TikFinity Desktop starten, mit dem LIVE verbinden und hier verbinden.';
 }
 
-function chatColorStyle(kind,message) {const source=String(message?.raw?.meta?.sourceConnector||message?.meta?.sourceConnector||message?.raw?.source||'');if(/^(?:(?:local|cng-local)-)?(?:auto-broadcast|broadcast-manual-test|broadcast(?:-run)?:[a-zA-Z0-9_-]{1,100})$/.test(source))kind=kind==='username'?'broadcastUsername':'broadcastMessage';const c=S.config?.chatColors;return c?.enabled && /^#[0-9a-f]{6}$/i.test(c[kind]||'') ? `style="color:${c[kind]}"` : '';}
+function chatColorStyle(kind,message) {const a=window.BattoChatAppearance;const color=a?.forMessage(a.resolve(S.config,{detached}),message)[kind];return a?.hex(color)?`style="color:${color}"`:'';}
 function renderChat() {
   const tabs = [['all', 'Alle'], ['tiktok', 'TikTok'], ['twitch', 'Twitch'], ['cng', 'CNG'], ['youtube', 'YouTube']];
   const tikfinityChat=tikFinityChatWidget();
@@ -228,9 +229,10 @@ function renderChat() {
   const rows = S.chatTab === 'all' ? S.messages : S.messages.filter((message) => message.platform === S.chatTab);
   const nativeBar=S.chatTab === 'tiktok' ? `<div class="tikfinity-native-bar"><span><span class="platform-icon tiktok">${platformIcon('tiktok')}</span><b>Batto TikTok-Chat</b></span><small class="conn-state ${statusClass(tikfinityStatus)}" id="tikfinityNativeState">${esc(tikFinityBridgeText(tikfinityStatus))}</small><div class="tikfinity-chat-actions"><button id="tikfinityBridgeConnect" type="button" ${tikfinityStatus.connected ? 'disabled' : ''}>${tikfinityStatus.connected ? 'Verbunden' : 'Jetzt verbinden'}</button><button id="tikfinityBridgeTest" type="button">Anzeige testen</button>${tikfinityChat ? '<button id="tikfinityWidgetView" type="button">Originalansicht</button>' : ''}</div></div>` : '';
   const rowsHtml = rows.length
-    ? rows.slice(-250).map((message) => { const platform=platformKey(message.platform); const label=PLATFORM_META[platform].label; return `<div class="chat-row"><span class="chat-time">${time(message.timestamp)}</span><span class="platform-icon ${platform}" aria-label="${label}">${platformIcon(platform)}</span><span class="chat-user ${platform}" ${chatColorStyle('username',message)} data-user="${esc(message.username)}" data-message-id="${esc(message.id||message.messageId||'')}" data-user-id="${esc(message.userId||message.raw?.meta?.userId||'')}" data-channel-id="${esc(message.channelId||message.raw?.meta?.channelId||'')}" data-platform="${platform}">${esc(message.displayName || message.username)}</span><span class="chat-text" ${chatColorStyle('message',message)}>${esc(message.message)}</span></div>`; }).join('')
+    ? rows.slice(-250).map((message) => { const platform=platformKey(message.platform); const label=PLATFORM_META[platform].label; const a=window.BattoChatAppearance,visual=a?.forMessage(a.resolve(S.config,{detached}),message); return `<div class="chat-row" data-chat-role="${visual?.role||'normal'}" data-chat-platform="${platform}"><span class="chat-time">${time(message.timestamp)}</span><span class="platform-icon ${platform}" aria-label="${label}">${platformIcon(platform)}</span><span class="chat-user ${platform}" ${chatColorStyle('username',message)} data-user="${esc(message.username)}" data-message-id="${esc(message.id||message.messageId||'')}" data-user-id="${esc(message.userId||message.raw?.meta?.userId||'')}" data-channel-id="${esc(message.channelId||message.raw?.meta?.channelId||'')}" data-platform="${platform}">${esc(message.displayName || message.username)}</span><span class="chat-text" ${chatColorStyle('message',message)}>${esc(message.message)}</span></div>`; }).join('')
     : `<div class="empty"><div><b>Noch keine Nachrichten</b><br><small>${S.chatTab === 'tiktok' ? 'TikFinity Desktop und dein TikTok-LIVE verbinden. Neue Nachrichten erscheinen dann hier.' : 'TikFinity, Twitch, CNG oder YouTube verbinden.'}</small></div></div>`;
   chatList.innerHTML = `${nativeBar}${rowsHtml}`;
+  window.BattoChatAppearance?.apply(chatList,S.config,{detached});
 
   $('#tikfinityBridgeConnect')?.addEventListener('click',async()=>{
     const button=$('#tikfinityBridgeConnect');
@@ -402,13 +404,7 @@ function renderFiltersModule() {
 }
 
 function renderHoloModule() {
-  const c=S.config.chatColors||{enabled:false,username:'#00d4ff',message:'#f0eae0',broadcastUsername:'#ffd166',broadcastMessage:'#ffd166'};
-  $('#holoModule').innerHTML=section('Schriftfarben im Multi-Chat', `<p>Wähle die Farben für Benutzernamen und Nachrichten. Sie gelten für den normalen Multi-Chat, das abgetrennte Chatfenster und das OBS-Chat-Overlay.</p><div class="form-grid"><label>Benutzername<input type="color" id="mcNameColor" value="${esc(c.username)}"></label><label>Chatnachricht<input type="color" id="mcTextColor" value="${esc(c.message)}"></label><label>Auto-Broadcast: Name<input type="color" id="mcBroadcastName" value="${esc(c.broadcastUsername)}"></label><label>Auto-Broadcast: Nachricht<input type="color" id="mcBroadcastText" value="${esc(c.broadcastMessage)}"></label></div><div id="mcColorPreview" style="background:#10141b;padding:20px;border-radius:10px;line-height:2"><div><b id="mcPreviewName">Zuschauer: </b><span id="mcPreviewText">Hallo, schön hier zu sein!</span></div><div><b id="mcPreviewBroadcastName">Auto-Broadcast: </b><span id="mcPreviewBroadcastText">Willkommen im Stream!</span></div></div><p>Die Sichtbarkeit eigener Auto-Broadcasts stellst du unter Auto-Broadcast ein. Diese Farben gelten auch für ihre Anzeige im Multi-Chat und OBS-Overlay. Die Webseiten von Twitch, TikTok und YouTube bestimmen ihre Schriftfarben selbst.</p><div class="toolbar"><button class="primary" id="mcColorsSave">Farben speichern</button><button id="mcColorsReset">Standardfarben verwenden</button></div>`);
-  const preview=()=>{for(const [input,label] of [['mcNameColor','mcPreviewName'],['mcTextColor','mcPreviewText'],['mcBroadcastName','mcPreviewBroadcastName'],['mcBroadcastText','mcPreviewBroadcastText']])$('#'+label).style.color=$('#'+input).value;};
-  for(const id of ['mcNameColor','mcTextColor','mcBroadcastName','mcBroadcastText'])$('#'+id).oninput=preview;
-  preview();
-  $('#mcColorsSave').onclick=async()=>{await saveAndSync({chatColors:{enabled:true,username:$('#mcNameColor').value,message:$('#mcTextColor').value,broadcastUsername:$('#mcBroadcastName').value,broadcastMessage:$('#mcBroadcastText').value}},'Chatfarben gespeichert.');renderChat();};
-  $('#mcColorsReset').onclick=async()=>{await saveAndSync({chatColors:{enabled:false,username:'#00d4ff',message:'#f0eae0',broadcastUsername:'#ffd166',broadcastMessage:'#ffd166'}},'Standardfarben wiederhergestellt.');renderHoloModule();renderChat();};
+  window.BattoChatAppearanceUI?.renderColors($('#holoModule'));
 }
 
 function adapterCard(name, title, desc, fields = '') {
@@ -1012,6 +1008,7 @@ async function boot() {
   api.onTtsCancel(cancelTts);
   api.onConfigChanged((config) => {
     S.config = config;
+    window.BattoChatAppearanceUI?.sync();
     applyAppearance();
     renderDashboard();
     if (S.view !== 'dashboard') renderModule(S.view);

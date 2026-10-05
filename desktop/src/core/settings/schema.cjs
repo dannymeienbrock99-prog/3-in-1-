@@ -114,6 +114,7 @@ function validateConfig(config) {
   if (!integerIn(c.eventCore?.dedupeTtlMs ?? 120000, 1000, 3600000)) errors.push(issue('eventCore.dedupeTtlMs', 'Dedup-TTL muss zwischen 1000 und 3600000 ms liegen.'));
 
   if(c.chatColors && (typeof c.chatColors.enabled!=='boolean'||['username','message','broadcastUsername','broadcastMessage'].some(k=>!/^#[0-9a-f]{6}$/i.test(c.chatColors[k]||''))))errors.push(issue('chatColors','Bitte gültige Schriftfarben auswählen.'));
+  if(c.chatAppearance!==undefined)errors.push(...require('../../renderer/chat-appearance.js').validate(c.chatAppearance));
   if(c.welcome){
     if(typeof c.welcome.enabled!=='boolean'||!['first-chat','follow'].includes(c.welcome.trigger)||typeof c.welcome.message!=='string'||!c.welcome.message.trim()||c.welcome.message.length>400||!integerIn(c.welcome.cooldownSeconds,5,3600)||!Array.isArray(c.welcome.platforms)||c.welcome.platforms.some(p=>!['twitch','tiktok','youtube','cng'].includes(p))||!Array.isArray(c.welcome.ignoreUsers))errors.push(issue('welcome','Begrüßung: Text, Auslöser, Plattformen und Mindestabstand prüfen.'));
   }

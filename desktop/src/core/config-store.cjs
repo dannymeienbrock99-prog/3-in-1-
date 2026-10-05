@@ -21,6 +21,7 @@ const DEFAULT_CHAT_BACKGROUND = {
 const DEFAULT_CHAT_ICONS = {
   local: { mode:'default', customPath:'', customName:'' }
 };
+const chatAppearance = require('../renderer/chat-appearance.js');
 
 const DEFAULT_CONFIG = {
   version: CURRENT_VERSION,
@@ -37,6 +38,7 @@ const DEFAULT_CONFIG = {
   },
   filters: { enabled:true, rules:[], whitelistUsers:[], whitelistTerms:[] },
   chatColors: { enabled:false, username:'#00d4ff', message:'#f0eae0', broadcastUsername:'#ffd166', broadcastMessage:'#ffd166' },
+  chatAppearance: chatAppearance.clone(chatAppearance.defaults),
   chatDesign: { enabled:true, usernameEnabled:true, messageEnabled:true, fontFamily:'Segoe UI', customFontPath:'', fontSize:20, usernameColor:'#00d4ff', messageColor:'#ffffff', glow:10, opacity:.92, displaySeconds:12 },
   alerts: { enabled:true, maxQueue:100, defaultDurationMs:5000, queueMode:'priority', mergeGiftWindowMs:1500, masterVolume:1, items:[] },
   cohost: { enabled:true, format:'tiktok', places:4, slots:[{label:'Gast 1',source:''},{label:'Gast 2',source:''},{label:'Gast 3',source:''},{label:'Gast 4',source:''}] },
@@ -240,6 +242,7 @@ function migrateConfig(input) {
   if (currentTikfinity && !Array.isArray(currentTikfinity.webWidgets) && Array.isArray(currentTikfinity.widgets)) {
     source.platforms={...source.platforms,tikfinity:{...currentTikfinity,webWidgets:fromLegacyTikFinityWidgets(currentTikfinity)}};
   }
+  if(source.chatAppearance===undefined)source.chatAppearance=chatAppearance.fromLegacy(source);
   const merged = deepMerge(DEFAULT_CONFIG, source);
   merged.version = CURRENT_VERSION;
   merged.schemaVersion = CURRENT_SCHEMA_VERSION;

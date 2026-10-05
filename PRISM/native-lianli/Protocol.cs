@@ -18,7 +18,7 @@ internal static class Protocol
     internal static bool Dual(int pid) => pid is 0xa101 or 0xa102 or 0xa104;
     internal static bool V2(int pid) => pid is 0xa103 or 0xa104 or 0xa105;
     internal static int MaximumFans(int pid) => V2(pid) ? 6 : 4;
-    internal static string ModelName(int pid) => pid switch { 0xa100 => "SL Fan", 0xa101 => "AL Fan", 0xa102 => "SL Infinity", 0xa103 => "SL V2 Fan", 0xa104 => "AL V2 Fan", 0xa105 => "SL V2A Fan", 0xa106 => "SL Redragon", 0x7372 => "TL", _ => throw new ArgumentException("Unknown controller") };
+    internal static string ModelName(int pid) => pid switch { 0xa100 => "SL Fan", 0xa101 => "AL Fan", 0xa102 => "SL Infinity", 0xa103 => "SL V2 Fan", 0xa104 => "AL V2 Fan", 0xa105 => "SL V2A Fan", 0xa106 => "SL Redragon", 0xa200 => "Strimer L-Connect", 0x7372 => "TL", _ => throw new ArgumentException("Unknown controller") };
     static string[] List(string key) => Catalog.RootElement.GetProperty(key).EnumerateArray().Select(x => x.GetString()!).ToArray();
     static JsonElement Mapping(Endpoint e) => Catalog.RootElement.GetProperty("mappings").GetProperty(e.Pid == 0x7372 ? "tl" : e.Pid == 0xa102 ? "slInf" : Dual(e.Pid) ? e.Ring == "outer" ? e.Pid == 0xa104 ? "alV2Outer" : "alOuter" : "alInner" : "single");
     internal static Mode[] Modes(Endpoint e)

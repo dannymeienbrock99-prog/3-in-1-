@@ -6,6 +6,28 @@ export const STRIMER_SOURCES=Object.freeze({
  controller:'https://lian-li.com/product/strimer-l-connect-3-controller/',
  software:'https://lian-li.com/l-connect3/l-connect3-manual-2/',
 });
+export const STRIMER_WIRELESS_SOURCES=Object.freeze({
+ product:'https://lian-li.com/de/product/strimer-wireless/',
+ software:STRIMER_SOURCES.software,
+ protocol:'https://github.com/sgtaziz/lian-li-linux/blob/d335fdd459b0a308814497d36cf1d8c7dc1a782d/crates/lianli-devices/src/wireless/fan_type.rs',
+});
+// The Plus V2 PDF is not a Wireless effect catalog. No Wireless firmware IDs
+// or per-mode ranges are inferred from that separate controller family.
+export const STRIMER_WIRELESS_LCONNECT_MODES=Object.freeze([]);
+export const STRIMER_WIRELESS_CABLE_TYPES=Object.freeze([
+ Object.freeze({id:'wireless-gpu8',receiverType:1,name:'GPU · 8 Lichtleiter',strands:8,channels:null,ledCount:116,ledsPerStrand:null}),
+ Object.freeze({id:'wireless-24pin',receiverType:2,name:'24-Pin',strands:12,channels:null,ledCount:132,ledsPerStrand:11}),
+ Object.freeze({id:'wireless-gpu12',receiverType:3,name:'GPU · 12 Lichtleiter',strands:12,channels:null,ledCount:174,ledsPerStrand:null}),
+ Object.freeze({id:'wireless-cpu8',receiverType:4,name:'CPU 2×8-Pin',strands:8,channels:null,ledCount:88,ledsPerStrand:11}),
+]);
+export function wirelessCableLayout(receiverType,ledCount){
+ const cable=STRIMER_WIRELESS_CABLE_TYPES.find(value=>value.receiverType===receiverType&&value.ledCount===ledCount);
+ if(!cable)return null;
+ return {family:'wireless',strimerFamily:'wireless',cableType:cable.id,strimerModel:cable.name,
+  strandCount:cable.strands,ledsPerStrand:cable.ledsPerStrand,
+  ledLayout:{kind:'linear',linearLedCount:ledCount,strandCount:cable.strands,ledsPerStrand:cable.ledsPerStrand,
+   strandLedCounts:null,physicalStrandMapVerified:false,source:STRIMER_WIRELESS_SOURCES.protocol}};
+}
 
 const names=['Regenbogen','Wellen','Statische Farbe','Atmen','Regenbogen-Verwandlung','Snooker','Mischen','Landebahn','Farbauftrag','Pingpong','Gezeiten','Explosion','Meteore','Farbübertragung','Ausblenden','Wettlauf','Kreuzung','Lichtstapel','Funkeln','Parallele Linien','Stoßwelle','Wasserwellen','Schallwellen','Nieselregen'];
 export const STRIMER_LCONNECT_MODES=Object.freeze(names.map((name,index)=>Object.freeze({
@@ -26,22 +48,25 @@ export const STRIMER_CABLE_TYPES=Object.freeze([
 ]);
 
 export function strimerCapabilities(device) {
- const isStrimer=!!device&&/strimer/i.test(`${device.name??''} ${device.description??''} ${device.family??''}`);
- const wireless=isStrimer&&(device.backend==='lianli-wireless'||/wireless/i.test(`${device.name??''} ${device.family??''}`));
+ const wireless=!!device&&(device.backend==='lianli-wireless'||device.provider==='lianli-wireless'||device.strimerFamily==='wireless'||device.family==='wireless'||/strimer.*wireless/i.test(`${device.name??''} ${device.description??''}`));
+ const isStrimer=wireless||!!device&&/strimer/i.test(`${device.name??''} ${device.description??''} ${device.family??''}`);
  const direct=!!device?.directMode&&Number.isInteger(device?.ledCount)&&device.ledCount>0;
- const native=Array.isArray(device?.nativeEffects)?device.nativeEffects.map(effect=>({...effect})):[];
+ const native=!wireless&&Array.isArray(device?.nativeEffects)?device.nativeEffects.map(effect=>({...effect})):[];
+ const layout=wireless?wirelessCableLayout(device.receiverType,device.ledCount):null;
  return {
   family:wireless?'wireless':isStrimer?'plus-v2-or-other-wired':'unassigned',
+  cableTypes:wireless?STRIMER_WIRELESS_CABLE_TYPES:STRIMER_CABLE_TYPES,
+  cableType:layout?.cableType??null,strandCount:layout?.strandCount??null,ledLayout:layout?.ledLayout??null,
   nativeEffects:native,nativeAvailable:isStrimer&&native.length>0,
   directAvailable:isStrimer&&direct,
   // No checked per-channel transport exists in this release. UI-only channels
   // must never be turned into device IDs, zone indices or HID commands.
   separateChannelOutput:false,physicalOutputVerified:false,
-  lconnectReference:STRIMER_LCONNECT_MODES,sources:STRIMER_SOURCES,
-  limitation:wireless?'Strimer Wireless ist eine andere Controllerfamilie. Es stehen nur die vom erkannten Gerät gemeldeten Effekte zur Verfügung.'
+  lconnectReference:wireless?STRIMER_WIRELESS_LCONNECT_MODES:STRIMER_LCONNECT_MODES,sources:wireless?STRIMER_WIRELESS_SOURCES:STRIMER_SOURCES,
+  limitation:wireless?'Erkannte Strimer-Wireless-Kabel verwenden eigene RGB-Schleifen für das ausgewählte Kabel. Die LED-Folge ist geprüft; die physische Zuordnung zu einzelnen Lichtleitern ist nicht belegt. Getrennte Lichtleiter bleiben Vorschau.'
    :isStrimer&&direct?'Die Ausgabe kann über das erkannte Gerät erfolgen. Eine getrennte L-Connect-Kanalzuordnung ist hier nicht geprüft.'
     :isStrimer&&native.length?device.wholeControllerOnly?'Die native Ausgabe ändert alle angeschlossenen Strimer-Kanäle dieses Controllers und benötigt deine ausdrückliche Bestätigung. Getrennt bleibt Vorschau; die reale Ausgabe ist in Batto noch nicht physisch geprüft.':'Verwende ausschließlich die vom erkannten Controller angebotenen Effekte. Eine Strimer-Plus-V2-Kanalsteuerung ist nicht geprüft.'
      :'Die native USB-Kanalsteuerung für Strimer Plus V2 ist hier noch nicht verfügbar. Die animierten Stränge sind eine Vorschau; L-Connect-Effekte bleiben ein dokumentierter Vergleich.',
-  documentationConflict:'Die Produktseite nennt 11 Einzel- und 13 Gesamtmodi; die PDF-Tabelle ordnet 13 Einzel- und 11 Gesamtmodi zu. Die Kanalzuordnung wird deshalb nicht aus diesen Zahlen abgeleitet.',
+  documentationConflict:wireless?null:'Die Produktseite nennt 11 Einzel- und 13 Gesamtmodi; die PDF-Tabelle ordnet 13 Einzel- und 11 Gesamtmodi zu. Die Kanalzuordnung wird deshalb nicht aus diesen Zahlen abgeleitet.',
  };
 }

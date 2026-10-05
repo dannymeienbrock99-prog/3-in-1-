@@ -35,6 +35,7 @@ const time = (iso) => {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 };
+const objectList = (value) => Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
 
 function toast(message, error = false) {
   const el = $('#toast');
@@ -90,21 +91,26 @@ function statusClass(status) {
 }
 
 const navigationDrafts=new Map();
-function setView(view) {
+let navigationChosen=false, initialStateReady=false, initialStatePending=null;
+function setView(view, { initial=false } = {}) {
   if(view==='cohost')view='dashboard';
   if(!document.querySelector('[data-view-panel="'+view+'"]'))throw new Error('Unbekannter Bereich.');
   const old=document.querySelector('.view.active');
   if(old)navigationDrafts.set(S.view,[...old.querySelectorAll('input[id],select[id],textarea[id]')].filter(x=>x.type!=='password'&&x.type!=='file').map(x=>({id:x.id,value:x.value,checked:x.checked,selected:x.multiple?[...x.selectedOptions].map(o=>o.value):null})));
 
+  if(!initial)navigationChosen=true;
   S.view = view;
-  window.BattoProgramBackground?.apply(S.config?.appearance,view);
   $$('.view').forEach((panel) => panel.classList.toggle('active', panel.dataset.viewPanel === view));
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
-  if (view !== 'dashboard') renderModule(view);
+  try {
+    window.BattoProgramBackground?.apply(S.config?.appearance,view);
+    if (view !== 'dashboard' && S.config) renderModule(view);
+  } catch(error) { toast(`Ansicht konnte nicht vollständig geladen werden: ${error.message}`,true); }
   const active=document.querySelector('.view.active');
   for(const saved of navigationDrafts.get(view)||[]){const el=document.getElementById(saved.id);if(el&&active?.contains(el)){el.value=saved.value;el.checked=saved.checked;if(saved.selected)for(const o of el.options)o.selected=saved.selected.includes(o.value);}}
   document.dispatchEvent(new CustomEvent('batto:view',{detail:view}));
   if(!detached)api.navigationState?.(view);
+  if(!initialStateReady)void loadInitialState();
 
 }
 
@@ -198,7 +204,7 @@ function tikFinityBridgeText(status={}) {
   return 'TikFinity Desktop starten, mit dem LIVE verbinden und hier verbinden.';
 }
 
-function chatColorStyle(kind,message) {const a=window.BattoChatAppearance;const color=a?.forMessage(a.resolve(S.config,{detached}),message)[kind];return a?.hex(color)?`style="color:${color}"`:'';}
+function chatColorStyle(kind,message) {const a=window.BattoChatAppearance;const color=a?.forMessage(a.resolve(S.config||{},{detached}),message)[kind];return a?.hex(color)?`style="color:${color}"`:'';}
 function renderChat() {
   const tabs = [['all', 'Alle'], ['tiktok', 'TikTok'], ['twitch', 'Twitch'], ['cng', 'CNG'], ['youtube', 'YouTube']];
   const tikfinityChat=tikFinityChatWidget();
@@ -229,10 +235,10 @@ function renderChat() {
   const rows = S.chatTab === 'all' ? S.messages : S.messages.filter((message) => message.platform === S.chatTab);
   const nativeBar=S.chatTab === 'tiktok' ? `<div class="tikfinity-native-bar"><span><span class="platform-icon tiktok">${platformIcon('tiktok')}</span><b>Batto TikTok-Chat</b></span><small class="conn-state ${statusClass(tikfinityStatus)}" id="tikfinityNativeState">${esc(tikFinityBridgeText(tikfinityStatus))}</small><div class="tikfinity-chat-actions"><button id="tikfinityBridgeConnect" type="button" ${tikfinityStatus.connected ? 'disabled' : ''}>${tikfinityStatus.connected ? 'Verbunden' : 'Jetzt verbinden'}</button><button id="tikfinityBridgeTest" type="button">Anzeige testen</button>${tikfinityChat ? '<button id="tikfinityWidgetView" type="button">Originalansicht</button>' : ''}</div></div>` : '';
   const rowsHtml = rows.length
-    ? rows.slice(-250).map((message) => { const platform=platformKey(message.platform); const label=PLATFORM_META[platform].label; const a=window.BattoChatAppearance,visual=a?.forMessage(a.resolve(S.config,{detached}),message); return `<div class="chat-row" data-chat-role="${visual?.role||'normal'}" data-chat-platform="${platform}"><span class="chat-time">${time(message.timestamp)}</span><span class="platform-icon ${platform}" aria-label="${label}">${platformIcon(platform)}</span><span class="chat-user ${platform}" ${chatColorStyle('username',message)} data-user="${esc(message.username)}" data-message-id="${esc(message.id||message.messageId||'')}" data-user-id="${esc(message.userId||message.raw?.meta?.userId||'')}" data-channel-id="${esc(message.channelId||message.raw?.meta?.channelId||'')}" data-platform="${platform}">${esc(message.displayName || message.username)}</span><span class="chat-text" ${chatColorStyle('message',message)}>${esc(message.message)}</span></div>`; }).join('')
+    ? rows.slice(-250).map((message) => { const platform=platformKey(message.platform); const label=PLATFORM_META[platform].label; const a=window.BattoChatAppearance,visual=a?.forMessage(a.resolve(S.config||{},{detached}),message); return `<div class="chat-row" data-chat-role="${visual?.role||'normal'}" data-chat-platform="${platform}"><span class="chat-time">${time(message.timestamp)}</span><span class="platform-icon ${platform}" aria-label="${label}">${platformIcon(platform)}</span><span class="chat-user ${platform}" ${chatColorStyle('username',message)} data-user="${esc(message.username)}" data-message-id="${esc(message.id||message.messageId||'')}" data-user-id="${esc(message.userId||message.raw?.meta?.userId||'')}" data-channel-id="${esc(message.channelId||message.raw?.meta?.channelId||'')}" data-platform="${platform}">${esc(message.displayName || message.username)}</span><span class="chat-text" ${chatColorStyle('message',message)}>${esc(message.message)}</span></div>`; }).join('')
     : `<div class="empty"><div><b>Noch keine Nachrichten</b><br><small>${S.chatTab === 'tiktok' ? 'TikFinity Desktop und dein TikTok-LIVE verbinden. Neue Nachrichten erscheinen dann hier.' : 'TikFinity, Twitch, CNG oder YouTube verbinden.'}</small></div></div>`;
   chatList.innerHTML = `${nativeBar}${rowsHtml}`;
-  window.BattoChatAppearance?.apply(chatList,S.config,{detached});
+  window.BattoChatAppearance?.apply(chatList,S.config||{},{detached});
 
   $('#tikfinityBridgeConnect')?.addEventListener('click',async()=>{
     const button=$('#tikfinityBridgeConnect');
@@ -268,6 +274,7 @@ function stateFor(platform) {
 }
 
 function modEntries(title, list, kind) {
+  list=objectList(list);
   return `<div class="mod-box"><div class="mod-title"><span>${title} (${list.length})</span><span>＋</span></div><div class="mod-list">${list.length ? list.map((entry) => `<div class="mod-entry"><div><b>${esc(entry.username)}</b>${entry.reason ? `<small><br>Grund: ${esc(entry.reason)}</small>` : ''}</div><button data-mod-inline="${kind}" data-user="${esc(entry.username)}">⋮</button></div>`).join('') : '<small style="color:var(--muted)">Keine Einträge</small>'}</div></div>`;
 }
 
@@ -311,7 +318,7 @@ function renderHistory() {
 }
 
 function renderHologram() {
-  const design = S.config.chatDesign || {};
+  const design = S.config?.chatDesign || {};
   $('#holoUserEnabled').checked = design.usernameEnabled !== false;
   $('#holoMessageEnabled').checked = design.messageEnabled !== false;
   $('#holoFont').value = ['Segoe UI', 'Arial', 'Impact', 'Verdana', 'BattoCustom'].includes(design.fontFamily) ? design.fontFamily : 'Segoe UI';
@@ -903,10 +910,12 @@ async function refresh(render = true) {
   const state = await api.getState();
   if ($('#appVersion') && state.appVersion) $('#appVersion').textContent = state.appVersion;
   S.config = state.config;
-  S.messages = state.messages || [];
-  S.logs = state.logs || [];
+  const messages=objectList(state.messages);
+  if(!initialStateReady)for(const message of S.messages){const id=message.id||message.messageId;if(id&&!messages.some(item=>(item.id||item.messageId)===id&&item.platform===message.platform))messages.push(message);}
+  S.messages = messages;
+  S.logs = Array.isArray(state.logs) ? state.logs : [];
   S.moderation = state.moderation || {};
-  S.history = state.moderationHistory || [];
+  S.history = objectList(state.moderationHistory);
   S.adapters = state.adapters || {};
   S.overlay = state.overlay;
   S.obs = state.obs || {};
@@ -916,7 +925,22 @@ async function refresh(render = true) {
   if (render) renderDashboard();
 }
 
+function loadInitialState() {
+  if(initialStatePending)return initialStatePending;
+  initialStatePending=refresh().then(()=>{
+    if(S.view!=='dashboard')renderModule(S.view);
+    initialStateReady=true;
+    return true;
+  }).catch(error=>{
+    toast(`Chat und Einstellungen konnten nicht geladen werden: ${error.message}. Wähle einen Bereich, um es erneut zu versuchen.`,true);
+    return false;
+  }).finally(()=>{initialStatePending=null;});
+  return initialStatePending;
+}
+
 function bindStatic() {
+  if(bindStatic.bound)return;
+  bindStatic.bound=true;
   $$('#mainNav [data-view]').forEach((button) => { button.onclick = () => setView(button.dataset.view); });
   $$('[data-back-dashboard]').forEach((button) => { button.onclick = () => setView('dashboard'); });
   $$('[data-open-view]').forEach((button) => { button.onclick = () => setView(button.dataset.openView); });
@@ -960,11 +984,8 @@ function updateSystem(status) {
 }
 
 async function boot() {
-  await loadProgramBackground();
-  await refresh();
   bindStatic();
   document.body.classList.toggle('detached',detached);
-  if(!detached)setView(S.config.general.startView==='multichat'?'dashboard':S.config.general.startView || 'start');
   if (detached) {
     $('#sidebar').style.display = 'none';
     document.querySelector('.shell').style.gridTemplateColumns = '1fr';
@@ -974,10 +995,10 @@ async function boot() {
     $('#detachBtn').textContent = '↙';
   }
 
-  api.onChatHistory?.(messages=>{S.messages=messages;renderChat();});
+  api.onChatHistory?.(messages=>{S.messages=objectList(messages);renderChat();});
   api.onChatMessage((message) => {
     S.messages.push(message);
-    const max = S.config.multiChat.maxMessages || 5000;
+    const max = S.config?.multiChat?.maxMessages || 5000;
     if (S.messages.length > max) S.messages.splice(0, S.messages.length - max);
     const source=String(message?.raw?.meta?.sourceConnector || message?.raw?.source || '').toLowerCase();
     const rawEvent=String(message?.raw?.event || message?.raw?.type || '').toLowerCase();
@@ -991,18 +1012,18 @@ async function boot() {
     S.adapters[status.name] = status;
     renderConnections();
     if (status.name === 'tikfinity' && ['all','tiktok'].includes(S.chatTab)) renderChat();
-    if (S.view === 'platforms') renderPlatformsModule();
+    if (S.view === 'platforms' && S.config) renderPlatformsModule();
   });
   api.onModerationEvent(async () => {
     const state = await api.getState();
     S.moderation = state.moderation;
-    S.history = state.moderationHistory;
+    S.history = objectList(state.moderationHistory);
     renderModeration(); renderHistory();
-    if (S.view === 'moderation') renderModerationModule();
+    if (S.view === 'moderation' && S.config) renderModerationModule();
   });
   api.onFilterHit((hit) => toast(`Chat-Filter: ${hit.username} · ${hit.term}`));
   api.onPlatformEvent((event) => { if (['gift', 'follow', 'subscribe'].includes(event.event)) toast(`${event.platform || 'Event'} ${event.event}: ${event.data?.nickname || event.data?.uniqueId || ''}`); });
-  api.onObsStatus((status) => { S.obs = status; renderConnections(); if (S.view === 'platforms') renderPlatformsModule(); });
+  api.onObsStatus((status) => { S.obs = status; renderConnections(); if (S.view === 'platforms' && S.config) renderPlatformsModule(); });
   api.onSystemStatus(updateSystem);
   api.onTtsSpeak((payload) => {if(!detached)playTts(payload);});
   api.onTtsCancel(cancelTts);
@@ -1026,6 +1047,9 @@ async function boot() {
     renderDashboard();
     if (S.view !== 'dashboard') renderModule(S.view);
   });
+  await loadProgramBackground();
+  const loaded=await loadInitialState();
+  if(loaded&&!detached&&!navigationChosen)setView(S.config.general.startView==='multichat'?'dashboard':S.config.general.startView || 'start',{initial:true});
 }
 
 boot().catch((error) => {

@@ -122,7 +122,7 @@ export class LianLiLightingClient extends EventEmitter {
         || device.fanRpms != null && (!Array.isArray(device.fanRpms) || device.fanRpms.length !== fanIds.length || new Set(device.fanRpms.map(fan => fan.index)).size !== fanIds.length
           || device.fanRpms.some(fan => !fanIds.includes(fan.index) || !Number.isInteger(fan.rpm) || fan.rpm < 0 || fan.rpm > 65535))) throw new BridgeError('Ungültige Lian-Li-Drehzahlquelle.', 'NATIVE_INVALID_DATA');
       resultDevice.rpm = device.rpm ?? null; resultDevice.fanRpms = device.fanRpms ?? null;
-      if(strimer){resultDevice.wholeControllerOnly=true;resultDevice.physicalOutputVerified=false;resultDevice.separateChannelOutput=false;resultDevice.capabilitySource=catalog.strimerSource;}
+      if(strimer){resultDevice.strimerFamily='plus-v2';resultDevice.wholeControllerOnly=true;resultDevice.physicalOutputVerified=false;resultDevice.separateChannelOutput=false;resultDevice.capabilitySource=catalog.strimerSource;}
       resultDevice.nativeEffectCatalog = lianliCatalogForDevice(resultDevice); return resultDevice;
     });
     this.details = { ...(result.environment ?? {}), discovery: Array.isArray(result.discovery) ? result.discovery.filter(item => !isProtectedDevice(item)).slice(0, 32) : [], warnings: Array.isArray(result.warnings) ? result.warnings.map(String).slice(0, 64) : [] };

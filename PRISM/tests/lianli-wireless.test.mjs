@@ -47,11 +47,18 @@ test('wireless discovery preserves actual V1/V2 Strimer layouts and accepts a re
     ...(index===3?{vendorId:0x1a86,productId:0xe304,receiverVendorId:0x1a86,receiverProductId:0xe305}:{})}));
   const mock=await connected(t,{devices});
   assert.deepEqual(mock.client.devices.map(d=>d.ledCount),[116,132,174,88]);
+  assert.deepEqual(mock.client.devices.map(d=>d.strandCount),[8,12,12,8]);
+  assert.deepEqual(mock.client.devices.map(d=>d.ledsPerStrand),[null,11,null,11]);
+  assert.deepEqual(mock.client.devices.map(d=>d.cableType),['wireless-gpu8','wireless-24pin','wireless-gpu12','wireless-cpu8']);
   assert.equal(mock.client.devices[2].rxType,41);
   for(const device of mock.client.devices){
     assert.equal(device.physicalLedCount,device.ledCount);assert.equal(device.directMode,true);
     assert.equal(device.effectUpload,true);assert.equal(device.zones.length,1);
     assert.equal(device.category,'strip');assert.equal(device.leds.length,device.ledCount);
+    assert.equal(device.family,'wireless');assert.equal(device.strimerFamily,'wireless');
+    assert.equal(device.ledLayout.kind,'linear');assert.equal(device.ledLayout.linearLedCount,device.ledCount);
+    assert.equal(device.ledLayout.strandLedCounts,null);assert.equal(device.ledLayout.physicalStrandMapVerified,false);
+    assert.deepEqual(device.nativeEffects,[]);assert.equal(device.wholeControllerOnly,false);
   }
   assert.equal(mock.requests.length,1);assert.deepEqual(mock.spawned[0].args,['--wireless']);
   assert.equal(mock.spawned[0].settings.windowsHide,true);

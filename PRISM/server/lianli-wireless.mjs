@@ -3,6 +3,7 @@ import { BridgeError, publicController } from './openrgb.mjs';
 import { assertDeviceAllowed, isProtectedDevice } from './device-policy.mjs';
 import { renderFrame, isAnimatedEffect } from './effect-renderer.mjs';
 import { validateSettings } from './effects.mjs';
+import { wirelessCableLayout } from './strimer-capabilities.mjs';
 
 const layouts = new Map([[1,116],[2,132],[3,174],[4,88]]);
 const tx = (vid,pid) => vid === 0x0416 && pid === 0x8040 || vid === 0x1a86 && pid === 0xe304;
@@ -58,6 +59,8 @@ export class LianLiWirelessClient extends LianLiLightingClient {
       ids.add(value.id); addresses.add(value.mac.toLowerCase());
       const name=String(value.name||'Lian Li Strimer Wireless').slice(0,180)+' · '+value.mac.slice(-6).toUpperCase();
       return {...value,name,vendor:'Lian Li',provider:'lianli-wireless',backend:'lianli-wireless',category:'strip',type:4,
+        ...wirelessCableLayout(value.receiverType,value.ledCount),separateChannelOutput:false,physicalOutputVerified:false,
+        wholeControllerOnly:false,controllerScope:undefined,confirmWholeController:undefined,
         effectUpload:true,directMode:true,directModeId:0,layoutValid:true,physicalLedCount:value.ledCount,ledGranularity:'led',
         colors:Array(value.ledCount).fill(0),leds:Array.from({length:value.ledCount},(_,id)=>({id,name:`LED ${id+1}`,color:'#000000'})),
         modes:[{id:0,name:'Eigene RGB-Schleife'}],nativeEffects:[],zones:[{id:0,name:'Ganzes Strimer-Kabel',startIndex:0,ledCount:value.ledCount,hardwareLedCount:value.ledCount,type:0}]};

@@ -51,6 +51,10 @@ test('the manufacturer catalog cannot grant transport capabilities or confuse Wi
  assert.equal(STRIMER_CABLE_TYPES.find(cable=>cable.id==='24pin').channels,6);
  const absent=strimerCapabilities();assert.equal(absent.nativeAvailable,false);assert.equal(absent.directAvailable,false);assert.equal(absent.separateChannelOutput,false);
  const wired=strimerCapabilities({name:'Strimer Plus V2',directMode:true,ledCount:120});assert.equal(wired.directAvailable,true);assert.equal(wired.nativeAvailable,false);assert.equal(wired.physicalOutputVerified,false);assert.equal(wired.separateChannelOutput,false);
- const wireless=strimerCapabilities({name:'Strimer Wireless',backend:'lianli-wireless',nativeEffects:[{id:'Static',name:'Statisch'}]});assert.equal(wireless.family,'wireless');assert.equal(wireless.nativeEffects.length,1);assert.equal(wireless.separateChannelOutput,false);
+ const wireless=strimerCapabilities({name:'Strimer Wireless',backend:'lianli-wireless',receiverType:3,ledCount:174,nativeEffects:[{id:'Static',name:'Statisch'}]});assert.equal(wireless.family,'wireless');assert.equal(wireless.nativeEffects.length,0);assert.equal(wireless.nativeAvailable,false);assert.equal(wireless.separateChannelOutput,false);
+ assert.deepEqual(wireless.lconnectReference,[]);assert.equal(wireless.documentationConflict,null);assert.match(wireless.sources.product,/strimer-wireless/);
+ assert.equal(wireless.cableType,'wireless-gpu12');assert.equal(wireless.strandCount,12);assert.equal(wireless.ledLayout.ledsPerStrand,null);assert.equal(wireless.ledLayout.physicalStrandMapVerified,false);
+ const providerOnly=strimerCapabilities({name:'Unknown',provider:'lianli-wireless',receiverType:2,ledCount:132});assert.equal(providerOnly.family,'wireless');assert.equal(providerOnly.cableType,'wireless-24pin');
+ assert.equal(strimerCapabilities({provider:'lianli-wireless',receiverType:3,ledCount:132}).ledLayout,null);
  assert.equal(strimerCapabilities({name:'Lian Li UNI FAN',nativeEffects:[{id:'Static'}]}).nativeAvailable,false);
 });

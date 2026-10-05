@@ -1,4 +1,10 @@
-# Batto 3-in-1 · 1.14.0
+# Batto 3-in-1 · 1.14.1
+
+## Strimer Wireless und Hauptnavigation · 1.14.1
+
+Die Kabelvorschau unterscheidet Strimer Wireless und kabelgebundene Strimer. Erkannte Funk-Kabel liefern die passende Familie, ihren Namen und ihre LED-Anzahl. Eine manuell gewählte Kabelvariante ist ausschließlich eine Vorschau. Wireless verwendet weiterhin die eigene Funk-Anbindung und vorhandene Softwareeffekte einschließlich **Eigener Effekt**. Die Modi und Gesamtcontroller-Bestätigungen für Plus V2 werden auf Wireless nicht übertragen. Unterschiedliche Einstellungen je Lichtleiter bleiben Vorschau, solange keine geprüfte physische Zuordnung vorliegt.
+
+Die Hauptnavigation wechselt wieder zwischen Multi-Chat, RGB und den übrigen Bereichen. Der zusätzliche Statusbalken über der eingebetteten RGB-Oberfläche ist entfernt; Start- und Verbindungsfehler bleiben gezielt sichtbar.
 
 ## Gestaltung, Vorschau und eigene Befehle · 1.14.0
 
@@ -249,7 +255,7 @@ Neue freigegebene Sensoren und eigene Szenen werden erkannt. Erfolgreiche Befehl
 
 ## Installation und Bedienung
 
-Installer: `Batto-3-in-1-Setup-1.14.0.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
+Installer: `Batto-3-in-1-Setup-1.14.1.exe`. Plugin: `de.crazybatto.suite.streamDeckPlugin` (Stream Deck 6.5+). Android-App: `Batto-Touch-Deck-1.8.0.apk`. Detaillierte Anleitung: [ANLEITUNG.html](ANLEITUNG.html).
 
 Der freigegebene Windows-Installer benötigt den separat erhaltenen **Installationsschlüssel**. Der Schlüssel steht weder in dieser Anleitung noch im Repository. Build- und Release-Automatisierung verwenden dafür private Konfiguration; der Quellcode enthält keine gültige geheime Eingabe. Für ein Update persönliche Einstellungen behalten und den privaten Schlüssel bereithalten.
 

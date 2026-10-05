@@ -9,6 +9,7 @@ import { isProtectedDevice } from '../server/device-policy.mjs';
 import { createBridge } from '../server/index.mjs';
 import { extractCorsairDll } from '../server/corsair-setup.mjs';
 import { APP_VERSION } from '../server/version.mjs';
+import {readFile} from 'node:fs/promises';
 
 const fixture = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/native-helper.mjs');
 test('native discovery excludes Stream Deck, retains Corsair provider and writes bounded RGB via helper', async () => {
@@ -57,7 +58,8 @@ test('default app remains passive and never starts or connects OpenRGB', async (
   const base = `http://127.0.0.1:${address.port}`;
   try {
     const status = await (await fetch(base + '/api/status')).json();
-    assert.equal(status.version, APP_VERSION); assert.equal(status.backend, 'windows');
+    const packageVersion=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8')).version;
+    assert.equal(status.version, packageVersion);assert.equal(APP_VERSION,packageVersion); assert.equal(status.backend, 'windows');
     assert.equal(bridge.client.process, null);
     const response = await fetch(base + '/api/openrgb/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(response.status, 410);

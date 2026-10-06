@@ -16,5 +16,6 @@
     <None Update="licenses\**" CopyToOutputDirectory="PreserveNewest" />
     <None Update="README.md" CopyToOutputDirectory="PreserveNewest" />
     <None Update="packages.lock.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="fan-control-launch.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

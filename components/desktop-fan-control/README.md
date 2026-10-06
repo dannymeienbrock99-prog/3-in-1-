@@ -1,6 +1,6 @@
 # Batto Desktop Mainboard-Lüfter
 
-Eigener optionaler Windows-Helfer für erkannte ASUS/MSI-Desktop-PCs, mit LibreHardwareMonitorLib **0.9.6**. Standardmäßig aus. Erfordert bereits installiertes PawnIO und Administratorrechte; der Helfer installiert keinen Treiber und erhöht seine Rechte nicht selbst. Das Anzeigen der Mainboarddaten in Batto kann ohne diesen Helfer erfolgen.
+Eigener optionaler Windows-Helfer für erkannte ASUS/MSI-Desktop-PCs, mit LibreHardwareMonitorLib **0.9.6**. Standardmäßig aus. Erfordert bereits installiertes PawnIO. Beim bewussten Einschalten fordert Batto die Windows-UAC-Bestätigung für seinen eigenen kleinen Lüfterhelfer an, wenn Batto selbst ohne Administratorrechte läuft. Batto und iCUE behalten ihre normalen Rechte; der Helfer installiert keinen Treiber. Das Anzeigen der Mainboarddaten in Batto kann ohne diesen Helfer erfolgen. Die Windows-Bestätigung prüft lediglich, ob tatsächlich unterstützte Mainboardanschlüsse verfügbar sind; eine Mainboardmarke allein bestätigt keinen steuerbaren Kanal.
 
 Der Helfer öffnet ausschließlich die Mainboardgruppe. Corsair-USB-Controller, GPU, Netzteil, Notebooks und als Pumpe/AIO bezeichnete Anschlüsse werden nicht gesteuert. Nur zugeordnete CPU-, System- und Chassis-Fanheader von geprüften Nuvoton-NCT-Controllern erscheinen als steuerbare Kanäle. NCT6683/6686/6687 einschließlich 6687DR sind wegen eines bestätigten Restore-Bitfehlers in LHM 0.9.6 ausgeschlossen; andere SuperIO-Familien haben in diesem Helfer noch keine geprüfte Freigaberegel. Generische `Fan #1`/`PWM #1`-Namen sind ausgeschlossen, weil sie auch Pumpenanschlüsse bedeuten können. Das tatsächliche Gerät an einem Fanheader kann die Bibliothek nicht erkennen; vor jeder Übernahme wird `fanConfirmed: true` benötigt.
 
@@ -10,7 +10,9 @@ Bei `disable`, `shutdown`, geschlossenem Eingabekanal, fehlendem Elternprozess o
 
 ## Lokales Protokoll
 
-Start: `BattoFanControl.exe --parent-pid <Batto PID>`. JSON-Zeilen auf stdin/stdout, keine HTTP-Schnittstelle. Anfragen benötigen eine nichtnegative `requestId` und `command`:
+Bei einem bereits erhöhten Batto-Prozess: `BattoFanControl.exe --parent-pid <Batto PID>`. JSON-Zeilen auf stdin/stdout, keine HTTP-Schnittstelle. Bei einem normalen Batto-Prozess startet `fan-control-launch.ps1` den fest zugeordneten Helfer mit `RunAs` und `--pipe batto-fan-<32 Zufallshexzeichen> --token <64 Zufallshexzeichen> --parent-pid <PID> --parent-start <UTC-Ticks>`. Die einmalige lokale Pipe besitzt eine geschützte ACL für die Benutzeridentität des bestätigten Batto-Prozesses und des Helfers sowie ein Medium-Integrity-Label. Client-PID, Prozessstartzeit und ein konstanter Tokenvergleich werden vor jedem Hardwareöffnen geprüft. Ohne bestätigte Anmeldung endet der Helfer nach 30 Sekunden. Die Sitzung bleibt nur bei laufendem identischem Batto-Prozess bestehen. Ein fehlgeschlagener UAC-Start bleibt sichtbar und führt weder zu PWM-Schreibzugriffen noch zu Änderungen anderer Programme.
+
+Anfragen benötigen eine nichtnegative `requestId` und `command`:
 
 - `scan`, `enable`, `heartbeat` (Batto sendet alle zwei Sekunden), `disable`, `shutdown`.
 - `manual`: `id`, `duty` (30–100), `fanConfirmed: true`.

@@ -1,4 +1,12 @@
-# Batto 3-in-1 · 1.15.1
+# Batto 3-in-1 · 1.15.2
+
+## Windows-Freigabe für Strimer und PC-Lüfter · 1.15.2
+
+Der Strimer-Helfer aus 1.15.1 konnte den normal gestarteten Batto-Prozess durch die Windows-Rechtehöhe aussperren. Die eigene kurzlebige Verbindung verwendet jetzt die Windows-Benutzeridentität des bestätigten Batto-Prozesses, einen zufälligen Sitzungsschlüssel und dessen Prozessnummer/Startzeit. Die Windows-Freigabe bleibt erforderlich; sie gilt ausschließlich für den kleinen eigenen Helfer. Ein Verbindungsfehler wird getrennt von einer abgebrochenen Freigabe angezeigt.
+
+**PC & iCUE Lüfter → PC-Lüftersteuerung** erlaubt jetzt auch im normal gestarteten Batto das bewusste Einschalten. Die Windows-Abfrage startet ausschließlich den eigenen Lüfterhelfer und sucht die unterstützten, benannten Mainboardanschlüsse. Das Einschalten oder Suchen schreibt keinen PWM-Wert. Erst **Anwenden** übernimmt einen bestätigten Lüfteranschluss. Fehlgeschlagenes Beenden bleibt sichtbar und lässt sich erneut versuchen. iCUE bleibt aktiv; CorsairLink wird wegen seines Konflikts mit iCUE weiterhin nicht automatisch geladen. Ein erkannter Mainboardname allein bestätigt keine steuerbaren Anschlüsse.
+
+Die Hardwarefreigabe benötigt eine Bestätigung in Windows. Ohne diese Bestätigung wird weder eine erfolgreiche Übergabe noch eine echte Lüfter- oder Lichtausgabe behauptet.
 
 ## Strimer Wireless tatsächlich ansteuern · 1.15.1
 

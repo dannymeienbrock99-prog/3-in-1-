@@ -7,9 +7,9 @@ Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = new UTF8Encoding(false);
 var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 if (args.Contains("--wireless-handoff-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(await WirelessHandoff.Fixtures(), json)); return; }
-if (args.Contains("--wireless-handoff"))
+if (args.Contains("--wireless-handoff") || args.Contains("--wireless-handoff-probe") || args.Contains("--wireless-handoff-probe-currentuser"))
 {
-    try { await WirelessHandoff.Run(args); }
+    try { await WirelessHandoff.Run(args, args[0] != "--wireless-handoff", args[0] == "--wireless-handoff-probe-currentuser"); }
     catch (Exception error) { Console.Error.WriteLine(error.Message); Environment.ExitCode = 1; }
     return;
 }

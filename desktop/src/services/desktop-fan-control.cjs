@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { ElevatedFanHost } = require('./elevated-fan-host.cjs');
 
 const execute = promisify(execFile);
 const MAX_LINE = 512 * 1024;
@@ -157,16 +158,16 @@ class JsonLineNativeHost {
   }
   endInput() { try { this.child?.stdin.end(); } catch {} }
   close() {
-    if (this.closePromise) return this.closePromise;
     if (!this.child || this.ended || this.child.exitCode !== null) { this.endInput(); return Promise.resolve(); }
+    if (this.closePromise) return this.closePromise;
     this.closePromise = new Promise((resolve, reject) => {
       const child = this.child;
       const cleanup = () => { clearTimeout(timer); child.removeListener('exit', finish); child.removeListener('close', finish); };
       const finish = () => { cleanup(); resolve(); };
-      const timer = setTimeout(() => { cleanup(); reject(Error('Der eigene PC-Lüfterdienst hat das Beenden nicht bestätigt.')); }, this.closeTimeoutMs);
+      const timer = setTimeout(() => { cleanup(); this.closePromise = null; reject(Error('Der eigene PC-Lüfterdienst hat das Beenden nicht bestätigt.')); }, this.closeTimeoutMs);
       child.once('exit', finish); child.once('close', finish);
       this.endInput();
-    });
+    }).catch(error => { this.closePromise = null; throw error; });
     return this.closePromise;
   }
 }
@@ -178,24 +179,23 @@ class DesktopFanService {
     schedule = setInterval, unschedule = clearInterval } = {}) {
     Object.assign(this, { helperPath, platformName: platform, readMetadata, exists, nativeFactory, spawnProcess, requestTimeoutMs, now, onChange, heartbeatMs, schedule, unschedule });
     this.platform = blankPlatform(); this.prerequisites = prerequisitesFrom(); this.enabled = false; this.phase = 'off'; this.error = ''; this.channels = []; this.sensors = [];
-    this.native = null; this.inspected = false; this.ownsControl = false; this.closed = false; this.queue = Promise.resolve(); this.closePromise = null; this.heartbeatTimer = null; this.heartbeatPromise = null; this.releaseVerification = 'none';
+    this.native = null; this.inspected = false; this.ownsControl = false; this.releaseAcknowledged = false; this.closed = false; this.queue = Promise.resolve(); this.closePromise = null; this.heartbeatTimer = null; this.heartbeatPromise = null; this.releaseVerification = 'none';
     this.external = { path: text(external.path, 1024), version: text(external.version, 100), pluginPresent: external.pluginPresent === true, status: 'not-configured' };
   }
   snapshot() {
     const helperExists = this.exists(this.helperPath), supportedBrand = ['asus', 'msi'].includes(this.platform.brand);
-    const missingPawn = this.prerequisites.pawnIO === false, missingAdmin = this.prerequisites.administrator === false;
-    const native = this.platformName === 'win32' && helperExists && this.platform.kind === 'desktop' && supportedBrand && !missingPawn && !missingAdmin;
+    const missingPawn = this.prerequisites.pawnIO === false, missingAdmin = this.prerequisites.administrator !== true;
+    const native = this.platformName === 'win32' && helperExists && this.platform.kind === 'desktop' && supportedBrand && !missingPawn;
     const reason = this.platformName !== 'win32' ? 'Die PC-Lüftersteuerung benötigt Windows.'
       : !helperExists ? 'Die PC-Lüfterkomponente fehlt. Bitte die Installation reparieren.'
       : this.platform.kind === 'portable' ? 'Diese Steuerung ist ausschließlich für Desktop-PCs verfügbar.'
       : this.platform.kind === 'unknown' ? 'Der Desktop-PC wurde noch nicht sicher erkannt.'
       : !supportedBrand ? 'Die Mainboard-Lüftersteuerung unterstützt ASUS- und MSI-Desktop-PCs.'
-      : missingPawn && missingAdmin ? 'Für die direkte Mainboardsteuerung fehlen PawnIO und Administratorrechte.'
       : missingPawn ? 'Für die direkte Mainboardsteuerung fehlt PawnIO.'
-      : missingAdmin ? 'Für die direkte Mainboardsteuerung fehlen Administratorrechte.' : '';
+      : '';
     const curveAvailable = this.enabled && this.phase === 'ready' && this.sensors.some(sensor => this.freshTemperature(sensor));
     return copy({ enabled: this.enabled, phase: this.phase, platform: this.platform, channels: this.channels, sensors: this.sensors,
-      error: this.error, prerequisites: this.prerequisites, availability: { native, reason }, external: this.external, releaseVerification: this.releaseVerification,
+      error: this.error, prerequisites: this.prerequisites, availability: { native, reason, requiresElevation: native && missingAdmin }, external: this.external, releaseVerification: this.releaseVerification,
       curveAvailability: { available: curveAvailable, reason: curveAvailable ? '' : 'Temperaturkurven benötigen einen Sensor mit nachweislich aktuellem Messzeitpunkt. Dieser Dienst liefert derzeit keinen solchen Sensor.' } });
   }
   changed() { try { this.onChange(this.snapshot()); } catch {} }
@@ -236,10 +236,11 @@ class DesktopFanService {
       onExit: () => {
         if (this.native !== owned || this.closed || !this.enabled) return;
         this.stopHeartbeat();
+        if (this.releaseAcknowledged) return;
         this.phase = 'error'; this.error = 'Der Lüfterdienst wurde beendet. Die Rückgabe der Steuerung konnte nicht bestätigt werden.'; this.changed();
       }
     };
-    owned = this.nativeFactory ? this.nativeFactory(handlers) : new JsonLineNativeHost(handlers);
+    owned = this.nativeFactory ? this.nativeFactory(handlers) : this.prerequisites.administrator !== true ? new ElevatedFanHost(handlers) : new JsonLineNativeHost(handlers);
     return owned;
   }
   startHeartbeat(native) {
@@ -297,15 +298,19 @@ class DesktopFanService {
     }
     this.phase = 'releasing'; this.changed();
     try {
-      const result = await native.request('disable');
-      if (result.released !== true || result.state?.enabled !== false) throw Error('Die Rückgabe der Lüftersteuerung wurde nicht bestätigt.');
-      this.releaseVerification = result.state.releaseVerification === 'api-only' || result.releaseVerification === 'api-only' ? 'api-only' : 'none';
+      if (!this.releaseAcknowledged) {
+        const result = await native.request('disable');
+        if (result.released !== true || result.state?.enabled !== false) throw Error('Die Rückgabe der Lüftersteuerung wurde nicht bestätigt.');
+        this.releaseVerification = result.state.releaseVerification === 'api-only' || result.releaseVerification === 'api-only' ? 'api-only' : 'none';
+        this.releaseAcknowledged = true; this.ownsControl = false;
+      }
       // A release acknowledgement need not carry telemetry; the cleared list
       // below prevents stale channels being shown as available after OFF.
-      this.ownsControl = false; this.enabled = false;
-      await native.close(); this.native = null; this.channels = []; this.sensors = []; this.phase = 'off'; this.error = ''; this.changed(); return this.snapshot();
+      await native.close(); this.native = null; this.enabled = false; this.releaseAcknowledged = false; this.channels = []; this.sensors = []; this.phase = 'off'; this.error = ''; this.changed(); return this.snapshot();
     } catch (error) {
-      this.phase = 'error'; this.error = error.message; this.changed(); throw error;
+      // The visible switch remains available for OFF retry until the owned
+      // helper actually closes, even if the driver already acknowledged release.
+      this.enabled = true; this.phase = 'error'; this.error = error.message; this.changed(); throw error;
     }
   }
   readyChannel(id) {

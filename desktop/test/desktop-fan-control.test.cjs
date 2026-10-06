@@ -28,7 +28,7 @@ function fixture(options = {}) {
       if (command === 'disable') return { ok: true, state: { enabled: false, releaseVerification: 'api-only' }, released: true };
       return { ok: true, state };
     },
-    async close() { closes++; calls.push({ command: 'close' }); }
+    async close() { closes++; calls.push({ command: 'close' }); if(options.close) return options.close(closes); }
   };
   const service = new DesktopFanService({
     platform: options.platform ?? 'win32', helperPath: 'C:/Synthetic/BattoFanControl.exe', exists: () => options.exists !== false,
@@ -74,18 +74,20 @@ test('startup and metadata inspection remain OFF and never construct a native ho
   await f.service.close();
 });
 
-test('known missing PawnIO or administrator prerequisites are reported while OFF and cannot launch a helper', async () => {
-  for (const prerequisites of [{ administrator: false, pawnIO: false }, { administrator: true, pawnIO: false }, { administrator: false, pawnIO: true }]) {
+test('missing PawnIO remains blocked; non-admin Windows sessions expose a deliberate UAC activation', async () => {
+  for (const prerequisites of [{ administrator: false, pawnIO: false }, { administrator: true, pawnIO: false }]) {
     const f = fixture({ metadata: { ...desktop, prerequisites } });
     const inspected = await f.service.inspect();
     assert.equal(inspected.enabled, false); assert.equal(inspected.phase, 'off'); assert.equal(inspected.availability.native, false);
     assert.deepEqual(inspected.prerequisites, prerequisites); assert(!('prerequisites' in inspected.platform));
-    if (prerequisites.administrator === false && prerequisites.pawnIO === false)
-      assert.equal(inspected.availability.reason, 'Für die direkte Mainboardsteuerung fehlen PawnIO und Administratorrechte.');
-    else assert.match(inspected.availability.reason, prerequisites.pawnIO ? /Administratorrechte/ : /PawnIO/);
+    assert.match(inspected.availability.reason, /PawnIO/);
     await assert.rejects(f.service.enable(true), /direkte Mainboardsteuerung/);
     assert.equal(f.creations, 0); assert.deepEqual(f.calls, []); await f.service.close();
   }
+  const normal = fixture({ metadata: {...desktop,prerequisites:{administrator:false,pawnIO:true}} });
+  const normalState=await normal.service.inspect();
+  assert.equal(normalState.enabled,false);assert.equal(normalState.availability.native,true);assert.equal(normalState.availability.requiresElevation,true);assert.equal(normal.creations,0);
+  await normal.service.enable(true);assert.equal(normal.creations,1);assert.deepEqual(normal.calls.map(c=>c.command),['start','scan','enable']);await normal.service.close();
   const unknown = fixture(); await unknown.service.inspect();
   assert.deepEqual(unknown.service.snapshot().prerequisites, { administrator: null, pawnIO: null }); await unknown.service.close();
 });
@@ -105,6 +107,16 @@ test('deliberate enable scans then enables the module without any PWM command', 
   assert.equal(state.enabled, true); assert.equal(state.phase, 'ready'); assert.equal(f.service.ownsControl, false);
   assert.deepEqual(state.channels, [channel]); assert.equal(f.timerCallbacks.length, 1);
   await f.service.enable(true); assert.equal(f.creations, 1); await f.service.close();
+});
+
+test('acknowledged hardware release with an unconfirmed helper close remains visibly retryable and cannot restart',async()=>{
+  const f=fixture({close:async count=>{if(count===1)throw Error('Synthetic close timeout');}});
+  await f.service.enable(true);await f.service.setManual({id:channel.id,duty:55,fanConfirmed:true});
+  await assert.rejects(f.service.enable(false),/close timeout/);
+  const failed=f.service.snapshot();assert.equal(failed.enabled,true);assert.equal(failed.phase,'error');assert.equal(f.service.ownsControl,false);assert.equal(f.service.releaseAcknowledged,true);assert.equal(f.service.native,f.native);
+  await assert.rejects(f.service.enable(true),/sicher ausgeschaltet/);
+  const released=await f.service.enable(false);assert.equal(released.enabled,false);assert.equal(released.phase,'off');assert.equal(f.service.native,null);assert.equal(f.closes,2);
+  assert.equal(f.calls.filter(c=>c.command==='disable').length,1);await f.service.close();
 });
 
 test('no controllable channels or malformed physical inventory block enable without fabricating fan controls', async () => {
@@ -224,6 +236,13 @@ test('native protocol correlates split JSON lines and EOF closes only its owned 
   child.stdout.write(JSON.stringify({ requestId: lines[1].requestId, ok: true, state: { enabled: true } }) + '\n');
   assert.deepEqual((await scan).state.channels, []); assert.equal((await enable).state.enabled, true);
   await host.close(); assert.equal(child.stdin.writableEnded, true);
+});
+
+test('a normal helper close timeout is retryable after the process exits',async()=>{
+  const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();child.exitCode=null;child.stdin=new PassThrough();
+  const host=new JsonLineNativeHost({helperPath:'C:/Synthetic/BattoFanControl.exe',spawnProcess:()=>child,closeTimeoutMs:5});await host.start();
+  await assert.rejects(host.close(),/Beenden nicht bestätigt/);assert.equal(host.closePromise,null);
+  child.exitCode=0;child.emit('exit',0);await host.close();
 });
 
 test('malformed native output and unacknowledged native requests cannot be treated as successful actions', async () => {

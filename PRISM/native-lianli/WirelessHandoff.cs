@@ -39,18 +39,20 @@ internal static class WirelessHandoff
         catch { return false; }
     }
 
-    internal static async Task Run(string[] args)
+    internal static async Task Run(string[] args, bool probe = false, bool legacyPipe = false)
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Der Wireless-Modus benötigt Windows.");
-        if (args.Length != 5 || args[0] != "--wireless-handoff" || !ValidPipeName(args[1]) || !ValidToken(args[2])
+        string mode = probe ? legacyPipe ? "--wireless-handoff-probe-currentuser" : "--wireless-handoff-probe" : "--wireless-handoff";
+        if (args.Length != 5 || args[0] != mode || !ValidPipeName(args[1]) || !ValidToken(args[2])
             || !int.TryParse(args[3], out int ownerPid) || ownerPid <= 0 || ownerPid == Environment.ProcessId
             || !long.TryParse(args[4], out long ownerTicks) || ownerTicks <= 0 || !OwnerMatches(ownerPid, ownerTicks))
             throw new ArgumentException("Ungültiger oder beendeter Wireless-Auftrag.");
         using var identity = WindowsIdentity.GetCurrent();
         if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)) throw new UnauthorizedAccessException("Die bestätigte Windows-Freigabe für den Wireless-Modus fehlt.");
         string token = args[2];
-        using var pipe = new NamedPipeServerStream(args[1], PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly, 4096, 4096);
+        using var pipe = legacyPipe
+            ? new NamedPipeServerStream(args[1], PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly, 4096, 4096)
+            : WirelessGuardPipe.Create(args[1], ownerPid);
         using var watchCancellation = new CancellationTokenSource();
         long lastHeartbeat = Environment.TickCount64; bool connected = false, ready = false; string reason = "error";
         var monitor = Task.Run(async () => {
@@ -79,6 +81,7 @@ internal static class WirelessHandoff
         {
             using var connectDeadline = CancellationTokenSource.CreateLinkedTokenSource(watchCancellation.Token); connectDeadline.CancelAfter(30000);
             await pipe.WaitForConnectionAsync(connectDeadline.Token);
+            if (!legacyPipe) WirelessGuardPipe.AssertClient(pipe, ownerPid, ownerTicks);
             var hello = await ReadMessage(pipe, connectDeadline.Token);
             if (hello.Op != "hello" || !TokenMatches(token, hello.Token) || !OwnerMatches(ownerPid, ownerTicks)) throw new UnauthorizedAccessException("Wireless-Auftrag konnte nicht bestätigt werden.");
             Volatile.Write(ref connected, true); Interlocked.Exchange(ref lastHeartbeat, Environment.TickCount64);
@@ -99,6 +102,17 @@ internal static class WirelessHandoff
                 catch (IOException) { reason = "pipe-disconnected"; watchCancellation.Cancel(); }
                 catch (Exception error) { reason = "error"; try { await Emit(new { @event = "error", code = "WIRELESS_HANDOFF_FAILED", message = error.Message }); } catch { } watchCancellation.Cancel(); }
             });
+            if (probe)
+            {
+                // Genuine elevation/IPC test; never constructs a service or USB
+                // object, and shares the production ACL/client authentication.
+                Volatile.Write(ref ready, true);
+                await Emit(new { @event = "ready", ownerPid, probe = true, services = Array.Empty<object>() });
+                await stops.Reader.ReadAsync(watchCancellation.Token);
+                await Emit(new { @event = "restored", ok = true, probe = true, services = Array.Empty<object>(), reason = "stop" });
+                returned = true;
+                return;
+            }
             IHandoffService? watcher = new WindowsHandoffService(WatcherName);
             try { lease = new HandoffLease([watcher, new WindowsHandoffService(ServiceName)]); watcher = null; }
             finally { watcher?.Dispose(); }

@@ -14,25 +14,26 @@ const failure=(message,code='WIRELESS_CONTROL_FAILED')=>new BridgeError(message,
 
 function launchGuard(pipe,token) {
   const powershell=path.join(process.env.SystemRoot || 'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe');
-  return new Promise((resolve,reject)=>execFile(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',launcher,'-Helper',helper,'-OwnerPid',String(process.pid),'-Pipe',pipe,'-Token',token],{windowsHide:true,timeout:45000,maxBuffer:4096},(error,stdout)=>{
+  return new Promise((resolve,reject)=>execFile(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',launcher,'-Helper',helper,'-OwnerPid',String(process.pid),'-Pipe',pipe,'-Token',token],{windowsHide:true,timeout:120000,maxBuffer:4096},(error,stdout)=>{
     if(error) return reject(failure('Windows hat die Strimer-Übernahme nicht freigegeben. Bitte die Administratorabfrage bestätigen oder L-Connect selbst schließen.','WIRELESS_CONTROL_DENIED'));
     try {const value=JSON.parse(stdout.trim());if(value.launched!==true||!/^\d{16,19}$/.test(value.ownerStartUtcTicks))throw Error();resolve(value);}catch{reject(failure('Die Strimer-Übergabe konnte nicht gestartet werden.'));}
   }));
 }
 
 async function connectGuard(pipe) {
-  const deadline=Date.now()+5000;
+  const deadline=Date.now()+10000;let lastCode=null;
   while(Date.now()<deadline) {
     const socket=await new Promise(resolve=>{
       const value=createConnection(`\\\\.\\pipe\\${pipe}`);
-      const fail=()=>{value.destroy();resolve(null);};value.once('error',fail);
+      const fail=error=>{if(error?.code)lastCode=error.code;value.destroy();resolve(null);};value.once('error',fail);
       value.once('connect',()=>{value.off('error',fail);resolve(value);});
       value.setTimeout(500,fail);
     });
     if(socket){socket.setTimeout(0);return socket;}
     await new Promise(resolve=>setTimeout(resolve,150));
   }
-  throw failure('Der Strimer-Helfer ist nicht erreichbar. L-Connect wurde nicht übernommen.');
+  if(lastCode==='EACCES'||lastCode==='EPERM')throw failure('Windows verweigert die Verbindung zum Strimer-Helfer. L-Connect wurde nicht übernommen. Bitte das aktuelle Batto-Update installieren.','WIRELESS_PIPE_DENIED');
+  throw failure('Der gestartete Strimer-Helfer antwortet nicht. L-Connect wurde nicht übernommen. Bitte die Windows-Freigabe und den installierten Helfer prüfen.','WIRELESS_PIPE_UNAVAILABLE');
 }
 
 /** Explicit, unsaved service lease. Only the elevated guard controls services. */

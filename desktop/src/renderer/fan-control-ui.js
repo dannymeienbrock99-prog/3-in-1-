@@ -78,6 +78,7 @@
     else if (ready()) message = channels.length ? `${channels.length} ${channels.length === 1 ? 'steuerbarer Lüfteranschluss' : 'steuerbare Lüfteranschlüsse'} · Änderungen erst mit „Anwenden“ übernehmen.` : 'Keine unterstützten Lüfteranschlüsse gemeldet. Es wird kein Lüfter übernommen.';
     else if (enabled) message = 'Die Übernahme wird geprüft. Beachte den Verbindungsstatus.';
     else if (platform.kind === 'desktop' && state?.releaseVerification === 'api-only') message = 'Batto steuert keine Lüfter. Hardware-Regelung angefordert.';
+    else if (platform.kind === 'desktop' && state?.availability?.native && state.availability.requiresElevation) message = 'Aktiviere den Schalter und bestätige die Windows-Abfrage. Batto startet nur seinen Lüfterhelfer mit Administratorrechten und prüft deine Mainboardanschlüsse. iCUE bleibt aktiv. Lüfterleistung erst mit „Anwenden“ ändern.';
     else if (platform.kind === 'desktop' && state?.availability?.native) message = 'Hardware-Regelung bleibt aktiv. Aktiviere Batto, um die unterstützten Lüfteranschlüsse einzustellen.';
     else if (platform.kind === 'desktop' && !message) message = 'Mainboard erkannt. Für diese Anschlüsse ist noch keine unterstützte Steuerung verfügbar.';
     find('status').textContent = lastMessage || message;

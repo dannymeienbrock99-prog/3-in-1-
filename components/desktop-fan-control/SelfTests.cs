@@ -11,6 +11,10 @@ internal static class SelfTests
         var now = DateTimeOffset.Parse("2026-10-06T20:00:00Z");
         try
         {
+            Check(FanPipe.ValidName("batto-fan-" + new string('a', 32)) && !FanPipe.ValidName("batto-fan-" + new string('a', 31)) && !FanPipe.ValidName("\\\\.\\pipe\\other"), "Fixed local fan pipe namespace");
+            Check(FanPipe.TokenMatches(new string('a', 64), new string('a', 64)) && !FanPipe.TokenMatches(new string('a', 64), new string('b', 64)) && !FanPipe.TokenMatches(new string('a', 64), "short"), "Private token exact constant-time match");
+            using (var owner = System.Diagnostics.Process.GetCurrentProcess())
+                Check(FanPipe.OwnerMatches(owner.Id, owner.StartTime.ToUniversalTime().Ticks) && !FanPipe.OwnerMatches(owner.Id, owner.StartTime.ToUniversalTime().Ticks - 1), "PID reuse cannot inherit a fan session");
             var backend = new FakeBackend(); var engine = new FanEngine(backend, () => now);
             Check(Send(engine, new { requestId = 1, command = "enable" }).Ok, "Enable opens service");
             Check(backend.Writes.Count == 0, "Enable never writes PWM");

@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>PRISM-LianLi</AssemblyName>
-    <Version>1.12.0</Version>
+    <Version>1.12.1</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <RuntimeFrameworkVersion>8.0.31</RuntimeFrameworkVersion>
     <SelfContained>true</SelfContained>

@@ -42,11 +42,13 @@ internal sealed class LibreBackend : IFanBackend
         try
         {
             next.Open();
+            var discovered = new List<string>();
             foreach (IHardware board in next.Hardware.Where(h => h.HardwareType == HardwareType.Motherboard))
             {
                 foreach (IHardware hardware in board.SubHardware.Where(h => h.HardwareType == HardwareType.SuperIO))
                 {
                     hardware.Update();
+                    discovered.Add(hardware.Name);
                     // NCT668x has an upstream restore-mode bug. Other SuperIO
                     // families have no verified restore policy in this helper.
                     if (!ApprovedController(hardware.Name)) continue;
@@ -65,7 +67,9 @@ internal sealed class LibreBackend : IFanBackend
             }
             computer = next;
             Update(DateTimeOffset.UtcNow);
-            if (channels.Length == 0) throw new InvalidOperationException("Keine unterstützten Mainboard-Lüfteranschlüsse mit lesbarer Leistung gefunden.");
+            if (channels.Length == 0) throw new InvalidOperationException("Keine unterstützten Mainboard-Lüfteranschlüsse mit lesbarer Leistung gefunden. "
+                + (discovered.Count == 0 ? "Die Hardwarebibliothek erkennt für dieses Mainboard keinen steuerbaren SuperIO-Controller."
+                    : "Erkannte Controller: " + string.Join(", ", discovered.Distinct()) + ". Für diese Anschlüsse wurde keine geprüfte Steuerung gefunden."));
         }
         catch { try { next.Close(); } finally { computer = null; controls.Clear(); temperatures.Clear(); channels = []; sensors = []; } throw; }
     }

@@ -39,6 +39,12 @@ test('opening desktop fan controls only reads state, and publishing a ready stat
   const f=fixture();await f.settle();assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state']);assert.equal(f.elements.get('enabled').checked,false);assert.equal(f.elements.get('enabled').disabled,false);assert.equal(f.elements.get('brand').textContent,'ASUS');assert.equal(f.elements.get('model').textContent,'ROG CROSSHAIR TEST');
   f.publish({...initial(),enabled:true,phase:'ready'});await f.settle();assert.equal(f.calls.length,1);assert.equal(f.elements.get('enabled').checked,true);
 });
+
+test('a normal Windows session can deliberately activate its elevated helper and sees the Windows confirmation before activation',async()=>{
+  const state={...initial(),availability:{native:true,requiresElevation:true,reason:''}},f=fixture(state);await f.settle();
+  const toggle=f.elements.get('enabled');assert.equal(toggle.disabled,false);assert.match(f.elements.get('status').textContent,/Windows-Abfrage/);assert.match(f.elements.get('status').textContent,/iCUE bleibt aktiv/);
+  toggle.checked=true;toggle.listeners.change();await f.settle();assert.equal(f.calls[1].command,'fan-control-enable');assert.equal(f.calls[1].value.enabled,true);
+});
 test('portable and unconfirmed chassis cannot request activation even if a synthetic native flag is present',async()=>{
   for (const kind of ['portable','unknown']) {
     const f=fixture({...initial(),platform:{kind,brand:'msi',model:'Test'}});await f.settle();const toggle=f.elements.get('enabled');assert.equal(toggle.disabled,true);toggle.checked=true;toggle.listeners.change();await f.settle();assert.equal(f.calls.length,1);assert.equal(toggle.checked,false);assert.equal(f.elements.get('error').hidden,false);

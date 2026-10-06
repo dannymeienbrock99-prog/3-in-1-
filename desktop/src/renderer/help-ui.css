@@ -1,0 +1,13 @@
+.batto-help #battoHelpGuide { margin-top: 18px; }
+.batto-help [hidden] { display: none !important; }
+.batto-help #battoHelpSearch { width: 100%; max-width: 640px; }
+.batto-help-letters { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 18px; }
+.batto-help-letters button { min-width: 34px; padding: 7px 9px; }
+.batto-help details { margin: 10px 0; padding: 14px 16px; border: 1px solid rgba(211,174,95,.35); border-radius: 10px; background: rgba(12,15,23,.58); }
+.batto-help summary { cursor: pointer; font-weight: 700; line-height: 1.5; }
+.batto-help h3 { font-size: 17px; }
+.batto-help summary { font-size: 16px; }
+.batto-help p, .batto-help li { font-size: 14px; line-height: 1.65; max-width: 100ch; }
+.batto-help li { margin-bottom: 9px; }
+.batto-help-limit { padding: 10px 12px; border-left: 3px solid #d3ae5f; background: rgba(211,174,95,.08); }
+.batto-help button:focus-visible, .batto-help summary:focus-visible { outline: 2px solid #d3ae5f; outline-offset: 4px; }

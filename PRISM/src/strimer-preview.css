@@ -47,6 +47,7 @@
 .strimer-color-value{display:flex;align-items:center;gap:9px;min-height:35px;color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}
 .strimer-controls input[type=color]{width:36px;height:35px;padding:3px;cursor:pointer}
 .strimer-control-panel>.secondary{width:100%;margin-top:20px;white-space:normal;font-size:12px;line-height:1.5;min-height:44px}
+.strimer-control-panel>.strimer-apply{width:100%;margin-top:10px;white-space:normal;font-size:12px;line-height:1.5;min-height:44px}
 .strimer-reference{margin-top:24px;border-top:1px solid var(--border);padding-top:17px;color:var(--muted);font-size:12px;line-height:1.75}
 .strimer-reference summary{cursor:pointer;color:var(--text);font-size:13px;padding:3px 0;line-height:1.5}
 .strimer-reference p{font-size:12px;margin-top:12px;max-width:92ch}

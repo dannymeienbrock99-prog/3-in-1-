@@ -1,26 +1,28 @@
 import {useEffect,useRef,useState} from 'react';
 import {createEffectSampler} from './effect-color.js';
-import {EFFECT_NAMES,DEFAULT_CONFIG,validConfig} from './data.js';
+import {EFFECT_NAMES,DEFAULT_CONFIG,validConfig,api} from './data.js';
+import {normalizeStrimerDraft,strimerIdentity} from '../server/strimer-draft.mjs';
+import {createStrimerStore} from './strimer-store.mjs';
+import {LConnectImport} from './LConnectImport.jsx';
 import {STRIMER_CABLE_TYPES,STRIMER_WIRELESS_CABLE_TYPES,STRIMER_LCONNECT_MODES,STRIMER_SOURCES,STRIMER_WIRELESS_SOURCES,strimerCapabilities} from '../server/strimer-capabilities.mjs';
 import './strimer-preview.css';
 
 const KEY='batto.rgb.strimer-preview.v1';
-function configs(input,max=12){const result={};for(const [id,value]of Object.entries(input||{}))if(/^\d{1,2}$/.test(id)&&Number(id)<max){try{result[id]=validConfig(value);}catch{}}return result;}
+const EMBEDDED=new URLSearchParams(window.location.search).get('embedded')==='1';
+const embeddedStore=createStrimerStore(api);
 function read(){
- try{
-  const raw=JSON.parse(localStorage.getItem(KEY)||'{}'),cable=raw.cable==='2x8'?'dual8pin':raw.cable,wirelessChannels={};
-  for(const [id,value]of Object.entries(raw.wirelessChannels||{}).slice(0,32))if(id.length<=240)wirelessChannels[id]=configs(value);
-  let offlineConfig;try{offlineConfig=validConfig(raw.offlineConfig);}catch{}
-  return {mode:raw.mode==='separate'?'separate':'all',previewFamily:raw.previewFamily==='plus-v2'?'plus-v2':'wireless',cable:STRIMER_CABLE_TYPES.some(type=>type.id===cable)?cable:'24pin',wirelessCable:STRIMER_WIRELESS_CABLE_TYPES.some(type=>type.id===raw.wirelessCable)?raw.wirelessCable:'wireless-24pin',channels:configs(raw.channels,6),wirelessChannels,offlineConfig};
- }catch{return {mode:'all',previewFamily:'wireless',cable:'24pin',wirelessCable:'wireless-24pin',channels:{},wirelessChannels:{}};}
+ try{return normalizeStrimerDraft(JSON.parse(localStorage.getItem(KEY)||'{}'),validConfig);}
+ catch{return normalizeStrimerDraft({},validConfig);}
 }
 
-export function StrimerPreview({config=DEFAULT_CONFIG,onChange,running=true,devices=[]}){
+export function StrimerPreview({config=DEFAULT_CONFIG,onChange,onApply,onNotify,running=true,devices=[],busy=false}){
  const [draft,setDraft]=useState(read),[channel,setChannel]=useState(0),[deviceChoice,setDeviceChoice]=useState(null),[virtual,setVirtual]=useState(false),[storageError,setStorageError]=useState('');
+ const [draftReady,setDraftReady]=useState(!EMBEDDED);
  const canvas=useRef(null),time=useRef(0);
  const recognised=devices.filter(device=>strimerCapabilities(device).family!=='unassigned');
- const selectedDevice=recognised.find(device=>String(device.id)===deviceChoice)||recognised.find(device=>strimerCapabilities(device).family==='wireless')||recognised[0];
- const offline=virtual||!selectedDevice;
+ const selectedDevice=recognised.find(device=>strimerIdentity(device)===draft.deviceChoice)||recognised.find(device=>!strimerIdentity(device)&&String(device.id)===deviceChoice)||recognised.find(device=>strimerCapabilities(device).family==='wireless')||recognised[0];
+ const rememberedMissing=Boolean(draft.deviceChoice&&!recognised.some(device=>strimerIdentity(device)===draft.deviceChoice)||deviceChoice&&!recognised.some(device=>!strimerIdentity(device)&&String(device.id)===deviceChoice));
+ const offline=virtual||!selectedDevice||rememberedMissing;
  const capabilities=selectedDevice?strimerCapabilities(selectedDevice):null;
  const family=offline?draft.previewFamily:capabilities.family==='wireless'?'wireless':'plus-v2';
  const wireless=family==='wireless',familyTitle=wireless?'Strimer Wireless':'Strimer Plus V2',title=offline?'Strimer-Kabel':familyTitle;
@@ -32,14 +34,23 @@ export function StrimerPreview({config=DEFAULT_CONFIG,onChange,running=true,devi
  const channelCount=wireless?strands:cableType?.channels||strands/2;
  const channelIndex=Math.min(channel,Math.max(0,channelCount-1));
  const separate=draft.mode==='separate'&&channelCount>0;
- const draftKey=offline?selectedCable:`${selectedDevice?.provider||selectedDevice?.backend||''}:${selectedDevice?.id}:${selectedCable}`;
+ const draftKey=offline?selectedCable:`${strimerIdentity(selectedDevice)||'unassigned'}:${selectedCable}`;
  const channelConfigs=wireless?draft.wirelessChannels[draftKey]||{}:draft.channels;
  const localOnly=offline||!selectedDevice?.directMode;
- const selectedHint=localOnly?'Die Änderungen bleiben lokale Vorschau; die Ausgabe der Herstellereffekte wird separat bestätigt.':'Die Ausgabeauswahl bleibt oben sichtbar. Eine Änderung des gemeinsamen Effekts wählt ausschließlich dieses direkt steuerbare Kabel.';
- const commonConfig=localOnly?draft.offlineConfig||config:config;
+ const selectedHint=localOnly?'Die Änderungen bleiben lokale Vorschau; die Ausgabe der Herstellereffekte wird separat bestätigt.':'„Auf dieses Kabel anwenden“ überträgt den gemeinsamen Effekt ausschließlich auf dieses Kabel.';
+ const commonConfig=draft.offlineConfig||config;
  const settings=separate?channelConfigs[channelIndex]||commonConfig:commonConfig;
 
- useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(draft));setStorageError('');}catch{setStorageError('Kabelvorschau konnte nicht gespeichert werden.');}},[draft]);
+ useEffect(()=>{
+  if(!EMBEDDED)return;let alive=true;
+  embeddedStore.load().then(value=>{if(!alive)return;if(value.draft)setDraft(normalizeStrimerDraft(value.draft,validConfig));setDraftReady(true);}).catch(()=>{if(alive)setStorageError('Gespeicherte Kabelvorschau konnte nicht geladen werden. Bitte RGB erneut laden.');});
+  return()=>{alive=false;};
+ },[]);
+ useEffect(()=>{
+  if(!draftReady)return;
+  if(EMBEDDED){let alive=true;embeddedStore.save(draft).then(()=>{if(alive)setStorageError('');}).catch(()=>{if(alive)setStorageError('Kabelvorschau konnte nicht gespeichert werden.');});return()=>{alive=false;};}
+  try{localStorage.setItem(KEY,JSON.stringify(draft));setStorageError('');}catch{setStorageError('Kabelvorschau konnte nicht gespeichert werden.');}
+ },[draft,draftReady]);
  useEffect(()=>{
   const node=canvas.current,context=node.getContext('2d');if(!context)return;
   let frame,last,lastPaint,visible=true;
@@ -72,15 +83,23 @@ export function StrimerPreview({config=DEFAULT_CONFIG,onChange,running=true,devi
 
  function change(patch){
   const next={...settings,...patch};
-  if(!separate){if(localOnly)setDraft(current=>({...current,offlineConfig:next}));else onChange?.(next,selectedDevice.id);return;}
+  if(!separate){setDraft(current=>({...current,offlineConfig:next}));return;}
   setDraft(current=>wireless?{...current,wirelessChannels:{...current.wirelessChannels,[draftKey]:{...(current.wirelessChannels[draftKey]||{}),[channelIndex]:next}}}:{...current,channels:{...current.channels,[channelIndex]:next}});
  }
  function chooseCable(value){setDraft(current=>({...current,[wireless?'wirelessCable':'cable']:value}));setChannel(0);}
  function resetChannels(){setDraft(current=>wireless?{...current,wirelessChannels:{...current.wirelessChannels,[draftKey]:{}}}:{...current,channels:{}});}
+ function confirmPreview(){if(!separate)onChange?.(settings);onNotify?.(separate?`${wireless?'Strang':'Kanal'} ${channelIndex+1}: Vorschaueffekt bestätigt.`:'Vorschaueffekt bestätigt. Deine Geräteauswahl bleibt erhalten.');}
+ function importPreview({cable,previewPatch}){
+  // A saved manufacturer group is a source preset, never a physical strand.
+  // Import always enters virtual mode and preserves global targets and output.
+  const next=validConfig({...settings,...previewPatch});
+  setDraft(current=>({...current,mode:'all',previewFamily:'wireless',wirelessCable:cable.cableType,deviceChoice:cable.identity,offlineConfig:next}));
+  setDeviceChoice(null);setVirtual(true);setChannel(0);
+ }
 
- return <section className="surface strimer-preview" aria-label={offline?'Virtuelle Strimer-Kabelvorschau':`${title} Kabelvorschau`} data-strimer-family={family}>
+ return <section className="surface strimer-preview" aria-label={offline?'Virtuelle Strimer-Kabelvorschau':`${title} Kabelvorschau`} data-strimer-family={family} inert={!draftReady}>
   <div className="strimer-heading"><div className="strimer-heading-copy"><span className="strimer-eyebrow">Kabel & Lichtleiter</span><div className="strimer-title-row"><h3>{title}</h3><span className={`strimer-preview-badge${offline?' virtual':''}`}>{offline?'Virtuelle Vorschau':'Gerät erkannt'}</span></div><p>{offline?`Virtuelle ${familyTitle}-Vorschau`:'Erkannte Kabelfamilie · animierte Vorschau'}</p></div>
-   {recognised.length?<label className="strimer-device-choice">Gerät in der Kabelvorschau<select aria-label="Gerät in der Kabelvorschau" value={selectedDevice.id} onChange={event=>{setDeviceChoice(event.target.value);setVirtual(false);setChannel(0);}}>{recognised.map(device=><option key={device.id} value={device.id}>{device.name}</option>)}</select></label>:null}
+   {recognised.length?<label className="strimer-device-choice">Gerät in der Kabelvorschau<select aria-label="Gerät in der Kabelvorschau" value={rememberedMissing?'':selectedDevice.id} disabled={!draftReady} onChange={event=>{const device=recognised.find(value=>String(value.id)===event.target.value);setDeviceChoice(strimerIdentity(device)?null:event.target.value);setDraft(current=>({...current,deviceChoice:strimerIdentity(device)||undefined}));setVirtual(false);setChannel(0);}}>{rememberedMissing?<option value="" disabled>Gespeichertes Kabel nicht verbunden · Gerät wählen</option>:null}{recognised.map(device=><option key={device.id} value={device.id}>{device.name}</option>)}</select></label>:null}
   </div>
   <div className="strimer-preview-source">
    {recognised.length?<label><input type="checkbox" checked={virtual} onChange={event=>{setVirtual(event.target.checked);setChannel(0);if(event.target.checked)setDraft(current=>({...current,offlineConfig:current.offlineConfig||structuredClone(config)}));}}/>Virtuellen Kabeltyp ansehen</label>:null}
@@ -100,8 +119,11 @@ export function StrimerPreview({config=DEFAULT_CONFIG,onChange,running=true,devi
    <label>Tempo<input type="range" aria-label="Strimer-Vorschautempo" min="1" max="100" value={settings.speed} onChange={event=>change({speed:+event.target.value})}/><output>{settings.speed}%</output></label>
    <label>Richtung<select aria-label="Strimer-Vorschaurichtung" value={settings.direction} onChange={event=>change({direction:event.target.value})}><option value="forward">Vorwärts</option><option value="reverse">Rückwärts</option></select></label>
   </div>
+  <button className="secondary" disabled={busy||!draftReady} onClick={confirmPreview}>Vorschaueffekt bestätigen</button>
+  {!localOnly&&!separate?<button className="primary strimer-apply" disabled={busy||!draftReady} onClick={()=>onApply?.(settings,selectedDevice.id)}>Auf dieses Kabel anwenden</button>:null}
   {separate?<button className="secondary" onClick={resetChannels}>{wireless?'Stränge':'Kanäle'} auf gemeinsamen Effekt zurücksetzen</button>:null}
   </div></div>
+  <LConnectImport disabled={busy||!draftReady} onImport={importPreview}/>
   {wireless?<details className="strimer-reference"><summary>Strimer Wireless · Erkennung und eigene Effekte</summary><p>Funkkabel werden einzeln über den L-Wireless-Empfänger erkannt. Die vorhandenen Batto-Effekte und eigenen RGB-Schleifen bleiben verfügbar. Die Vorschau legt keine neue Gerätezuordnung fest.</p><p>Eine frei gespeicherte Strang-Einstellung wird nicht als physische Kanaladresse übertragen. „Alle“ bereitet den gemeinsamen Effekt ausschließlich für das bewusst bearbeitete Funkkabel vor. Im virtuellen Modus bleibt auch dieser ausschließlich Vorschau.</p><p><a href={STRIMER_WIRELESS_SOURCES.product} target="_blank" rel="noreferrer">Strimer Wireless bei Lian Li</a> · <a href={STRIMER_WIRELESS_SOURCES.software} target="_blank" rel="noreferrer">L-Connect 3</a></p></details>:<details className="strimer-reference"><summary>L-Connect-Vergleich · 24 dokumentierte Modi</summary><p>Hersteller-Modusnamen der kabelgebundenen Familie zum Vergleich. Diese Tabelle ist keine Freigabe für USB-Befehle.</p><div className="strimer-reference-modes">{STRIMER_LCONNECT_MODES.map(mode=><span key={mode.referenceId}>{mode.name}</span>)}</div>{!offline&&selectedDevice?<p>{strimerCapabilities(selectedDevice).limitation}</p>:null}<p>{strimerCapabilities().documentationConflict}</p><p><a href={STRIMER_SOURCES.manual} target="_blank" rel="noreferrer">Lian-Li-Handbuch</a> · <a href={STRIMER_SOURCES.product} target="_blank" rel="noreferrer">Strimer Plus V2</a></p></details>}
   {storageError?<p role="status">{storageError}</p>:null}
  </section>;

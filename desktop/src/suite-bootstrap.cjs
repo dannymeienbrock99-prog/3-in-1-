@@ -9,7 +9,7 @@ const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())i
 function checkSender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}if(path.resolve(file)!==path.resolve(__dirname,'renderer/index.html'))throw Error('Diese Bedienoberfläche ist nicht berechtigt.');}
 function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSender(e);if(!runtime)throw Error('Batto 3-in-1 startet noch.');return fn(value);});}
 handle('state',()=>runtime.snapshot());
-handle('rgb-start',()=>runtime.rgb.start());
+handle('rgb-start',()=>runtime.rgb.openUi());
 handle('rgb-state',()=>runtime.rgb.snapshot());
 handle('rgb-stop',()=>runtime.rgb.stop());
 handle('command',value=>runtime.jarvis.execute(value));

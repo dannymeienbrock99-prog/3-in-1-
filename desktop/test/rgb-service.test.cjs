@@ -21,16 +21,40 @@ class FakeClient extends EventEmitter{
  async applyNativeEffect(item,effectId,options){this.nativeWrites.push({id:item.id,effectId,...options});return {accepted:true};}
  async close(){this.closes++;this.connected=false;}
 }
-async function fixture(t,{devices=[device(),device(2)],factoryWrap,replyWrap}={}){
+async function fixture(t,{devices=[device(),device(2)],factoryWrap,replyWrap,ui}={}){
  const {createBridge}=await bridgeModule,directory=fs.mkdtempSync(path.join(os.tmpdir(),'batto-rgb-service-')),client=new FakeClient(devices),calls=[],changes=[];
- let owned,created=0;const bridgeFactory=options=>{created++;assert.equal(options.port,0);assert.equal(options.embedded,true);owned=createBridge({...options,client});return factoryWrap?factoryWrap(owned):owned;};
+ const uiRoot=path.join(directory,'ui');if(ui==='ready'){fs.mkdirSync(uiRoot);fs.writeFileSync(path.join(uiRoot,'index.html'),'<!doctype html><title>Synthetic RGB UI</title>');}
+ let owned,created=0;const bridgeFactory=options=>{created++;assert.equal(options.port,0);assert.equal(options.embedded,true);owned=createBridge({...options,client,...(ui?{dist:uiRoot}:{})});return factoryWrap?factoryWrap(owned):owned;};
  const service=new RgbService({root,directory,bridgeFactory,onChange:s=>changes.push(s),fetchRequest:async(url,options)=>{const call={route:new URL(url).pathname,body:options.body&&JSON.parse(options.body)};calls.push(call);const response=await fetch(url,options);return replyWrap?replyWrap(response,call):response;}});
  t.after(async()=>{await service.close();fs.rmSync(directory,{recursive:true,force:true});});
  async function seed({brightness=61,effect='static',custom,colors=['#123456','#abcdef'],zoneIds={1:[1]},deviceIds=[1]}={}){
   await service.start();await client.connect();const response=await fetch(new URL(service.url).origin+'/api/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceIds,zoneIds,effect,colors,brightness,speed:23,scale:47,direction:'reverse',...(custom?{custom}:{})})});assert.equal(response.ok,true);await response.json();client.writes.length=0;client.direct.length=0;calls.length=0;
  }
- return {service,client,calls,changes,seed,directory,get bridge(){return owned;},get created(){return created;}};
+ return {service,client,calls,changes,seed,directory,uiRoot,get bridge(){return owned;},get created(){return created;}};
 }
+
+test('the owned Node UI probe opens while null browser origins remain blocked and local HTTP origins work',async t=>{
+ const f=await fixture(t,{ui:'ready'});await f.service.start();const requests=[];
+ f.bridge.server.prependListener('request',request=>requests.push({path:request.url,origin:request.headers.origin}));
+ const opened=await f.service.openUi();assert.equal(opened.running,true);assert.equal(opened.url,f.service.url);
+ assert.deepEqual(requests,[{path:'/?embedded=1',origin:undefined}]);
+ const blocked=await fetch(opened.url,{headers:{Origin:'null'}});assert.equal(blocked.status,403);assert.equal((await blocked.json()).code,'INVALID_ORIGIN');assert.equal(blocked.headers.get('access-control-allow-origin'),null);
+ const sameOrigin=await fetch(opened.url,{headers:{Origin:new URL(opened.url).origin}});assert.equal(sameOrigin.status,200);assert.match(await sameOrigin.text(),/Synthetic RGB UI/);
+ assert.equal(f.client.connections,0);assert.deepEqual(f.client.direct,[]);assert.deepEqual(f.client.writes,[]);
+});
+
+test('missing UI surfaces its real HTTP reason and a later reload recovers without changing hardware',async t=>{
+ const f=await fixture(t,{ui:'missing'});
+ await assert.rejects(f.service.openUi(),/Die Oberfläche ist noch nicht gebaut/);assert.equal(f.service.snapshot().running,true);assert.match(f.service.snapshot().error,/Die Oberfläche ist noch nicht gebaut/);
+ fs.mkdirSync(f.uiRoot);fs.writeFileSync(path.join(f.uiRoot,'index.html'),'<!doctype html><title>Recovered fixture</title>');
+ assert.equal((await f.service.openUi()).error,'');assert.equal(f.created,1);assert.equal(f.client.connections,0);assert.deepEqual(f.client.writes,[]);
+});
+
+test('stopping during a successful UI probe rejects the stale open result',async t=>{
+ let release,ready;const gate=new Promise(resolve=>release=resolve),readyPromise=new Promise(resolve=>ready=resolve),f=await fixture(t,{ui:'ready',replyWrap:async(response,call)=>{if(call.route==='/'){ready();await gate;}return response;}});
+ const opening=f.service.openUi();await readyPromise;await f.service.stop();release();
+ await assert.rejects(opening,/RGB-Dienst wurde beendet/);assert.equal(f.service.snapshot().running,false);assert.equal(f.client.connections,0);assert.deepEqual(f.client.writes,[]);
+});
 test('RGB service rejects invalid actions before starting or contacting any bridge',async t=>{
  const f=await fixture(t);
  for(const input of [null,[],{}, {type:'execute'},{type:'color',color:'red'},{type:'color',color:'#fff'},{type:'effect',effect:'unsupported'},{type:'brightness',brightness:NaN},{type:'brightness',brightness:-1},{type:'brightness',brightness:101}])assert.throws(()=>f.service.action(input));

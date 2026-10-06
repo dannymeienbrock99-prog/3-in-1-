@@ -1,4 +1,20 @@
-# Batto 3-in-1 · Schnellstart 1.14.2
+# Batto 3-in-1 · Schnellstart 1.14.4
+
+## Hilfe und RGB-Kabelvorschau - 1.14.4
+
+Unter **Einstellungen → Hilfe** gibt es 26 durchsuchbare Themen von A bis Z mit Bedienwegen, Voraussetzungen und Grenzen. Die RGB-Schaltfläche **RGB erneut laden** lädt auch bei gleicher Dienstadresse erneut und zeigt Ladefehler an. In **Strimer-Kabel** bestätigt **Vorschaueffekt bestätigen** den lokalen Entwurf, ohne Geräte oder Zonen abzuwählen. **Auf dieses Kabel anwenden** sendet nur nach ausdrücklicher Bedienung an ein erkanntes, direkt unterstütztes ganzes Kabel. Kabelentwürfe und die Wireless-Kabelwahl bleiben über wechselnde Dienstports hinweg erhalten.
+
+Die Prozessprüfung fand keinen eingebauten Mechanismus zum Pausieren fremder Software. Die Ursache der gemeldeten SystemSettings-Pause ist weiterhin unbelegt. Corsair benötigt derzeit iCUE; Lüfterkurven sind Entwürfe. L-Connect bleibt für nicht ersetzte Funktionen und Einrichtung erforderlich.
+
+### L-Connect-Beleuchtungssicherung importieren
+
+1. **RGB-Steuerung → Strimer-Kabel → L-Connect-Sicherung als Vorschau importieren** öffnen.
+2. Den L-Connect-3-Export **Lighting / Fan Speed** als ZIP oder die enthaltene JSON-Datei **backup** wählen (maximal 1 MB).
+3. Das gewünschte Kabel und eine gespeicherte Quellgruppe auswählen; Farben und Quellenwerte prüfen.
+4. **Als lokalen Vorschauentwurf importieren** übernimmt einen ähnlichen benannten Effekt, geeignete RGB-Farben und gültige Helligkeit. Tempo und Richtung der bisherigen Vorschau bleiben erhalten. Der Entwurf wird lokal gespeichert.
+
+Der Import überträgt keine Beleuchtung. Die gespeicherten Gruppen werden keinem physischen Lichtleiter zugeordnet. **Vorschaueffekt bestätigen** übernimmt anschließend bewusst die Lichtvorschau und schaltet Live-Änderungen aus. Physische Ausgabe bleibt eine getrennte Aktion für ein aktuell erkanntes und unterstütztes Ziel.
+
 
 ## Streamer.bot auf diesem PC einrichten
 

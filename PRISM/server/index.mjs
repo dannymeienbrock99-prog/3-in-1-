@@ -13,6 +13,7 @@ import { EffectEngine, EFFECTS } from './effects.mjs';
 import { systemInventory } from './system.mjs';
 import { buildCoverage, createRazerProbe } from './provider-coverage.mjs';
 import { readProfiles, saveProfiles } from './profiles.mjs';
+import { readStrimerPreferences, saveStrimerPreferences } from './strimer-preferences.mjs';
 
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8', '.woff2': 'font/woff2' };
@@ -55,6 +56,7 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
         if (request.method === 'GET' && url.pathname === '/api/status') return json(response, 200, status());
         if (request.method === 'GET' && url.pathname === '/api/fans') return json(response, 200, {fans:client.readTelemetry ? await client.readTelemetry() : []});
         if (embedded && profileDirectory && request.method === 'GET' && url.pathname === '/api/profiles') return json(response, 200, { profiles: await readProfiles(profileDirectory) });
+        if (embedded && profileDirectory && request.method === 'GET' && url.pathname === '/api/strimer-preview') return json(response, 200, { draft: await readStrimerPreferences(profileDirectory) });
         if (request.method === 'GET' && url.pathname === '/api/devices') return json(response, 200, { devices: client.devices.map(publicController), connected: client.connected });
         if (request.method === 'GET' && url.pathname === '/api/system') return json(response, 200, await inventory());
         if (request.method === 'GET' && url.pathname === '/api/msi') return json(response, 200, await msiSetupStatus());
@@ -71,6 +73,7 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
         if (request.method !== 'POST') throw new BridgeError('API-Endpunkt oder Methode nicht gefunden.', 'NOT_FOUND', 404);
         const body = await readJson(request, embedded && profileDirectory && url.pathname === '/api/profiles' ? 128 * 1024 : 64 * 1024);
         if (embedded && profileDirectory && url.pathname === '/api/profiles') return json(response, 200, await serialize(async () => ({ profiles: await saveProfiles(profileDirectory, body.profiles) })));
+        if (embedded && profileDirectory && url.pathname === '/api/strimer-preview') return json(response, 200, await serialize(async () => ({ draft: await saveStrimerPreferences(profileDirectory, body.draft) })));
         if (url.pathname === '/api/system/refresh') return json(response, 200, await inventory({ force: true }));
         if (url.pathname === '/api/msi/setup') return json(response, 200, await installMsiSdk(body));
         if (url.pathname === '/api/corsair/setup') return json(response, 200, await installCorsairSdk(body));

@@ -1,4 +1,21 @@
-# Batto 3-in-1 · 1.14.2
+# Batto 3-in-1 · 1.14.4
+
+## RGB laden und L-Connect-Vorschauimport · 1.14.4
+
+Die RGB-Oberfläche wird im lokalen Dienst geprüft und lässt sich wiederholt laden. Die Windows-Ansicht benötigt dafür keinen zusätzlichen Browserabruf aus ihrem Datei-Ursprung. Fehler bei einer fehlenden Oberfläche werden weiterhin angezeigt; eine verspätete Ladeantwort öffnet keinen beendeten Dienst.
+
+Unter **Strimer-Kabel → L-Connect-Sicherung als Vorschau importieren** liest PRISM 1.8.4 eine Beleuchtungssicherung der Version 2 als ZIP oder JSON. Nach Auswahl eines Kabels und seiner gespeicherten Quellgruppe übernimmt **Als lokalen Vorschauentwurf importieren** höchstens einen ähnlichen benannten Effekt, passende RGB-Farben und Helligkeit. Der Import bleibt virtuell und erhält Geräte-/Zonenauswahl, Tempo und Richtung. Modusnummern und die sechs gespeicherten Gruppen sind keine physischen Strangadressen. LCD-Sicherungen werden nicht als Beleuchtung importiert.
+
+Die 26 Hilfethemen, portunabhängige Strimer-Entwürfe und separate Bestätigung/Anwendung sind enthalten. Alle 31 bisherigen Batto-Effekte, Szenen und PC-Bilder bleiben erhalten. iCUE und L-Connect sind weiterhin nicht vollständig ersetzt; die folgenden Hinweise zur Hardwareunterstützung gelten unverändert.
+
+## Hilfe und RGB-Kabelvorschau - 1.14.3
+
+Der [Projektauftrag vom 6. Oktober 2026](PROJEKTAUFTRAG-2026-10-06.md) hält die verbindliche Regel gegen das Pausieren fremder Software, die Untersuchungsergebnisse und die offenen Hardwarearbeiten fest.
+
+Unter **Einstellungen → Hilfe** gibt es 26 durchsuchbare Themen von A bis Z mit Bedienwegen, Voraussetzungen und Grenzen. Die RGB-Schaltfläche **RGB erneut laden** lädt auch bei gleicher Dienstadresse erneut und zeigt Ladefehler an. In **Strimer-Kabel** bestätigt **Vorschaueffekt bestätigen** den lokalen Entwurf, ohne Geräte oder Zonen abzuwählen. **Auf dieses Kabel anwenden** sendet nur nach ausdrücklicher Bedienung an ein erkanntes, direkt unterstütztes ganzes Kabel. Kabelentwürfe und die Wireless-Kabelwahl bleiben über wechselnde Dienstports hinweg erhalten.
+
+Die Prozessprüfung fand keinen eingebauten Mechanismus zum Pausieren fremder Software. Die Ursache der gemeldeten SystemSettings-Pause ist weiterhin unbelegt. Corsair benötigt derzeit iCUE; Lüfterkurven sind Entwürfe. L-Connect bleibt für nicht ersetzte Funktionen und Einrichtung erforderlich.
+
 
 ## RGB-Oberfläche · 1.14.2
 

@@ -69,6 +69,22 @@ class RgbService{
    finally{this.starting=null;}
   })();return this.starting;
  }
+ async openUi(){
+  await this.start();
+  const bridge=this.bridge,url=this.url;
+  try{
+   // The desktop page uses file://. Probe from Node so its opaque browser
+   // origin never needs access to the RGB server's protected HTTP endpoints.
+   const response=await this.fetchRequest(url,{signal:AbortSignal.timeout(10000),cache:'no-store'});
+   if(!response.ok){let message='Die RGB-Oberfläche konnte nicht geladen werden.';try{message=(await response.json()).error||message;}catch{}throw Error(message);}
+   await response.body?.cancel();
+   if(this.bridge!==bridge||this.url!==url||this.stopping||this.closed)throw Error('Der RGB-Dienst wurde beendet. Bitte RGB erneut öffnen.');
+   this.error='';return this.snapshot();
+  }catch(error){
+   this.error=this.bridge!==bridge||this.url!==url||this.stopping||this.closed?'Der RGB-Dienst wurde beendet. Bitte RGB erneut öffnen.':error.name==='TimeoutError'?'Die RGB-Oberfläche antwortet nicht. Bitte RGB erneut laden.':error.message==='fetch failed'?'Die lokale RGB-Oberfläche ist nicht erreichbar. Bitte RGB erneut laden.':error.message;
+   this.changed();throw Error(this.error);
+  }
+ }
  settings(value){
   if(!value||!this.softwareEffects().some(effect=>effect.id===value.effect)||!Array.isArray(value.colors)||value.colors.length<1||value.colors.length>8||value.colors.some(c=>typeof c!=='string'||!/^#[0-9a-f]{6}$/i.test(c)))throw Error('Ungültige RGB-Einstellungen.');
   for(const [key,min,max]of [['brightness',0,100],['speed',1,100],['scale',1,100]])if(!Number.isFinite(value[key])||value[key]<min||value[key]>max)throw Error('Ungültige RGB-Einstellungen.');

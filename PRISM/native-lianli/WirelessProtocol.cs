@@ -129,7 +129,7 @@ internal static class WirelessProtocol
     }
     internal static bool Acknowledged(WirelessReceiver current, WirelessReceiver target, WirelessMaster master, byte[] effectIndex)
         => current.Mac == target.Mac && current.MasterMac == master.Mac && current.DeviceType == target.DeviceType
-            && current.LedCount == target.LedCount && !current.MotherboardSync
+            && current.LedCount == target.LedCount && current.Channel == target.Channel && current.RxType == target.RxType && !current.MotherboardSync
             && effectIndex.Length == 4 && current.EffectIndex.SequenceEqual(effectIndex);
     static byte[] DecodeMac(string value)
     {
@@ -172,7 +172,17 @@ internal static class WirelessProtocol
                 wrongIdentity = Acknowledged(Receiver(2) with { Mac = "111111111111", EffectIndex = upload.EffectIndex }, Receiver(2), master, upload.EffectIndex),
                 motherboardSync = Acknowledged(Receiver(2) with { MotherboardSync = true, EffectIndex = upload.EffectIndex }, Receiver(2), master, upload.EffectIndex),
                 wrongMaster = Acknowledged(Receiver(2) with { MasterMac = "111111111111", EffectIndex = upload.EffectIndex }, Receiver(2), master, upload.EffectIndex),
+                wrongChannel = Acknowledged(Receiver(2) with { Channel = 9, EffectIndex = upload.EffectIndex }, Receiver(2), master, upload.EffectIndex),
+                wrongRadioAddress = Acknowledged(Receiver(2) with { RxType = 3, EffectIndex = upload.EffectIndex }, Receiver(2), master, upload.EffectIndex),
                 oldEffect = Acknowledged(Receiver(2), Receiver(2), master, upload.EffectIndex) },
+            diagnostics = new[] { WirelessErrors.Diagnostic(new WirelessUsbException("open", 5), "receiver"),
+                WirelessErrors.Diagnostic(new WirelessUsbException("initialize", 5), "transmitter"),
+                WirelessErrors.Diagnostic(new WirelessUsbException("open", 32), "transmitter") },
+            interfaceIdentities = new { ordinary = WinUsbDevice.AllowedHardwareKey("VID_0416&PID_8040"),
+                composite = WinUsbDevice.AllowedHardwareKey("vid_1a86&pid_e305&mi_00"),
+                otherProduct = WinUsbDevice.AllowedHardwareKey("VID_0416&PID_7372"),
+                elgato = WinUsbDevice.AllowedHardwareKey("VID_0FD9&PID_006C"),
+                suffix = WinUsbDevice.AllowedHardwareKey("VID_0416&PID_8040&unexpected") },
             models = Enumerable.Range(1, 9).Select(type => new { type, ledCount = LedCount(type), name = ModelName(type) }),
             parsed = ParseDiscovery(input, 1), invalid,
             upload = new { upload.FrameCount, upload.LedCount, upload.IntervalMs,

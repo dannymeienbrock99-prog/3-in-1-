@@ -1,15 +1,51 @@
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Prism.LianLi;
 
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = new UTF8Encoding(false);
 var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+if (args.Contains("--wireless-handoff-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(await WirelessHandoff.Fixtures(), json)); return; }
+if (args.Contains("--wireless-handoff"))
+{
+    try { await WirelessHandoff.Run(args); }
+    catch (Exception error) { Console.Error.WriteLine(error.Message); Environment.ExitCode = 1; }
+    return;
+}
 var controllers = new Dictionary<int, HidDevice>();
 var endpoints = new Dictionary<int, Endpoint>();
 var strimerChannelCounts = new Dictionary<int,int>();
 using var wireless = new WirelessSession();
 bool wirelessMode = args.Contains("--wireless");
+using var workerLease = WirelessWorkerLease.FromArguments(args);
+
+async IAsyncEnumerable<string> InputLines()
+{
+    if (workerLease == null) { string? input; while ((input = await Console.In.ReadLineAsync()) != null) yield return input; yield break; }
+    var inputLines = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+    int queued = 0;
+    _ = Task.Run(async () => {
+        try {
+            string? input;
+            while ((input = await Console.In.ReadLineAsync()) != null) {
+                if (input.Length > 65536 || Volatile.Read(ref queued) >= 64) throw new IOException("Wireless-Anfragewarteschlange ist zu groß.");
+                try {
+                    using var request = JsonDocument.Parse(input, new JsonDocumentOptions { MaxDepth = 12 });
+                    if (request.RootElement.TryGetProperty("command", out var command) && command.GetString() == "lease-heartbeat"
+                        && request.RootElement.TryGetProperty("requestId", out var id) && id.TryGetInt32(out int requestId) && requestId > 0) {
+                        workerLease.Heartbeat();
+                        Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = true, result = new { acknowledged = true } }, json));
+                        continue;
+                    }
+                } catch (JsonException) { } catch (InvalidOperationException) { }
+                Interlocked.Increment(ref queued); await inputLines.Writer.WriteAsync(input);
+            }
+            inputLines.Writer.TryComplete();
+        } catch (Exception error) { inputLines.Writer.TryComplete(error); }
+    });
+    await foreach (var input in inputLines.Reader.ReadAllAsync()) { Interlocked.Decrement(ref queued); yield return input; }
+}
 
 object Fixtures()
 {
@@ -209,11 +245,12 @@ try
     if (args.Contains("--strimer-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(StrimerProtocol.Fixtures(), json)); return; }
     if (args.Contains("--wireless-fixtures")) { Console.WriteLine(JsonSerializer.Serialize(WirelessProtocol.Fixtures(), json)); return; }
     if (args.Contains("--wireless-scan")) { Console.WriteLine(JsonSerializer.Serialize(await wireless.Scan(), json)); return; }
+    if (args.Contains("--wireless-access")) { Console.WriteLine(JsonSerializer.Serialize(WinUsbDevice.AccessDiagnostics(), json)); return; }
     if (args.Contains("--fixtures")) { Console.WriteLine(JsonSerializer.Serialize(Fixtures(), json)); return; }
-    string? line;
-    while ((line = await Console.In.ReadLineAsync()) != null)
+    await foreach (string line in InputLines())
     {
         int requestId = 0;
+        workerLease?.Begin();
         try
         {
             if (line.Length > 65536) throw new ArgumentException("Anfrage zu groß");
@@ -221,6 +258,7 @@ try
             requestId = request.RootElement.GetProperty("requestId").GetInt32();
             string? command = request.RootElement.GetProperty("command").GetString();
             object result = command switch {
+                "lease-heartbeat" when wirelessMode && workerLease != null => new { acknowledged = true },
                 "enumerate" => OperatingSystem.IsWindows() ? wirelessMode ? await wireless.Scan() : await Enumerate() : throw new PlatformNotSupportedException("Die Lian-Li-Anbindung benötigt Windows."),
                 "animation" when wirelessMode => await wireless.Upload(request.RootElement),
                 "effect" => await Apply(request.RootElement),
@@ -228,7 +266,10 @@ try
                 _ => throw new ArgumentException("Unbekannter Lian-Li-Befehl") };
             Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = true, result }, json));
         }
-        catch (Exception error) { Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = false, error = new { code = error is WirelessAnimationTooLargeException ? "WIRELESS_ANIMATION_TOO_LARGE" : "LIANLI_ERROR", message = error.Message } }, json)); }
+        catch (Exception error) { Console.WriteLine(JsonSerializer.Serialize(new { requestId, ok = false, error = new {
+            code = error is WirelessAnimationTooLargeException ? "WIRELESS_ANIMATION_TOO_LARGE" : error is WirelessUsbException usb ? usb.Code : "LIANLI_ERROR",
+            message = error.Message, diagnostic = error is WirelessUsbException ? WirelessErrors.Diagnostic(error, "transport") : null } }, json)); }
+        finally { workerLease?.End(); }
     }
 }
 finally { Clear(); }

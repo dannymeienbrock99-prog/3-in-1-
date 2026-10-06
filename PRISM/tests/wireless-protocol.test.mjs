@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { decodeTinyUz } from './fixtures/tinyuz-decode.mjs';
 
-const helper = fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
+const helper = process.env.PRISM_LIANLI_FIXTURE_HELPER || fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
 const fixture = process.platform === 'win32' && existsSync(helper) ? (() => {
   const result = spawnSync(helper, ['--wireless-fixtures'], { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr);
@@ -28,7 +28,16 @@ test('wireless discovery names verified Strimer models and does not invent layou
 
 test('wireless RGB upload rejects stale ownership, motherboard sync, malformed data, broadcasts and memory overflow before writes', options, () => {
   assert.deepEqual(fixture.invalid, ['unbound', 'motherboardSync', 'unknownModel', 'wrongLedCount', 'broadcast', 'interval', 'truncated', 'tooManyFrames', 'controllerMemory']);
-  assert.deepEqual(fixture.acknowledgements, { confirmed: true, wrongIdentity: false, motherboardSync: false, wrongMaster: false, oldEffect: false });
+  assert.deepEqual(fixture.acknowledgements, { confirmed: true, wrongIdentity: false, motherboardSync: false, wrongMaster: false, wrongChannel: false, wrongRadioAddress: false, oldEffect: false });
+});
+
+test('WinUSB errors distinguish denied opens from initialization and only known USB interfaces are eligible', options, () => {
+  assert.deepEqual(fixture.diagnostics.map(({role,code,stage,win32Error}) => ({role,code,stage,win32Error})), [
+    {role:'receiver',code:'WIRELESS_ACCESS_DENIED',stage:'open',win32Error:5},
+    {role:'transmitter',code:'WIRELESS_INITIALIZE_DENIED',stage:'initialize',win32Error:5},
+    {role:'transmitter',code:'WIRELESS_IN_USE',stage:'open',win32Error:32},
+  ]);
+  assert.deepEqual(fixture.interfaceIdentities, {ordinary:true,composite:true,otherProduct:false,elgato:false,suffix:false});
 });
 
 test('native tinyuz encoder round-trips through an independent decoder including 4 KiB matches and incompressible data', options, () => {

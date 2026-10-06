@@ -65,7 +65,7 @@ internal sealed class WirelessSession : IDisposable
     {
         DisposeHandles();
         var elapsed = System.Diagnostics.Stopwatch.StartNew();
-        var warnings = new List<string>(); var discovery = new List<object>();
+        var warnings = new List<string>(); var discovery = new List<object>(); var diagnostics = new List<object>();
         var sightings = new Dictionary<ReceiverPort, WirelessReceiver[]>();
         var receiverFound = WinUsbDevice.Enumerate(false).Take(4).ToArray();
         var transmitterFound = WinUsbDevice.Enumerate(true).Take(4).ToArray();
@@ -84,7 +84,11 @@ internal sealed class WirelessSession : IDisposable
                 receivers.Add(port); sightings[port] = stable; usb = null;
                 discovery.Add(new { name = string.IsNullOrWhiteSpace(found.Product) ? "Lian Li L-Wireless · Empfänger" : found.Product, vendor = "Lian Li", provider = "lianli-wireless", vendorId = found.Vid, productId = found.Pid, status = "detected", reason = "Wireless-Empfänger erkannt. Kabel müssen bereits mit dem Sender gekoppelt sein." });
             }
-            catch (Exception error) { warnings.Add($"Wireless-Empfänger: {error.Message}"); }
+            catch (Exception error) {
+                warnings.Add($"Wireless-Empfänger: {error.Message}"); diagnostics.Add(WirelessErrors.Diagnostic(error, "receiver"));
+                discovery.Add(new { name = found.Product, vendor = "Lian Li", provider = "lianli-wireless", vendorId = found.Vid, productId = found.Pid,
+                    status = "unavailable", reason = error.Message, diagnostic = WirelessErrors.Diagnostic(error, "receiver") });
+            }
             finally { usb?.Dispose(); }
         }
         foreach (var found in transmitterFound)
@@ -97,7 +101,7 @@ internal sealed class WirelessSession : IDisposable
                 // Probe observed channels only; do not perform a binding/channel
                 // sweep across somebody else's wireless devices.
                 var channels = sightings.Values.SelectMany(d => d).Select(d => d.Channel).Where(c => c is >= 1 and <= 39).Distinct().Take(10).ToArray();
-                WirelessMaster? master = null;
+                WirelessMaster? master = null; Exception? lastQueryError = null;
                 foreach (var channel in channels.Length > 0 ? channels : [8])
                 {
                     if (elapsed.Elapsed.TotalSeconds > 24) break;
@@ -115,13 +119,18 @@ internal sealed class WirelessSession : IDisposable
                         master = WirelessProtocol.ParseMaster(await usb.ReadPacket(wait.Token), channel);
                         break;
                     }
-                    catch (Exception error) when (error is IOException or ArgumentException or OperationCanceledException or TimeoutException) { }
+                    catch (Exception error) when (error is IOException or ArgumentException or OperationCanceledException or TimeoutException) { lastQueryError = error; }
                 }
-                if (master == null) throw new IOException("Der Wireless-Sender meldet keine gültige Antwort. L-Connect darf den USB-Zugriff nicht gleichzeitig belegen.");
+                if (master == null) throw lastQueryError is WirelessUsbException ? lastQueryError
+                    : new IOException("Der Wireless-Sender meldet keine gültige Metadatenantwort. Bitte Geräte erneut suchen." + (lastQueryError == null ? "" : $" {lastQueryError.Message}"), lastQueryError);
                 transmitters.Add(new MasterPort(usb, master)); usb = null;
                 discovery.Add(new { name = string.IsNullOrWhiteSpace(found.Product) ? "Lian Li L-Wireless · Sender" : found.Product, vendor = "Lian Li", provider = "lianli-wireless", vendorId = found.Vid, productId = found.Pid, status = "detected", reason = "Sender geprüft. Die steuerbaren gekoppelten Kabel stehen in der Geräteliste." });
             }
-            catch (Exception error) { warnings.Add($"Wireless-Sender: {error.Message}"); }
+            catch (Exception error) {
+                warnings.Add($"Wireless-Sender: {error.Message}"); diagnostics.Add(WirelessErrors.Diagnostic(error, "transmitter"));
+                discovery.Add(new { name = found.Product, vendor = "Lian Li", provider = "lianli-wireless", vendorId = found.Vid, productId = found.Pid,
+                    status = "unavailable", reason = error.Message, diagnostic = WirelessErrors.Diagnostic(error, "transmitter") });
+            }
             finally { usb?.Dispose(); }
         }
         var devices = new List<object>();
@@ -157,8 +166,9 @@ internal sealed class WirelessSession : IDisposable
             }
         }
         return new { devices, discovery, warnings, environment = new { lianliWireless = new { status = cables.Count > 0 ? "ready" : transmitterFound.Length + receiverFound.Length > 0 ? "unavailable" : "not-found",
-            deviceCount = cables.Count, controllerCount = transmitters.Count,
+            deviceCount = cables.Count, controllerCount = transmitters.Count, diagnostics,
             message = cables.Count > 0 ? "Gekoppelte Strimer-Wireless-Kabel erkannt. Eigene Effekte werden erst nach Anwenden übertragen."
+                : diagnostics.Count > 0 ? "Wireless-USB-Geräte erkannt; der direkte Zugriff ist blockiert. Die Gerätehinweise nennen den fehlgeschlagenen Schritt."
                 : transmitterFound.Length + receiverFound.Length > 0 ? "Wireless-USB-Geräte erkannt. Kein eindeutig gekoppeltes, unterstütztes Strimer-Kabel verfügbar; Hinweise prüfen."
                 : "Kein L-Wireless-Controller mit vorhandenem WinUSB-Treiber erkannt." } } };
     }

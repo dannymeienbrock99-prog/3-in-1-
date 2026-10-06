@@ -1,5 +1,14 @@
-# Batto 3-in-1 · 1.15.0
+# Batto 3-in-1 · 1.15.1
 
+## Strimer Wireless tatsächlich ansteuern · 1.15.1
+
+**RGB-Steuerung → Strimer-Kabel / Kabel & Lichtleiter** zeigt reale Kabel mit Namen. **Strimer-Steuerung übernehmen** erfordert die ausdrückliche Bestätigung der vorübergehenden L-Connect-Dienstpause und die Windows-Administratorfreigabe. Erst dann pausiert ein eigener, begrenzter Helfer die beiden geprüften L-Connect-Dienste. iCUE bleibt aktiv. L-Connect kann währenddessen seine Lüfter und Controller nicht verwalten. Dieser Modus ist bei jedem Programmstart aus und wird nicht gespeichert.
+
+Das Übernehmen sucht die gekoppelten Kabel und sendet noch keinen Lichteffekt. **Auf dieses Kabel übertragen** spricht ausschließlich das ausgewählte ganze Kabel an; alle 31 Effekte und der eigene Effekteditor bleiben erhalten. Die Anzeige unterscheidet bestätigten Funkempfang, bloße Übertragung und Fehler. **Kabel erneut suchen** prüft nur Wireless und erhält laufende Effekte anderer Anbindungen. Demo, Strang-Entwürfe und L-Connect-Importe bleiben zusätzlich erhalten. Die physische Zuordnung einzelner Lichtleiter ist nicht freigegeben.
+
+**L-Connect wieder übernehmen lassen** schließt zuerst den eigenen USB-Zugriff und stellt nur zuvor laufende Dienste wieder her. Ein Fehler bleibt sichtbar und kann erneut versucht werden. Der getrennte Helfer überwacht Batto, Verbindung und Heartbeat; der eigene USB-Worker gibt seinen Zugriff bei Verbindungsverlust vorher frei. Es werden weder iCUE noch Treiber, Kopplung, Firmware, Dienst-Starttypen oder PWM-Werte geändert. Beim Rückwechsel kann L-Connect seine gespeicherten Lichtprofile erneut anwenden.
+
+Der genehmigte lesende Diensttest erkannte ein **24-Pin-Kabel mit 132 LEDs** und ein **GPU-Kabel mit 12 Lichtleitern und 174 LEDs**. Beide Herstellerdienste wurden wieder gestartet. Dieser Befund bestätigt die Erkennung; die sichtbare Lichtausgabe ist separat am realen Kabel zu prüfen.
 ## Optionale PC-Lüftersteuerung · 1.15.0
 
 Unter **PC & iCUE Lüfter → PC-Lüftersteuerung** erkennt Batto das Mainboard mit Hersteller und Modell sowie Desktop- oder Notebook-Gehäuse. Die eigene Steuerung ist bei jedem Start **aus**. Auf unterstützten ASUS-/MSI-Desktop-Mainboards lassen sich eindeutig bezeichnete CPU-, Gehäuse- und Systemlüfteranschlüsse nach dem bewussten Einschalten einzeln mit **30–100 %** übernehmen. Temperaturkurven benötigen einen nachweislich aktuellen Temperaturdienst; mit dem enthaltenen Mainboardtreiber sind sie derzeit gesperrt. **Anwenden** benötigt die Bestätigung, dass am ausgewählten Anschluss ein Lüfter und keine Pumpe hängt. Das Einschalten allein verändert keine Lüfterleistung. **Aus** gibt die von Batto übernommenen Anschlüsse mit einer Treiberanforderung an die Hardware-Regelung zurück; die tatsächliche Rückgabe wird nicht physisch bestätigt. Es schaltet Lüfter nicht ab.

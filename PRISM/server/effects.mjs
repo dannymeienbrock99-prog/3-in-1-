@@ -72,7 +72,9 @@ export class EffectEngine {
       for (const { device, zones } of targets) {
         if (device.effectUpload === true) {
           const upload = await this.client.applySoftwareEffect(device, settings, zones);
-          const acknowledgement = { deviceId: device.id, confirmation: upload?.confirmation ?? 'transmitted', acknowledgement: upload?.acknowledgement ?? null };
+          const acknowledgement = { deviceId: device.id, confirmation: upload?.confirmation ?? 'transmitted', acknowledgement: upload?.acknowledgement ?? null,
+            ...(typeof upload?.transmitted === 'boolean' ? {transmitted:upload.transmitted} : {}),
+            ...(typeof upload?.confirmed === 'boolean' ? {confirmed:upload.confirmed} : {}) };
           delete device.activeNativeEffect;
           delete device.nativeSettings;
           this.jobs.set(device.id, { device, zones, settings, started, appliedAt, uploaded: true, upload: acknowledgement });

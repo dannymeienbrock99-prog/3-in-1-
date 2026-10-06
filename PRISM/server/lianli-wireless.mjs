@@ -35,11 +35,21 @@ export class LianLiWirelessClient extends LianLiLightingClient {
   constructor(options = {}) {
     super({...options,args:['--wireless',...(options.args || [])],timeout:options.timeout ?? 30000});
     this.backend='lianli-wireless'; this.animations=new Map();
+    this.baseArgs=[...this.args];this.leaseTimer=null;this.leasePending=false;
     this.details={lianliWireless:{status:'not-scanned',message:'Strimer Wireless noch nicht geprüft.'}};
   }
   ensureHelper() {
     if (this.platform!=='win32') throw new BridgeError('Strimer Wireless benötigt Windows und den vorhandenen WinUSB-Treiber.','WINDOWS_REQUIRED',422);
-    return super.ensureHelper();
+    super.ensureHelper();
+    if(this.leaseOwner&&!this.leaseTimer)this.leaseTimer=setInterval(()=>{
+      if(this.leasePending||!this.process)return;this.leasePending=true;
+      this.request('lease-heartbeat').catch(()=>{}).finally(()=>{this.leasePending=false;});
+    },2000);
+  }
+  setLeaseOwner(owner) {
+    if(owner && (!Number.isInteger(owner.pid)||owner.pid<1||!/^\d{16,19}$/.test(owner.startTicks)))throw new BridgeError('Die Lebensdauer der Strimer-Übernahme ist nicht eindeutig.','WIRELESS_LEASE_INVALID',422);
+    this.leaseOwner=owner;this.args=[...this.baseArgs,...(owner?['--wireless-lease',String(owner.pid),owner.startTicks]:[])];
+    if(!owner && this.leaseTimer){clearInterval(this.leaseTimer);this.leaseTimer=null;}
   }
   async scan() {
     this.ready=false; this.devices=[]; this.animations.clear();
@@ -108,11 +118,12 @@ export class LianLiWirelessClient extends LianLiLightingClient {
   }
   async readTelemetry() { return []; }
   fail(error) {
+    if(this.leaseTimer){clearInterval(this.leaseTimer);this.leaseTimer=null;}
     this.ready=false;this.devices=[];
     this.details.lianliWireless={status:'unavailable',message:error.message};this.animations.clear();
     for (const pending of this.pending.values()) { clearTimeout(pending.timer);pending.reject(error); } this.pending.clear();
     const child=this.process;this.process=null;if(child&&!child.killed)child.kill();
     if(!this.closing)this.emit('disconnected',error);
   }
-  async close() { this.animations.clear(); return super.close(); }
+  async close() { if(this.leaseTimer){clearInterval(this.leaseTimer);this.leaseTimer=null;}this.animations.clear(); return super.close(); }
 }

@@ -36,6 +36,9 @@ internal sealed class WinUsbDevice : IDisposable
     static readonly (int Vid, int Pid)[] Devices = [(0x0416, 0x8040), (0x0416, 0x8041), (0x1a86, 0xe304), (0x1a86, 0xe305)];
     static readonly Guid V1Interface = new("1D4B2365-4749-48EA-B38A-7C6FDDDD7E26");
 
+    internal static bool AllowedHardwareKey(string key) => Devices.Any(device =>
+        Regex.IsMatch(key, $@"^VID_{device.Vid:X4}&PID_{device.Pid:X4}(?:&MI_[0-9A-F]{{2}})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+
     // All registry paths come from the allowlisted device's own USB identity.
     static bool InstalledIdentity(string path, out int vid, out int pid, out string product)
     {
@@ -61,9 +64,10 @@ internal sealed class WinUsbDevice : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return [];
         var guids = new HashSet<Guid> { V1Interface };
-        foreach (var (vid, pid) in Devices)
+        using var usbDevices = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\USB", false);
+        foreach (var hardwareKey in (usbDevices?.GetSubKeyNames() ?? []).Take(4096).Where(AllowedHardwareKey))
         {
-            using var device = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Enum\USB\VID_{vid:X4}&PID_{pid:X4}", false);
+            using var device = usbDevices!.OpenSubKey(hardwareKey, false);
             if (device == null) continue;
             foreach (var instance in device.GetSubKeyNames().Take(128))
             {
@@ -114,6 +118,88 @@ internal sealed class WinUsbDevice : IDisposable
         return found;
     }
 
+    // Explicit troubleshooting only: no WinUsb_Initialize, USB transfers,
+    // descriptor requests, ACL changes or driver changes. Each bare handle is
+    // immediately closed. A successful zero-access open is not RGB capability.
+    internal static object AccessDiagnostics()
+    {
+        var results = new List<object>();
+        foreach (var device in Enumerate(false).Concat(Enumerate(true)).DistinctBy(d => d.Path, StringComparer.OrdinalIgnoreCase).Take(8))
+        {
+            var checks = new List<object>(); string? security = null; int? securityError = null;
+            foreach (var (name, access) in new (string Name, uint Access)[] {
+                ("metadata", 0), ("readControl", 0x20000), ("read", 0x80000000), ("write", 0x40000000), ("readWrite", 0xc0000000) })
+            {
+                using var handle = WinUsbNative.CreateFile(device.Path, access, 3, IntPtr.Zero, 3, 0x40000000, IntPtr.Zero);
+                int? error = handle.IsInvalid ? Marshal.GetLastWin32Error() : null;
+                checks.Add(new { access = name, opened = !handle.IsInvalid, win32Error = error });
+                if (name != "readControl" || handle.IsInvalid) continue;
+                WinUsbNative.GetKernelObjectSecurity(handle, 4, null, 0, out uint required);
+                if (required == 0 || required > 65536) { securityError = Marshal.GetLastWin32Error(); continue; }
+                var bytes = new byte[required];
+                if (!WinUsbNative.GetKernelObjectSecurity(handle, 4, bytes, required, out _)) { securityError = Marshal.GetLastWin32Error(); continue; }
+                if (!WinUsbNative.ConvertSecurityDescriptorToStringSecurityDescriptor(bytes, 1, 4, out var value, out uint length)) { securityError = Marshal.GetLastWin32Error(); continue; }
+                try { if (length <= 32768) security = Marshal.PtrToStringUni(value); }
+                finally { WinUsbNative.LocalFree(value); }
+            }
+            results.Add(new { name = device.Product, vendorId = device.Vid, productId = device.Pid,
+                role = IsSupported(device.Vid, device.Pid, true) ? "transmitter" : "receiver", checks, securityDescriptor = security, securityError,
+                installedProperties = InstalledProperties(device.Path) });
+        }
+        return new { mode = "access-diagnostics", hardwarePackets = 0, devices = results };
+    }
+
+    static object InstalledProperties(string path)
+    {
+        // SetupAPI properties are metadata. They can describe installed policy
+        // when the live device denies READ_CONTROL; absent properties are unknown.
+        var identity = Identity.Match(path);
+        if (!InstalledIdentity(path, out _, out _, out _) || !Guid.TryParse(identity.Groups["guid"].Value, out var guid))
+            return new { error = "identity" };
+        var list = WinUsbNative.SetupDiGetClassDevs(ref guid, null, IntPtr.Zero, 0x12);
+        if (list == new IntPtr(-1)) return new { error = "device-list" };
+        try
+        {
+            var info = new WirelessInterfaceData { Size = Marshal.SizeOf<WirelessInterfaceData>() };
+            if (!WinUsbNative.SetupDiOpenDeviceInterface(list, path, 0, ref info)) return new { win32Error = Marshal.GetLastWin32Error() };
+            WinUsbNative.SetupDiGetDeviceInterfaceDetail(list, ref info, IntPtr.Zero, 0, out uint required, IntPtr.Zero);
+            if (required < 8 || required > 8192) return new { error = "detail-size" };
+            var detail = Marshal.AllocHGlobal((int)required);
+            var data = new WirelessDeviceInfoData { Size = Marshal.SizeOf<WirelessDeviceInfoData>() };
+            try
+            {
+                Marshal.WriteInt32(detail, IntPtr.Size == 8 ? 8 : 6);
+                if (!WinUsbNative.SetupDiGetDeviceInterfaceDetailWithDevice(list, ref info, detail, required, out _, ref data)) return new { win32Error = Marshal.GetLastWin32Error() };
+            }
+            finally { Marshal.FreeHGlobal(detail); }
+            byte[]? Property(uint key, out int? error)
+            {
+                WinUsbNative.SetupDiGetDeviceRegistryProperty(list, ref data, key, out _, null, 0, out uint size);
+                if (size == 0 || size > 65536) { error = Marshal.GetLastWin32Error(); return null; }
+                var bytes = new byte[size];
+                if (!WinUsbNative.SetupDiGetDeviceRegistryProperty(list, ref data, key, out _, bytes, size, out uint actual)) { error = Marshal.GetLastWin32Error(); return null; }
+                error = null; return actual > size ? null : bytes[..(int)actual];
+            }
+            // SPDRP_SECURITY (0x17) is readable binary form. The SDK marks
+            // SPDRP_SECURITY_SDS (0x18) as write-only; never use it for reads.
+            var securityBytes = Property(0x17, out var securityError);
+            string? securityDescriptor = null;
+            if (securityBytes != null)
+            {
+                if (!WinUsbNative.ConvertSecurityDescriptorToStringSecurityDescriptor(securityBytes, 1, 4, out var value, out uint length)) securityError = Marshal.GetLastWin32Error();
+                else
+                {
+                    try { if (length <= 32768) securityDescriptor = Marshal.PtrToStringUni(value); }
+                    finally { WinUsbNative.LocalFree(value); }
+                }
+            }
+            var exclusive = Property(0x1a, out var exclusiveError);
+            return new { securityDescriptor, securityError,
+                exclusive = exclusive?.Length >= 4 ? (bool?)(BitConverter.ToUInt32(exclusive, 0) != 0) : null, exclusiveError };
+        }
+        finally { WinUsbNative.SetupDiDestroyDeviceInfoList(list); }
+    }
+
     internal WinUsbDevice(string path, int vid, int pid, string product)
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Lian Li Wireless benötigt Windows.");
@@ -121,27 +207,30 @@ internal sealed class WinUsbDevice : IDisposable
             throw new IOException("Die Wireless-Schnittstelle ist nicht als bekannter WinUSB-Controller installiert. Kein Treiber wird ersetzt.");
         Vid = vid; Pid = pid; Product = product;
         file = WinUsbNative.CreateFile(path, 0xc0000000, 3, IntPtr.Zero, 3, 0x40000000, IntPtr.Zero);
-        if (file.IsInvalid) { int error = Marshal.GetLastWin32Error(); file.Dispose(); throw new Win32Exception(error); }
+        if (file.IsInvalid) { int error = Marshal.GetLastWin32Error(); file.Dispose(); throw new WirelessUsbException("open", error); }
         try
         {
-            if (!WinUsbNative.WinUsb_Initialize(file, out usb!)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (!WinUsbNative.WinUsb_Initialize(file, out usb!)) throw new WirelessUsbException("initialize", Marshal.GetLastWin32Error());
             try
             {
                 var descriptor = new byte[18];
-                if (!WinUsbNative.WinUsb_GetDescriptor(usb, 1, 0, 0, descriptor, descriptor.Length, out int descriptorLength) || descriptorLength != 18)
-                    throw new IOException("Der Wireless-USB-Gerätedeskriptor ist nicht vollständig.");
-                if (!WinUsbNative.WinUsb_QueryInterfaceSettings(usb, 0, out var settings) || settings.Endpoints is < 2 or > 16)
+                if (!WinUsbNative.WinUsb_GetDescriptor(usb, 1, 0, 0, descriptor, descriptor.Length, out int descriptorLength))
+                    throw new WirelessUsbException("descriptor", Marshal.GetLastWin32Error());
+                if (descriptorLength != 18) throw new IOException("Der Wireless-USB-Gerätedeskriptor ist nicht vollständig.");
+                if (!WinUsbNative.WinUsb_QueryInterfaceSettings(usb, 0, out var settings))
+                    throw new WirelessUsbException("interface-descriptor", Marshal.GetLastWin32Error());
+                if (settings.Endpoints is < 2 or > 16)
                     throw new IOException("Der Wireless-USB-Schnittstellendeskriptor ist nicht passend.");
                 var pipes = new List<WirelessPipe>();
                 for (byte index = 0; index < settings.Endpoints; index++)
                 {
-                    if (!WinUsbNative.WinUsb_QueryPipe(usb, 0, index, out var pipe)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if (!WinUsbNative.WinUsb_QueryPipe(usb, 0, index, out var pipe)) throw new WirelessUsbException("endpoints", Marshal.GetLastWin32Error());
                     pipes.Add(new(pipe.PipeId, (byte)pipe.PipeType, pipe.MaximumPacketSize));
                 }
                 ValidateDescriptor(vid, pid, descriptor, pipes.ToArray(), settings.InterfaceClass, settings.SubClass, settings.Protocol);
                 uint timeout = IoTimeoutMs;
                 foreach (byte pipe in new[] { OutputPipe, InputPipe })
-                    if (!WinUsbNative.WinUsb_SetPipePolicy(usb, pipe, 0x03, 4, ref timeout)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    if (!WinUsbNative.WinUsb_SetPipePolicy(usb, pipe, 0x03, 4, ref timeout)) throw new WirelessUsbException("timeout-policy", Marshal.GetLastWin32Error());
             }
             catch { usb.Dispose(); throw; }
         }
@@ -185,7 +274,7 @@ internal sealed class WinUsbDevice : IDisposable
             if (faulted) throw new IOException("Die Wireless-Übertragung wurde unterbrochen. Bitte erneut suchen.");
             // Flush only WinUSB's cached input data. Never resets the USB pipe,
             // aborts another operation or sends a radio configuration command.
-            if (!WinUsbNative.WinUsb_FlushPipe(usb, InputPipe)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (!WinUsbNative.WinUsb_FlushPipe(usb, InputPipe)) throw new WirelessUsbException("flush-input", Marshal.GetLastWin32Error());
         }
         finally { transfers.Release(); }
     }
@@ -203,7 +292,7 @@ internal sealed class WinUsbDevice : IDisposable
             bool completed = pipe == InputPipe
                 ? WinUsbNative.WinUsb_ReadPipe(usb, pipe, pending.Buffer, buffer.Length, IntPtr.Zero, pending.Overlapped)
                 : WinUsbNative.WinUsb_WritePipe(usb, pipe, pending.Buffer, buffer.Length, IntPtr.Zero, pending.Overlapped);
-            if (!completed && Marshal.GetLastWin32Error() != 997) throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (!completed && Marshal.GetLastWin32Error() != 997) throw new WirelessUsbException(pipe == InputPipe ? "read" : "write", Marshal.GetLastWin32Error());
             if (!completed)
             {
                 using (cancellationToken.Register(pending.Cancel))
@@ -232,7 +321,7 @@ internal sealed class WinUsbDevice : IDisposable
                 int error = Marshal.GetLastWin32Error();
                 if (error == 996) { faulted = true; pending.Cancel(); pending.DeferCleanup(); pending = null; }
                 cancellationToken.ThrowIfCancellationRequested();
-                throw new Win32Exception(error);
+                throw new WirelessUsbException(pipe == InputPipe ? "read-result" : "write-result", error);
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (count > buffer.Length) throw new IOException("Ungültige Wireless-Antwortlänge.");
@@ -298,6 +387,7 @@ internal sealed class SafeWinUsbHandle : SafeHandleZeroOrMinusOneIsInvalid
 }
 
 [StructLayout(LayoutKind.Sequential)] internal struct WirelessInterfaceData { public int Size; public Guid Guid; public int Flags; public IntPtr Reserved; }
+[StructLayout(LayoutKind.Sequential)] internal struct WirelessDeviceInfoData { public int Size; public Guid Guid; public uint DevInst; public IntPtr Reserved; }
 [StructLayout(LayoutKind.Sequential, Pack = 1)] internal struct WirelessInterfaceDescriptor
 {
     public byte Length, DescriptorType, Number, AlternateSetting, Endpoints, InterfaceClass, SubClass, Protocol, DescriptionIndex;
@@ -309,6 +399,9 @@ internal static class WinUsbNative
 {
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool CancelIoEx(SafeFileHandle file, IntPtr overlapped);
+    [DllImport("advapi32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetKernelObjectSecurity(SafeFileHandle file, uint information, byte[]? descriptor, uint length, out uint needed);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool ConvertSecurityDescriptorToStringSecurityDescriptor(byte[] descriptor, uint revision, uint information, out IntPtr text, out uint length);
+    [DllImport("kernel32.dll")] internal static extern IntPtr LocalFree(IntPtr memory);
     [DllImport("winusb.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool WinUsb_Initialize(SafeFileHandle file, out SafeWinUsbHandle handle);
     [DllImport("winusb.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool WinUsb_Free(IntPtr handle);
     [DllImport("winusb.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool WinUsb_GetDescriptor(SafeWinUsbHandle handle, byte descriptorType, byte index, ushort language, byte[] buffer, int bufferLength, out int length);
@@ -322,5 +415,8 @@ internal static class WinUsbNative
     [DllImport("setupapi.dll", CharSet = CharSet.Unicode)] internal static extern IntPtr SetupDiGetClassDevs(ref Guid guid, string? enumerator, IntPtr parent, uint flags);
     [DllImport("setupapi.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiEnumDeviceInterfaces(IntPtr list, IntPtr device, ref Guid guid, uint index, ref WirelessInterfaceData data);
     [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr list, ref WirelessInterfaceData data, IntPtr details, uint size, out uint required, IntPtr device);
+    [DllImport("setupapi.dll", EntryPoint = "SetupDiGetDeviceInterfaceDetailW", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiGetDeviceInterfaceDetailWithDevice(IntPtr list, ref WirelessInterfaceData data, IntPtr details, uint size, out uint required, ref WirelessDeviceInfoData device);
+    [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiOpenDeviceInterface(IntPtr list, string path, uint flags, ref WirelessInterfaceData data);
+    [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiGetDeviceRegistryProperty(IntPtr list, ref WirelessDeviceInfoData data, uint property, out uint type, byte[]? buffer, uint size, out uint required);
     [DllImport("setupapi.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetupDiDestroyDeviceInfoList(IntPtr list);
 }

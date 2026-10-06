@@ -5,14 +5,24 @@ import { LianLiLightingClient } from './lianli-lighting.mjs';
 import { LianLiWirelessClient } from './lianli-wireless.mjs';
 import { BridgeError, publicController } from './openrgb.mjs';
 import { assertDeviceAllowed } from './device-policy.mjs';
+import { StrimerControl } from './strimer-control.mjs';
 
 /** Independent sessions keep a missing manufacturer's service from hiding other devices. */
 export class LightingClient extends EventEmitter {
-  constructor({ clients } = {}) {
+  constructor({ clients, strimerControl } = {}) {
     super();
     this.clients = clients || [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()];
     this.backend = 'windows'; this.host = null; this.port = null; this.protocol = null;
     this.devices = []; this.details = {}; this.routes = new Map(); this.errors = new Map(); this.invalid = false;
+    this.strimerControl = strimerControl ?? new StrimerControl();
+    this.strimerControl.on('lost', error => {
+      const provider=this.wirelessProvider();
+      if(!provider)return;
+      const ids=this.devices.filter(device=>this.routes.get(device.id)===provider).map(device=>device.id);
+      // Closing this provider releases WinUSB before the guard restores L-Connect.
+      void provider.close();this.errors.set(provider,error.message);this.refresh();
+      this.emit('providerDisconnected',{deviceIds:ids,message:error.message});
+    });
     for (const client of this.clients) {
       const invalidate = error => {
         const ids = this.devices.filter(device => this.routes.get(device.id) === client).map(device => device.id);
@@ -55,6 +65,26 @@ export class LightingClient extends EventEmitter {
     } catch (error) { this.devices = []; this.routes.clear(); this.invalid = true; throw error; }
   }
   async connect() { return this.scan(); }
+  wirelessProvider() { const values=this.clients.filter(client=>client instanceof LianLiWirelessClient||client.backend==='lianli-wireless');return values.length===1?values[0]:null; }
+  async setStrimerControl(enabled, confirmed=false) {
+    const provider=this.wirelessProvider();
+    if(!provider)throw new BridgeError('Die Strimer-Wireless-Anbindung ist nicht eindeutig verfügbar.','WIRELESS_PROVIDER_UNAVAILABLE',422);
+    if(enabled && confirmed!==true)throw new BridgeError('Bestätige zuerst die vorübergehende Pause der L-Connect-Dienste.','WIRELESS_CONSENT_REQUIRED',400);
+    if(enabled && this.strimerControl.status.enabled && this.strimerControl.status.phase==='active')return this.devices.map(publicController);
+    const ids=this.devices.filter(device=>this.routes.get(device.id)===provider).map(device=>device.id);
+    if(ids.length)this.emit('providerDisconnected',{deviceIds:ids,message:'Die Strimer-Steuerung wird übergeben.'});
+    await provider.close();this.refresh();
+    if(enabled) {
+      try {
+        await this.strimerControl.start();provider.setLeaseOwner?.({pid:process.pid,startTicks:this.strimerControl.ownerStartUtcTicks});const devices=await this.refreshStrimer();
+        if(!provider.connected || !provider.devices.length)throw new BridgeError('Batto konnte trotz Übergabe keine Strimer-Kabel öffnen. L-Connect wird wieder gestartet.','WIRELESS_HANDOFF_NO_CABLES',422);
+        return devices;
+      } catch(error) {
+        try { await provider.close(); } finally { provider.setLeaseOwner?.(null);try { await this.strimerControl.stop(); } finally { this.refresh(); } }throw error;
+      }
+    }
+    provider.setLeaseOwner?.(null);try { await this.strimerControl.stop(); } finally { this.refresh(); }return this.devices.map(publicController);
+  }
   async scan() {
     const results = await Promise.allSettled(this.clients.map(client => client.connected ? client.scan() : client.connect()));
     results.forEach((result, index) => {
@@ -62,6 +92,24 @@ export class LightingClient extends EventEmitter {
       if (result.status === 'fulfilled') this.errors.delete(client);
       else { this.errors.set(client, result.reason?.message || 'Die Hersteller-Anbindung ist nicht erreichbar.'); client.devices = []; }
     });
+    this.refresh();
+    return this.devices.map(publicController);
+  }
+  async refreshStrimer() {
+    const providers = this.clients.filter(client => client instanceof LianLiWirelessClient || client.backend === 'lianli-wireless');
+    if (providers.length !== 1) throw new BridgeError('Die Strimer-Wireless-Anbindung ist nicht eindeutig verfügbar.', 'WIRELESS_PROVIDER_UNAVAILABLE', 422);
+    const provider = providers[0];
+    const previousIds = this.devices.filter(device => this.routes.get(device.id) === provider).map(device => device.id);
+    // Invalidate only this provider's cached jobs. Receiver loops keep playing;
+    // enumeration sends no blackout, PWM, pairing or lighting upload command.
+    if (previousIds.length) this.emit('providerDisconnected', {deviceIds:previousIds, message:'Strimer Wireless wird neu geprüft. Bereits übertragene Kabelschleifen können weiterlaufen.'});
+    try {
+      if (provider.connected) await provider.scan(); else await provider.connect();
+      this.errors.delete(provider);
+    } catch (error) {
+      this.errors.set(provider, error?.message || 'Strimer Wireless ist nicht erreichbar.');
+      provider.devices = [];
+    }
     this.refresh();
     return this.devices.map(publicController);
   }
@@ -89,9 +137,10 @@ export class LightingClient extends EventEmitter {
     if (!client) throw new BridgeError('Das Windows-Steuerfenster ist nicht verfügbar.', 'WINDOW_UNAVAILABLE', 422);
     return client.showWindow(url);
   }
-  close() { const closing = Promise.allSettled(this.clients.map(client => client.close())); this.devices = []; this.routes.clear(); return closing; }
+  async close() { await Promise.allSettled(this.clients.map(client => client.close())); await this.strimerControl.stop(); this.devices = []; this.routes.clear(); }
   async disconnect() {
     await Promise.allSettled(this.clients.map(client => client.disconnect ? client.disconnect() : client.close()));
+    await this.strimerControl.stop();
     this.devices = []; this.routes.clear();
   }
 }

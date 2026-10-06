@@ -1,16 +1,18 @@
 # Batto 3-in-1 - Projektauftrag vom 6. Oktober 2026
 
-Fortgeführter und lokal installierter Projektstand: Batto 1.15.0 / PRISM 1.8.4. Das optionale Modul für ASUS/MSI-Desktop-Mainboardlüfter ist ergänzt. 84 fokussierte Node-Prüfungen, 32 synthetische native Prüfungen, 31 Oberflächen-Vertragsprüfungen und 895 Paket-Dateiabgleiche bestanden. Einstellungen, verschlüsselte Zugangsdaten, RGB-Daten, lokaler Browserspeicher und PC-Bilder wurden gesichert und auf Erhalt geprüft. Alle 216 Dateien des installierten Lüfterhelfers stimmen mit dem Build überein. Die RGB-Ansicht meldet nach dem Start fünf steuerbare Geräte. Der Bot war unmittelbar vor und nach diesem Update nicht verbunden; dieses Update verändert keine Bot-Konfiguration.
+Vorbereitung des Folgeupdates: Batto 1.15.1 / PRISM 1.8.5. Bisher lokal installiert: Batto 1.15.0 / PRISM 1.8.4. Das optionale Modul für ASUS/MSI-Desktop-Mainboardlüfter ist ergänzt. 84 fokussierte Node-Prüfungen, 32 synthetische native Prüfungen, 31 Oberflächen-Vertragsprüfungen und 895 Paket-Dateiabgleiche bestanden. Einstellungen, verschlüsselte Zugangsdaten, RGB-Daten, lokaler Browserspeicher und PC-Bilder wurden gesichert und auf Erhalt geprüft. Alle 216 Dateien des installierten Lüfterhelfers stimmen mit dem Build überein. Die RGB-Ansicht meldet nach dem Start fünf steuerbare Geräte. Der Bot war unmittelbar vor und nach diesem Update nicht verbunden; dieses Update verändert keine Bot-Konfiguration.
 
 **Lüftermodus 1.15.0:** Standardmäßig aus, auch nach jedem Neustart. Mainboard-Hersteller und Modell werden ohne direkten Treiberzugriff aus Windows gelesen. Nur unterstützte, benannte CPU-/System-/Chassis-Anschlüsse geprüfter Nuvoton-Controller sind für eine bewusste manuelle Übernahme mit 30–100% vorgesehen. Pumpen/AIO, generische Anschlussnamen und NCT6683/6686/6687 einschließlich 6687DR bleiben ausgeschlossen. Der verwendete Backend bestätigt keine frischen Temperatur-Messzeitpunkte; echte Temperaturkurven sind deshalb gesperrt. Beim Ausschalten wird die Hardware-Regelung über die Bibliothek angefordert; ein physischer BIOS-ACK ist nicht verfügbar.
 
 **Aktueller lesender PC-Befund:** ASUS ROG CROSSHAIR X870E GLACIAL, Desktop-PC, PawnIO registriert, Batto ohne Administratorrechte. Die App zeigt diese fehlende Voraussetzung bereits im ausgeschalteten Zustand. Kein nativer Lüfterhelfer wurde gestartet, kein PWM-Wert geschrieben. Eine Erkennung des Mainboardnamens bestätigt noch keine steuerbaren Anschlüsse dieses Modells. iCUE/RGB bleiben erhalten; CorsairLink wird nicht automatisch geladen. Das verlinkte AsusFanControl ist ein Notebook-Projekt und wird nicht für Desktop-PCs ausgeführt.
 
-Die frische Wireless-Diagnose erkennt Sender und Empfänger, meldet aber für beide „Zugriff verweigert“. L-Connect und andere Herstellerprogramme wurden weder beendet noch verändert. Unabhängige physische Wireless-Ausgabe und vollständiger Herstellerersatz bleiben offen.
+Der ausdrücklich genehmigte kurze Diensttest bestätigte den Zugriffskonflikt mit L-Connect: Nur bei pausiertem LConnectService und LConnectServiceWatcher wurden das gekoppelte 24-Pin-Kabel (132 LEDs) und GPU-Kabel mit 12 Lichtleitern (174 LEDs) erkannt. Beide Dienste wurden im Abschluss wieder gestartet. Der Test war lesend; sichtbare Farben wurden dabei nicht geändert. Das neue optionale Übergabemodul ist vorbereitet und wird nur mit ausdrücklicher Zustimmung sowie Windows-Freigabe gestartet. Vollständiger Herstellerersatz und physische Einzelstrangzuordnung bleiben offen.
 
-## Verbindliche Regel: keine fremde Software pausieren
+**Validierung 1.15.1:** 219 RGB-Prüfungen, 50 fokussierte Desktop-RGB-/Lüfterprüfungen und 31 Oberflächen-Vertragsprüfungen bestanden. Die gepackten Ressourcen wurden mit 898 Dateiabgleichen geprüft. Browserprüfungen mit ausdrücklich gekennzeichneten Testdaten bestätigen die Zustimmung vor der Übernahme, getrennte Kabelziele, bestätigte und ausstehende Funkantworten sowie das Layout bei 390 Pixel Breite. Diese Prüfungen ersetzen keinen Farbtest an den echten Kabeln. Der lokale geschützte Installer ist erstellt; Installation und Neustart warten auf die aktuelle Freigabe, da inzwischen beide virtuellen Kameras ausgeben.
 
-Batto darf keine fremden Programme suspendieren, beenden, Dienste anhalten oder deren Betrieb durch eine automatische Prozessübernahme unterbrechen. Das gilt insbesondere für SystemSettings.exe, Armoury Crate, iCUE und L-Connect 3. Der Sparmodus darf eigene Ansichten, Animationen und eigene Hilfsprozesse verwalten. Bei Zugriffskonflikten muss die App eine verständliche Meldung anzeigen. Ein manuelles Schließen eines Herstellerprogramms ist eine Entscheidung des Benutzers.
+## Verbindliche Regel: keine automatische Pause fremder Software
+
+Batto darf keine fremden Programme suspendieren, beenden, Dienste anhalten oder deren Betrieb durch eine automatische Prozessübernahme unterbrechen. Das gilt insbesondere für SystemSettings.exe, Armoury Crate, iCUE und L-Connect 3. Der Sparmodus darf eigene Ansichten, Animationen und eigene Hilfsprozesse verwalten. Bei Zugriffskonflikten muss die App eine verständliche Meldung anzeigen. Ein manuelles Schließen eines Herstellerprogramms ist eine Entscheidung des Benutzers. Die ausdrücklich bestätigte Ausnahme für Strimer Wireless darf ausschließlich die zwei geprüften L-Connect-Dienste zeitweise übernehmen und ihren ursprünglichen Zustand wiederherstellen. Sie ist bei jedem Start aus, erfordert einen neuen Zustimmungshaken und eine Windows-Freigabe. Andere Programme und Dienste bleiben ausgeschlossen.
 
 Ausführbare Fremdplugins und konfigurierte externe Streamer.bot-Aktionen sind zusätzlich zu prüfen: Sie können außerhalb der eingebauten Batto-Aktionen arbeiten. Der Quellcodebefund ist keine Garantie über beliebige Erweiterungen oder bereits installierte ältere Programmstände.
 
@@ -42,7 +44,7 @@ Microsoft beschreibt Windows-eigene Suspendierung von Apps nach Minimieren, Hint
 
 ## 4. Kabel & Lichtleiter / Strimer-Vorschau
 
-**Im Quellstand ergänzt:** „Vorschaueffekt bestätigen“ bestätigt den lokalen Vorschauentwurf. Es wird dabei keine Hardware beschrieben und die übrige Geräte-/Zonenauswahl bleibt erhalten. „Auf dieses Kabel anwenden“ ist eine separate ausdrückliche Hardwareaktion für ein aktuell erkanntes, direkt unterstütztes ganzes Kabel.
+**Im Quellstand ergänzt:** „Vorschaueffekt bestätigen“ bestätigt den lokalen Vorschauentwurf. Es wird dabei keine Hardware beschrieben und die übrige Geräte-/Zonenauswahl bleibt erhalten. „Auf dieses Kabel übertragen“ ist eine separate ausdrückliche Hardwareaktion für ein aktuell erkanntes, direkt unterstütztes ganzes Kabel.
 
 Vorschauentwürfe und Wireless-Kabelwahl werden in einer validierten lokalen Datei gespeichert und bleiben bei wechselnden RGB-Dienstports erhalten. Physische Wireless-Ziele werden über ihre stabile Geräteidentität zugeordnet. Ein fehlendes gewähltes Kabel darf nicht automatisch durch ein anderes Ziel ersetzt werden.
 
@@ -65,7 +67,7 @@ Die PDF enthält die belegbare Funktionsliste und die A-bis-Z-Bedienhilfe. Sie t
 ## Abnahmekriterien der noch offenen Hardwarearbeit
 
 1. Exaktes Gerät mit Kennung/Firmware anzeigen und seine Fähigkeiten zutreffend ausweisen.
-2. Keine fremde Software automatisch anhalten; Zugriffskonflikte verständlich melden.
+2. Keine fremde Software automatisch anhalten; nur die ausdrücklich bestätigte Strimer-Ausnahme ist erlaubt. Zugriffskonflikte verständlich melden.
 3. Auswahl und gespeicherte Entwürfe über Dienst-/App-Neustart bewahren; fehlende Geräte nicht durch andere Ziele ersetzen.
 4. Nur ausdrücklich ausgewählte und bestätigte Geräte/Zonen beschreiben; Empfangsbestätigung und sichtbaren Hardwaretest unterscheiden.
 5. Für jede Ablösung auch Kühlung, Pumpen, Sensoren, Displays, Kopplung, Firmware und Startverhalten nach tatsächlichem Bedarf abdecken.

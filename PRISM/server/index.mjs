@@ -39,7 +39,7 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
   client.on('disconnected', error => { lastError = error.message; });
   client.on('devicesChanged', () => { lastError = 'Geräte wurden geändert. Bitte Geräte erneut erkennen.'; });
   client.on('controlLost', error => { engine.stop(); lastError = error.message; });
-  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, effectRunning: engine.running, active: engine.active, nativeActive:client.connected ? client.devices.map(nativeLightingState).filter(Boolean) : [], effects: EFFECTS, error: engine.lastError || lastError });
+  const status = () => ({ app: 'PRISM', version: APP_VERSION, backend: client.backend ?? 'test', connected: client.connected, host: client.host, port: client.port, protocol: client.protocol, deviceCount: client.devices.length, protectedDevices: PROTECTED_DEVICES, native: client.details ?? null, strimerControl:client.strimerControl?.status ?? {available:false,enabled:false,phase:'off',message:'Strimer-Übernahme ist hier nicht verfügbar.'}, effectRunning: engine.running, active: engine.active, nativeActive:client.connected ? client.devices.map(nativeLightingState).filter(Boolean) : [], effects: EFFECTS, error: engine.lastError || lastError });
 
   const server = http.createServer(async (request, response) => {
     try {
@@ -95,6 +95,19 @@ export function createBridge({ client = new LightingClient(), dist = path.resolv
           const devices = client.connected ? await client.scan() : await client.connect();
           lastError = null; engine.lastError = null;
           return { status: status(), devices, message: devices.length ? 'Direkt unterstützte RGB-Geräte erkannt.' : 'Keine direkt unterstützten RGB-Geräte gemeldet. PC-Komponenten werden unabhängig davon über Windows erkannt. Für Corsair die iCUE-Anbindung einrichten.' };
+        }));
+        if (url.pathname === '/api/strimer/refresh') return json(response, 200, await serialize(async () => {
+          if (Object.keys(body).length) throw new BridgeError('Die Kabelsuche benötigt keine Licht- oder Gerätebefehle.', 'INVALID_WIRELESS_REFRESH', 400);
+          if (typeof client.refreshStrimer !== 'function') throw new BridgeError('Diese Anbindung unterstützt keine eigene Wireless-Suche.', 'WIRELESS_PROVIDER_UNAVAILABLE', 422);
+          const devices = await client.refreshStrimer();
+          lastError = null; engine.lastError = null;
+          return {status:status(), devices, autonomousOutputUnchanged:true, message:'Nur Strimer Wireless wurde geprüft. Andere RGB-Geräte laufen weiter. Bereits übertragene Kabelschleifen können weiterlaufen.'};
+        }));
+        if (url.pathname === '/api/strimer/control') return json(response, 200, await serialize(async () => {
+          if(typeof body.enabled!=='boolean' || Object.keys(body).some(key=>!['enabled','confirmLConnectPause'].includes(key)) || (body.confirmLConnectPause!==undefined && typeof body.confirmLConnectPause!=='boolean'))throw new BridgeError('Ungültige Strimer-Übergabe.','INVALID_WIRELESS_CONTROL',400);
+          if(typeof client.setStrimerControl!=='function')throw new BridgeError('Die Strimer-Übergabe ist hier nicht verfügbar.','WIRELESS_PROVIDER_UNAVAILABLE',422);
+          const devices=await client.setStrimerControl(body.enabled,body.confirmLConnectPause);
+          lastError=null;engine.lastError=null;return {status:status(),devices,message:client.strimerControl?.status.message};
         }));
         if (url.pathname === '/api/native-effect') return json(response, 200, await serialize(async () => { const result = await applyNativeEffect(client, engine, body); lastError = null; engine.lastError = null; return result; }));
         if (url.pathname === '/api/apply') return json(response, 200, await serialize(async () => {
@@ -156,6 +169,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const bridge = createBridge({ port });
   await bridge.listen();
   console.log(`PRISM ist bereit: http://127.0.0.1:${port}`);
-  const stop = () => { bridge.engine.stop(); bridge.client.close(); bridge.server.close(() => process.exit(0)); };
+  const stop = async () => { bridge.engine.stop(); await bridge.client.close(); bridge.server.close(() => process.exit(0)); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
 }

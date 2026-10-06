@@ -61,3 +61,9 @@ Die Funkpaket-Anordnung basiert ebenfalls auf [sgtaziz/lian-li-linux](https://gi
 Die begrenzte eigene C#-Kompression verwendet das tinyuz-Format nach [sisong/tinyuz](https://github.com/sisong/tinyuz/tree/1d74ffa4d453796df352df470733f45dfa099bb1), Commit `1d74ffa4d453796df352df470733f45dfa099bb1`, MIT, Copyright 2012–2022 housisong. Die vollständige Lizenzkopie wird unter `PRISM/licenses/tinyuz-MIT.txt` und im Installer unter `resources/PRISM/licenses` mitgeliefert. Es wird keine fremde tinyuz-Binärdatei eingebunden.
 
 Gekoppelte Kabel mit bekannten Layouts erhalten die 31 Softwareeffekte einschließlich eigener Muster als lokal abgespielte Schleife. Der separate kabelgebundene Lian-Li-Katalog bleibt bei 94 Herstellermodi. Die lokale Metadatenabfrage bestätigte 132-/174-LED-Kabel, jedoch keine sichtbaren Hardwarefarben. Weitere Firmwareversionen sind nicht an echter Hardware geprüft. Pause und Aus benötigen eine Funkbestätigung; Programm schließen beendet die Schleife nicht. L-Connect wird separat für die vorhandene Kopplung benötigt und nicht mitverteilt.
+
+## Optionale Desktop-Lüftersteuerung 1.15.0
+
+Der separate Helfer enthält unveränderte LibreHardwareMonitorLib 0.9.6 (MPL-2.0) und ihre festgelegten Abhängigkeiten. Vollständige Lizenztexte, Paketreferenzen und Quellbezüge liegen unter resources/DesktopFanControl/licenses; die getrennten Bibliotheken bleiben austauschbar. Der PawnIO-Systemtreiber wird nicht mitgeliefert oder automatisch installiert. Originaler Helferquellcode: components/desktop-fan-control in diesem Repository.
+
+Fan Control und FanControl.CorsairLink werden nur über ihre offiziellen Projektseiten verlinkt; ihre Programme und Plugins werden nicht gebündelt. AsusFanControl ist ein Notebook-Projekt und wird nicht ausgeführt oder verteilt.

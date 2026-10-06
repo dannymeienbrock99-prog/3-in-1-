@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./rule-editor-ui.css" />
   <link rel="stylesheet" href="./community-ui.css" />
   <link rel="stylesheet" href="./suite.css" />
+  <link rel="stylesheet" href="./fan-control-ui.css" />
   <link rel="stylesheet" href="./rgb-ui.css" />
   <link rel="stylesheet" href="./dual-stream.css" />
   <link rel="stylesheet" href="./touch-deck.css" />
@@ -69,7 +70,7 @@
           <button class="nav-item" data-view="jarvis"><b>◉</b><span>Jarvis</span></button>
           <button class="nav-item" data-view="sensors"><b>◴</b><span>PC-Messwerte</span></button>
           <button class="nav-item" data-view="rgb"><b>✺</b><span>RGB-Steuerung</span></button>
-          <button class="nav-item" data-view="fans"><b>✣</b><span>iCUE LINK Lüfter</span></button>
+          <button class="nav-item" data-view="fans"><b>✣</b><span>PC &amp; iCUE Lüfter</span></button>
           <button class="nav-item" data-view="dualstream"><b>▣</b><span>Dual Stream</span></button>
           <button class="nav-item" data-view="touchdeck"><b>▦</b><span>Touch Deck</span></button>
         </nav>
@@ -188,7 +189,9 @@
  <article class="suite-panel"><h3>Messquellen</h3><div id="s-sources" class="suite-source"></div><div id="s-csv-list"></div><p class="suite-help">NVIDIA und Windows werden automatisch gelesen. Für weitere Sensoren HWiNFO-Sensorfreigabe aktivieren oder ein laufendes CSV-Protokoll aus iCUE, GPU Tweak oder HWiNFO auswählen. Die Datei muss regelmäßig neue Zeilen erhalten. Andere Programme behalten die Hardware-Steuerung.</p></article>
  </div></div>
 </section>
-<section id="view-fans" class="view suite-view" data-view-panel="fans"><h2>Deine iCUE-LINK-Lüfter</h2>
+<section id="view-fans" class="view suite-view" data-view-panel="fans"><h2>PC-Lüfter &amp; Stream-Anzeige</h2>
+ <div data-fan-control-root></div>
+ <h3>Deine iCUE-LINK-Lüfter</h3>
  <article class="suite-panel"><div class="suite-row"><label>Hintergrund<select id="f-background"><option value="stream-startet.jpg">Stream startet</option><option value="bin-gleich-zurueck.jpg">Bin gleich zurück</option><option value="">Transparent</option></select></label><button id="f-add">LINK-Lüfter hinzufügen</button><button id="f-align">Gleichmäßig ausrichten</button><button id="f-sources">Live-Werte verbinden</button><button id="f-copy">OBS-Adresse kopieren</button><button id="f-preview">Stream-Vorschau</button><button id="f-import">Layout laden</button><button id="f-export">Layout exportieren</button></div><div class="suite-normal-fans"><label class="suite-check"><input id="f-normal-enabled" type="checkbox"> Normale Lüfter anzeigen</label><button id="f-add-normal" disabled>Normalen Lüfter hinzufügen</button><span id="f-normal-state" class="suite-help">Optional: normale Lüfter rechts mit RPM anzeigen.</span></div><p id="f-state" class="suite-status"></p><div class="suite-stage-wrap" id="f-wrap"><div class="suite-stage" id="f-stage" aria-label="Lüfterbühne. Lüfter zum Verschieben ziehen."></div></div><p class="suite-help">iCUE LINK: gespeicherte Lüfter werden automatisch eingelesen. Für Live-Drehzahlen und Temperaturen in iCUE unter Einstellungen → Sensorprotokollierung die gewünschten LINK-Sensoren auswählen, Intervall 2 Sekunden, und die Protokollierung starten. Dateien im Dokumente-Ordner werden automatisch gefunden; andere Dateien unter PC-Messwerte → Sensor-CSV verbinden wählen. Normale Lüfter: aktuelle U/min aus HWiNFO-Sensorfreigabe oder einem laufenden Sensorprotokoll erscheinen optional rechts. Fehlende oder veraltete Messwerte bleiben —; 0 RPM bedeutet Stillstand. Die Bilder sind eine Vorschau, keine Aussage zum verbauten Modell. 1920 × 1080 · Lüfter anklicken und frei verschieben. In OBS als Browserquelle einfügen. Die Mitte zeigt standardmäßig die Geschwindigkeit in Prozent. Dazu einen echten Prozentwert zuordnen oder die Drehzahl bei 100 % eintragen. Ohne diesen Bezug wird kein Prozentwert geschätzt. Temperatur und U/min bleiben als Anzeige wählbar.</p><div id="f-edit" hidden><p id="f-kind" class="suite-badge"></p><div class="suite-row"><label>Lüftername<input id="f-name" maxlength="80"></label><label>Anzeige in der Mitte<select id="f-center"><option value="percent">Geschwindigkeit (%)</option><option value="rpm">Drehzahl (U/min)</option><option value="temperature">Temperatur (°C)</option></select></label><label>Temperatursensor<select id="f-temp"></select></label><label>Drehzahlsensor (U/min)<select id="f-rpm"></select></label><label>Größe<input id="f-size" type="range" min="120" max="420"></label></div><div class="suite-row"><label>Gemessener Prozentwert<select id="f-percent"></select></label><label>Alternativ: Drehzahl bei 100 % (U/min)<input id="f-max-rpm" type="number" min="100" max="20000" placeholder="Laut Datenblatt / eigener Messung"></label><label class="suite-check"><input id="f-announce" type="checkbox"> Diesen Lüfter bei hoher Drehzahl ansagen</label></div><p class="suite-help">Bei eingetragenem Maximalwert: aktuelle U/min ÷ Maximalwert × 100. Das ist der Drehzahlanteil, kein gemessener PWM-Steuerwert. Der gewählte Bezug gilt auch für Jarvis und Stream Deck.</p><div class="suite-row"><label>X<input id="f-x" type="number" min="0" max="1800"></label><label>Y<input id="f-y" type="number" min="0" max="900"></label><label class="suite-check"><input id="f-visible" type="checkbox"> Im Stream sichtbar</label><button id="f-save" class="primary">Lüfter speichern</button><button id="f-delete">Entfernen</button></div></div></article>
  <div class="suite-curves">
   <article class="suite-panel"><h3>Lüfterkurven</h3><label>Vorhandene Kurve<select id="f-curves"></select></label><div class="suite-row"><button id="f-new-curve">Eigene Kurve erstellen</button><button id="f-duplicate-curve">Als Kopie bearbeiten</button><button id="f-export-curve">Kurve exportieren</button></div><svg id="f-graph" class="suite-curve-svg" viewBox="0 0 600 250" role="img" aria-label="Lüfterkurve: Temperatur gegen Lüfterleistung"></svg><div class="suite-status">Hier bearbeitest du Kurvenentwürfe. Die Lüfter werden weiterhin von iCUE gesteuert.</div><div class="suite-row"><button id="f-copy-curve">Wertetabelle kopieren</button><button id="f-open-icue">iCUE öffnen</button></div><p class="suite-help">In iCUE unter Kühlung eine eigene Kurve erstellen und die Temperatur- und Prozentwerte eintragen. Anschließend den gewünschten Lüftern zuweisen. Der JSON-Export ist ein Batto-Kurvenentwurf, kein iCUE-Profil.</p></article>
@@ -245,6 +248,7 @@
 <link rel="stylesheet" href="./jarvis-customization.css">
 <script src="./jarvis-customization.js"></script>
 <script src="./suite.js"></script>
+<script src="./fan-control-ui.js"></script>
 <script src="./rgb-ui.js"></script>
 <script src="./dual-stream.js"></script>
 <script src="./touch-deck.js"></script>

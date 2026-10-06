@@ -9,6 +9,12 @@ const broadcast=(channel,value)=>{for(const w of BrowserWindow.getAllWindows())i
 function checkSender(e){let file='';try{file=fileURLToPath(e.senderFrame.url);}catch{}if(path.resolve(file)!==path.resolve(__dirname,'renderer/index.html'))throw Error('Diese Bedienoberfläche ist nicht berechtigt.');}
 function handle(name,fn){ipcMain.handle('suite:'+name,async(e,value)=>{checkSender(e);if(!runtime)throw Error('Batto 3-in-1 startet noch.');return fn(value);});}
 handle('state',()=>runtime.snapshot());
+handle('fan-control-state',()=>runtime.fanControl.snapshot());
+handle('fan-control-refresh',()=>runtime.fanControl.inspect());
+handle('fan-control-enable',value=>{if(typeof value?.enabled!=='boolean')throw Error('Bitte den Lüftermodus ein- oder ausschalten.');return runtime.fanControl.enable(value.enabled);});
+handle('fan-control-manual',value=>runtime.fanControl.setManual(value));
+handle('fan-control-curve',value=>runtime.fanControl.setCurve(value));
+handle('fan-control-link',value=>{const links={fancontrol:'https://github.com/Rem0o/FanControl.Releases',corsair:'https://github.com/EvanMulawski/FanControl.CorsairLink',asus:'https://github.com/Karmel0x/AsusFanControl'};const url=links[value?.kind];if(!url)throw Error('Unbekannte Lüfterhilfe.');return shell.openExternal(url);});
 handle('rgb-start',()=>runtime.rgb.openUi());
 handle('rgb-state',()=>runtime.rgb.snapshot());
 handle('rgb-stop',()=>runtime.rgb.stop());
@@ -44,7 +50,7 @@ handle('plugin',()=>{const file=path.join(app.isPackaged?process.resourcesPath:p
 handle('forget-memory',()=>{runtime.jarvis.memory=[];runtime.jarvis.save('jarvis-memory.json',[]);return {ok:true};});
 app.whenReady().then(async()=>{
  const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..');
- runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
+ runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),desktopFanRoot:path.join(resources,app.isPackaged?'DesktopFanControl':'components/desktop-fan-control/publish'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
  runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));

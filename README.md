@@ -1,4 +1,12 @@
-# Batto 3-in-1 · 1.14.4
+# Batto 3-in-1 · 1.15.0
+
+## Optionale PC-Lüftersteuerung · 1.15.0
+
+Unter **PC & iCUE Lüfter → PC-Lüftersteuerung** erkennt Batto das Mainboard mit Hersteller und Modell sowie Desktop- oder Notebook-Gehäuse. Die eigene Steuerung ist bei jedem Start **aus**. Auf unterstützten ASUS-/MSI-Desktop-Mainboards lassen sich eindeutig bezeichnete CPU-, Gehäuse- und Systemlüfteranschlüsse nach dem bewussten Einschalten einzeln mit **30–100 %** übernehmen. Temperaturkurven benötigen einen nachweislich aktuellen Temperaturdienst; mit dem enthaltenen Mainboardtreiber sind sie derzeit gesperrt. **Anwenden** benötigt die Bestätigung, dass am ausgewählten Anschluss ein Lüfter und keine Pumpe hängt. Das Einschalten allein verändert keine Lüfterleistung. **Aus** gibt die von Batto übernommenen Anschlüsse mit einer Treiberanforderung an die Hardware-Regelung zurück; die tatsächliche Rückgabe wird nicht physisch bestätigt. Es schaltet Lüfter nicht ab.
+
+Der separate Mainboarddienst verwendet LibreHardwareMonitor 0.9.6 und setzt einen bereits eingerichteten PawnIO-Treiber und Administratorrechte voraus. Fehlende Voraussetzungen und nicht sicher zugeordnete Anschlüsse werden gemeldet. Notebook-, GPU-, Pumpen- und Corsair-USB-Steuerungen werden von diesem Dienst nicht übernommen. NCT6683/6686/6687-Controller sind wegen eines Rückgabefehlers in der Bibliothek ausgeschlossen. Neue Leistungswerte werden nicht automatisch nach einem Neustart wieder angewendet. Der enthaltene Treiber bestätigt keine Messzeitpunkte, weshalb seine Temperaturen keine Kurven freigeben. Der vorbereitete Kurvenmotor fordert bei veralteten bestätigten Messwerten 100 % an; bei Verbindungsverlust versucht der Dienst die Hardware-Regelung wiederherzustellen. Ein fehlgeschlagener Rückgabeversuch wird als Fehler angezeigt.
+
+Der verlinkte **AsusFanControl**-Treiber ist für ASUS-Notebooks ausgelegt und wird deshalb nicht auf Desktop-Mainboards geladen. **Fan Control / CorsairLink** bleibt eine getrennte, optionale Einrichtung über die offiziellen Projektlinks. CorsairLink verlangt das Beenden von iCUE und Corsair.Service und kann Beleuchtung sowie Controller-Modi ändern. Batto lädt dieses Plugin nicht und beendet keine Herstellerprogramme. Die bestehende iCUE-/RGB-Steuerung bleibt erhalten. Die Erkennung eines ASUS-/MSI-Mainboards allein bestätigt keine steuerbaren Lüfteranschlüsse.
 
 ## RGB laden und L-Connect-Vorschauimport · 1.14.4
 
@@ -14,7 +22,7 @@ Der [Projektauftrag vom 6. Oktober 2026](PROJEKTAUFTRAG-2026-10-06.md) hält die
 
 Unter **Einstellungen → Hilfe** gibt es 26 durchsuchbare Themen von A bis Z mit Bedienwegen, Voraussetzungen und Grenzen. Die RGB-Schaltfläche **RGB erneut laden** lädt auch bei gleicher Dienstadresse erneut und zeigt Ladefehler an. In **Strimer-Kabel** bestätigt **Vorschaueffekt bestätigen** den lokalen Entwurf, ohne Geräte oder Zonen abzuwählen. **Auf dieses Kabel anwenden** sendet nur nach ausdrücklicher Bedienung an ein erkanntes, direkt unterstütztes ganzes Kabel. Kabelentwürfe und die Wireless-Kabelwahl bleiben über wechselnde Dienstports hinweg erhalten.
 
-Die Prozessprüfung fand keinen eingebauten Mechanismus zum Pausieren fremder Software. Die Ursache der gemeldeten SystemSettings-Pause ist weiterhin unbelegt. Corsair benötigt derzeit iCUE; Lüfterkurven sind Entwürfe. L-Connect bleibt für nicht ersetzte Funktionen und Einrichtung erforderlich.
+Die Prozessprüfung fand keinen eingebauten Mechanismus zum Pausieren fremder Software. Die Ursache der gemeldeten SystemSettings-Pause ist weiterhin unbelegt. Corsair benötigt derzeit iCUE; seine Lüfterkurven im bisherigen Editor sind Entwürfe. Die optionale Mainboardsteuerung ist getrennt. L-Connect bleibt für nicht ersetzte Funktionen und Einrichtung erforderlich.
 
 
 ## RGB-Oberfläche · 1.14.2

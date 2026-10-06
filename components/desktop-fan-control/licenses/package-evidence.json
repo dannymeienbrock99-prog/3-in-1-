@@ -1,0 +1,14 @@
+[
+  {
+    "File": "LibreHardwareMonitor-v0.9.6-source.zip",
+    "SHA256": "44a5f8bbf5698a8ccb866568dc9118c27e353ff8989c96faa6a4f1d423afce5b"
+  },
+  {
+    "File": "PawnIO.Modules-0.1.6-source.zip",
+    "SHA256": "647ed7c68c974b5763a0b3ddd52ea52c4d4b6b68f9226397839482a29a521328"
+  },
+  {
+    "File": "librehardwaremonitorlib.0.9.6.nupkg",
+    "SHA256": "60db5e0d9135f4658b385cae139d3b9eaeac0a8e867d322d20b5dbe4c4039197"
+  }
+]

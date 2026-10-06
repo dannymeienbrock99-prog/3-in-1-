@@ -7,6 +7,7 @@ python scripts/prepare-virtualcam.py; Check-Exit
 if (-not (Test-Path jarvis/python/python.exe) -or -not (Test-Path jarvis/models/whisper-small/model.bin)) { throw 'Sprachpaket fehlt. Mit Python 3.12 und -PrepareVoice vorbereiten.' }
 & ./jarvis/python/python.exe -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 & ./scripts/prepare-rgb.ps1
+& ./components/desktop-fan-control/build.ps1
 dotnet publish components/fanatlas-src/FanAtlas/FanAtlas.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet publish components/dual-stream/DualStreamHost.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet run --project components/dual-stream-registration-tests/RegistrationTests.csproj -c Release; Check-Exit
@@ -39,6 +40,7 @@ npm run test:streamerbot; Check-Exit
 node --test test/dual-stream*.test.cjs test/obs-*.test.cjs test/scene-groups.test.cjs; Check-Exit
 npm run test:core; Check-Exit
 node --test test/fan-*.test.cjs test/normal-fan-overlay.test.cjs; Check-Exit
+node --test test/desktop-fan-control.test.cjs test/fan-control-integration.test.cjs; Check-Exit
 node --test test/rgb-service.test.cjs; Check-Exit
 node --test test/connector-lifecycle.test.cjs test/settings-import-startup.test.cjs test/youtube-lifecycle.test.cjs test/twitch-popout-lifecycle.test.cjs test/presentation-startup.test.cjs; Check-Exit
 $env:BATTO_DECK_TEST_OUTPUT = Join-Path $PSScriptRoot 'work/deck-native-check'
@@ -57,5 +59,5 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.14.4.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.15.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
 }

@@ -1,12 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { KingstonServiceClient, KingstonCodec, buildKingstonEffect, kingstonNativeEffects, validateKingstonServiceIdentity } from '../server/kingston-service.mjs';
+import { KingstonCodec as InProcessKingstonCodec } from '../server/kingston-codec.mjs';
+import { integratedClients } from '../server/in-process-lighting.mjs';
 
-const helper = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../native-kingston/bin/PRISM-KingstonCodec.exe');
-const hasCodec = process.platform === 'win32' && existsSync(helper);
 const proof = { serviceName: 'FuryController_Service', servicePath: '"C:\\Program Files (x86)\\Kingston\\FURYCTRL_SDK\\FuryController_Service.exe"',
   processPath: 'C:\\Program Files (x86)\\Kingston\\FURYCTRL_SDK\\FuryController_Service.exe', processId: 2345,
   startTime: '2026-10-04T10:00:00Z', signatureStatus: 'Valid', signer: 'Kingston Technology Company, Inc.',
@@ -16,7 +13,7 @@ const slot = index => ({ index, manufac: 'KingstonFury_Beast_DDR5', brand: 'King
   part_number: 'KF556C40BBA-8', type: 2, api_ver: 2, model_id: 1 });
 
 // A stand-in codec keeps schema tests runnable without a Windows build. A
-// separate Windows test below exercises real Rijndael-256 encrypted messages.
+// separate test below exercises real in-process Rijndael-256 messages.
 class FixtureCodec {
   async encrypt(data) { return 'fixture:' + Buffer.from(data).toString('base64'); }
   async decrypt(data) {
@@ -27,8 +24,8 @@ class FixtureCodec {
 }
 
 function fixture({ dram = { slot_0: slot(0), slot_1: slot(1), slot_2: slot(2), slot_3: slot(3) }, reply = root => root,
-  type = 2, api = 2, verify = async () => identity, real = false, timeout = 1000 } = {}) {
-  const clientCodec = real ? new KingstonCodec() : new FixtureCodec();
+  type = 2, api = 2, verify = async () => identity, real = false, codec, timeout = 1000 } = {}) {
+  const clientCodec = codec ?? (real ? new KingstonCodec() : new FixtureCodec());
   const serverCodec = real ? new KingstonCodec() : new FixtureCodec();
   const requests = [], frames = [];
   let socket;
@@ -59,6 +56,19 @@ function fixture({ dram = { slot_0: slot(0), slot_1: slot(1), slot_2: slot(2), s
     createSocket: url => { socket = new FixtureSocket(url); return socket; }, timeout });
   return { client, requests, frames, get socket() { return socket; }, close() { client.close(); serverCodec.close(); } };
 }
+
+const tick = () => new Promise(resolve => setImmediate(resolve));
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+class DeferredCodec extends FixtureCodec {
+  constructor() { super(); this.held = new Map(); }
+  hold(label) { const wait = deferred(); this.held.set(label, wait); return wait; }
+  decrypt(data) { return this.held.has(data) ? this.held.get(data).promise : super.decrypt(data); }
+}
+const frame = root => 'fixture:' + Buffer.from(JSON.stringify({ root })).toString('base64');
 
 test('Kingston requires the real local service image, signature and protected installation root', () => {
   assert.equal(identity.verified, true);
@@ -168,7 +178,31 @@ test('Kingston refuses updater/service APIs, unexpected acknowledgements and sil
   } finally { silent.close(); }
 });
 
-test('real Windows Rijndael-256 codec roundtrips UTF-8, changes entropy and rejects malformed data', { skip: !hasCodec }, async () => {
+test('default Kingston client uses the in-process codec without a helper executable', () => {
+  const client = new KingstonServiceClient();
+  assert.equal(KingstonCodec, InProcessKingstonCodec);
+  assert.ok(client.codec instanceof InProcessKingstonCodec);
+  assert.equal('child' in client.codec, false);
+  client.close();
+});
+
+test('integrated Kingston identity verification uses only the in-process inventory provider and validates its proof',async()=>{
+  const calls=[];let result=proof;
+  const clients=integratedClients({request:async(provider,command)=>{calls.push({provider,command});return result;}});
+  const client=clients.find(value=>value.backend==='kingston');
+  assert.ok(client instanceof KingstonServiceClient);
+  assert.ok(client.codec instanceof InProcessKingstonCodec);
+  assert.deepEqual(calls,[],'creating adapters does not query devices or services');
+  assert.deepEqual(await client.verifyService(),identity);
+  result={unavailable:true};
+  await assert.rejects(client.verifyService(),{code:'KINGSTON_UNAVAILABLE'});
+  result={...proof,signer:'Unknown Publisher'};
+  await assert.rejects(client.verifyService(),{code:'KINGSTON_SERVICE_UNVERIFIED'});
+  assert.deepEqual(calls,Array(3).fill({provider:'inventory',command:'kingston'}));
+  client.close();
+});
+
+test('in-process Rijndael-256 codec roundtrips UTF-8, changes entropy and rejects malformed data', async () => {
   const codec = new KingstonCodec();
   try {
     const plain = JSON.stringify({ root: { api: 'get_version', name: 'FURY · Prüfung 🌈' } });
@@ -183,7 +217,7 @@ test('real Windows Rijndael-256 codec roundtrips UTF-8, changes entropy and reje
   } finally { codec.close(); }
 });
 
-test('actual Rijndael-encrypted fixture handshake and four sparse-slot acknowledgements', { skip: !hasCodec }, async () => {
+test('actual in-process Rijndael-encrypted fixture handshake and four sparse-slot acknowledgements', async () => {
   const f = fixture({ real: true, dram: { slot_0: slot(0), slot_2: slot(2), slot_5: slot(5), slot_7: slot(7) }, timeout: 2000 });
   try {
     await f.client.connect();
@@ -191,5 +225,106 @@ test('actual Rijndael-encrypted fixture handshake and four sparse-slot acknowled
     assert.deepEqual(f.requests.filter(request => request.api === 'set_dram_led').map(request => Object.keys(request.ctrl_settings_ddr5)), [['slot_0'], ['slot_2'], ['slot_5'], ['slot_7']]);
     assert.ok(f.frames.every(frame => /^[A-Za-z\d+/]+=*$/.test(frame) && !frame.includes('static_color')));
     assert.equal(f.socket.error, undefined);
+  } finally { f.close(); }
+});
+
+for (const failDecrypt of [false, true]) test(`late ${failDecrypt ? 'failed' : 'successful'} decrypt from the previous socket cannot close or acknowledge a reconnect`, async () => {
+  const codec = new DeferredCodec();
+  let holdReplies = false;
+  const f = fixture({ codec, reply: root => holdReplies ? null : root });
+  try {
+    await f.client.connect();
+    const oldSocket = f.socket;
+    holdReplies = true;
+    const oldRequest = f.client.request('get_version');
+    const oldRejected = assert.rejects(oldRequest, { code: 'KINGSTON_DISCONNECTED' });
+    await tick();
+    const wait = codec.hold('old-frame');
+    oldSocket.dispatchEvent(new MessageEvent('message', { data: 'old-frame' }));
+    f.client.close(); await oldRejected;
+    holdReplies = false; await f.client.connect();
+    const currentSocket = f.socket;
+    holdReplies = true;
+    const currentRequest = f.client.request('get_version');
+    await tick();
+    const currentPending = f.client.pending;
+    if (failDecrypt) wait.reject(Object.assign(Error('old canceled decode'), { code: 'KINGSTON_DISCONNECTED' }));
+    else wait.resolve(JSON.stringify({ root: { api: 'get_version', status: '0', version: 'stale' } }));
+    await tick();
+    assert.equal(f.client.socket, currentSocket);
+    assert.equal(f.client.pending, currentPending);
+    assert.equal(f.client.connected, true);
+    currentSocket.dispatchEvent(new MessageEvent('message', { data: frame({ api: 'get_version', status: '0', version: 'current' }) }));
+    assert.equal((await currentRequest).version, 'current');
+  } finally { f.close(); }
+});
+
+test('delayed duplicate acknowledgement cannot settle the next request with the same API on one socket', async () => {
+  const codec = new DeferredCodec();
+  let holdReplies = false;
+  const f = fixture({ codec, reply: root => holdReplies ? null : root });
+  try {
+    await f.client.connect(); holdReplies = true;
+    const first = f.client.request('get_version');
+    const second = f.client.request('get_version');
+    await tick();
+    const duplicate = codec.hold('duplicate-frame');
+    f.socket.dispatchEvent(new MessageEvent('message', { data: 'duplicate-frame' }));
+    f.socket.dispatchEvent(new MessageEvent('message', { data: frame({ api: 'get_version', status: '0', version: 'first' }) }));
+    assert.equal((await first).version, 'first'); await tick();
+    const secondPending = f.client.pending;
+    duplicate.resolve(JSON.stringify({ root: { api: 'get_version', status: '0', version: 'duplicate' } }));
+    await tick();
+    assert.equal(f.client.pending, secondPending);
+    assert.equal(f.client.connected, true);
+    f.socket.dispatchEvent(new MessageEvent('message', { data: frame({ api: 'get_version', status: '0', version: 'second' }) }));
+    assert.equal((await second).version, 'second');
+  } finally { f.close(); }
+});
+
+test('queued requests from a closed session never send on the new connection', async () => {
+  let holdReplies = false;
+  const f = fixture({ reply: root => holdReplies ? null : root });
+  try {
+    await f.client.connect(); holdReplies = true;
+    const first = f.client.request('get_version');
+    const second = f.client.request('get_dram_info');
+    const rejected = Promise.all([assert.rejects(first, { code: 'KINGSTON_DISCONNECTED' }), assert.rejects(second, { code: 'KINGSTON_DISCONNECTED' })]);
+    await tick(); const requestCount = f.requests.length;
+    f.client.close(); holdReplies = false;
+    await f.client.connect(); await rejected;
+    assert.equal(f.requests.length, requestCount + 4);
+    assert.equal(f.client.connected, true);
+  } finally { f.close(); }
+});
+
+test('superseded asynchronous service verification cannot replace or close the new connection', async () => {
+  const verification = deferred();
+  let checks = 0;
+  const f = fixture({ verify: () => ++checks === 1 ? verification.promise : Promise.resolve(identity) });
+  try {
+    const oldConnect = f.client.connect();
+    const oldRejected = assert.rejects(oldConnect, { code: 'KINGSTON_DISCONNECTED' });
+    await f.client.connect();
+    const currentSocket = f.socket;
+    verification.resolve({ ...identity, processId: 7777 }); await oldRejected;
+    assert.equal(f.client.socket, currentSocket);
+    assert.equal(f.client.identity, identity);
+    assert.equal(f.client.connected, true);
+  } finally { f.close(); }
+});
+
+test('an effect verification completed after reconnect cannot write the old device to the new service', async () => {
+  const verification = deferred();
+  let checks = 0;
+  const f = fixture({ verify: () => ++checks === 2 ? verification.promise : Promise.resolve(identity) });
+  try {
+    await f.client.connect();
+    const effect = f.client.applyNativeEffect(f.client.devices[0], 'static_color');
+    const rejected = assert.rejects(effect, { code: 'DEVICE_LIST_CHANGED' });
+    f.client.close(); await f.client.connect();
+    verification.resolve(identity); await rejected;
+    assert.equal(f.requests.filter(request => request.api === 'set_dram_led').length, 0);
+    assert.equal(f.client.connected, true);
   } finally { f.close(); }
 });

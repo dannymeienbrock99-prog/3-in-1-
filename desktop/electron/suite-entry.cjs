@@ -4,6 +4,8 @@ const path=require('node:path');
 // Own app identity, settings and single-instance lock; never open the original data directory.
 app.setName('Batto 3-in-1');
 app.setPath('userData',process.env.BATTO_OBS_DATA||path.join(app.getPath('appData'),'Batto3in1-v247'));
+async function startSuite(){
+await require('../src/services/admin-restart.cjs').awaitPreviousInstance(process.argv);
 require('./bootstrap.cjs');
 require('../src/suite-bootstrap.cjs');
 require('../src/dual-stream/bootstrap.cjs');
@@ -15,3 +17,5 @@ if(process.argv.includes('--dual-stream-test')&&process.env.BATTO_TEST_INSTANCE=
 if(process.argv.includes('--touch-deck-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./touch-deck-test.cjs');
 if(process.argv.includes('--touch-advanced-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./touch-advanced-test.cjs');
 if(process.argv.includes('--jarvis-control-test')&&process.env.BATTO_TEST_INSTANCE==='1')require('./jarvis-control-test.cjs');
+}
+startSuite().catch(error=>{console.error('Batto-Neustart:',error.message);require('electron').dialog.showErrorBox('Batto konnte nicht starten',error.message);app.exit(1);});

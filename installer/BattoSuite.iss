@@ -7,7 +7,7 @@
 [Setup]
 AppId={{2B151B53-163C-489D-80A2-B046578C2906}
 AppName=Batto 3-in-1
-AppVersion=1.15.2
+AppVersion=1.16.0
 AppPublisher=Crazy_Batto
 AppPublisherURL=https://github.com/dannymeienbrock99-prog/3-in-1-
 DefaultDirName={localappdata}\Programs\CrazyBatto\BattoSuite
@@ -17,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#OutputPath}
-OutputBaseFilename=Batto-3-in-1-Setup-1.15.2
+OutputBaseFilename=Batto-3-in-1-Setup-1.16.0
 SetupIconFile=..\desktop\src\assets\app-icon.ico
 UninstallDisplayIcon={app}\Batto 3-in-1.exe
 WizardStyle=modern
@@ -41,6 +41,13 @@ Source: "{#AppSource}\*"; DestDir: "{app}"; Excludes: "\resources\VirtualCam\x64
 ; These versioned DLLs can remain loaded by a camera consumer during an update.
 ; Skip identical files; still install newer versions or changed same-version files.
 Source: "{#AppSource}\resources\VirtualCam\x64\*.dll"; DestDir: "{app}\resources\VirtualCam\x64"; Flags: replacesameversion
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\resources\PRISM\dist\assets"
+; Remove only obsolete bundled Batto device executables from earlier versions.
+Type: filesandordirs; Name: "{app}\resources\DesktopFanControl"
+Type: filesandordirs; Name: "{app}\resources\PRISM\native\bin"
+Type: filesandordirs; Name: "{app}\resources\PRISM\native-lianli\bin"
+Type: filesandordirs; Name: "{app}\resources\PRISM\native-kingston\bin"
 [Icons]
 Name: "{group}\Batto 3-in-1"; Filename: "{app}\Batto 3-in-1.exe"; IconFilename: "{app}\resources\app-icon.ico"
 Name: "{group}\Kurzanleitung"; Filename: "{app}\resources\Extras\ANLEITUNG.html"

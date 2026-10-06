@@ -1,8 +1,11 @@
-# Batto 3-in-1 · Schnellstart 1.15.0
+# Batto 3-in-1 · Schnellstart 1.16.0
+
+RGB und Mainboardlüfter sind direkt in Batto integriert, ohne zusätzliche Steuerhelfer. Für Mainboardlüfter und die bestätigte L-Connect-Pause Batto als Administrator starten. Der optionale Modus bleibt nach jedem Start aus. Die in README und der HTML-Anleitung beschriebenen Voraussetzungen und Grenzen gelten weiterhin.
+
 
 ## PC-Lüftersteuerung - 1.15.0
 
-Unter **PC & iCUE Lüfter** den Mainboard-Namen prüfen. Der Modus startet immer aus. Unterstützte ASUS-/MSI-Desktop-Anschlüsse lassen sich nach bewusster Auswahl mit 30–100 % übernehmen. Temperaturkurven bleiben mit diesem Treiber gesperrt, da er keine bestätigten Messzeitpunkte liefert. **Anwenden** benötigt die Bestätigung eines tatsächlichen Lüfters ohne Pumpe. **Aus** beendet Batto-Schreibzugriffe und fordert Hardware-Regelung an; tatsächliche Drehzahl prüfen. Ein bereits eingerichteter PawnIO-Treiber und Administratorrechte sind Voraussetzung. Corsair bleibt über iCUE geregelt; CorsairLink wird separat über den offiziellen Projektlink eingerichtet und kann bei Übernahme RGB ändern. AsusFanControl ist für Notebooks und wird nicht geladen.
+Unter **PC & iCUE Lüfter** den Mainboard-Namen prüfen. Der Modus startet immer aus. Unterstützte ASUS-/MSI-Desktop-Anschlüsse lassen sich nach bewusster Auswahl mit 30–100 % übernehmen. Temperaturkurven bleiben mit diesem Treiber gesperrt, da er keine bestätigten Messzeitpunkte liefert. **Anwenden** benötigt die Bestätigung eines tatsächlichen Lüfters ohne Pumpe. **Aus** beendet Batto-Schreibzugriffe und fordert Hardware-Regelung an; tatsächliche Drehzahl prüfen. Ein bereits eingerichteter PawnIO-Treiber und Administratorrechte sind Voraussetzung. Corsair bleibt über iCUE geregelt; Die Corsair-SDK-Anbindung setzt iCUE voraus. Die Lüftersteuerung startet keinen separaten Controller.
 
 ## Hilfe und RGB-Kabelvorschau - 1.14.4
 

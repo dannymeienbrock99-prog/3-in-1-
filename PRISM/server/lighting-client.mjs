@@ -6,15 +6,17 @@ import { LianLiWirelessClient } from './lianli-wireless.mjs';
 import { BridgeError, publicController } from './openrgb.mjs';
 import { assertDeviceAllowed } from './device-policy.mjs';
 import { StrimerControl } from './strimer-control.mjs';
+import { integratedClients, InProcessStrimerControl } from './in-process-lighting.mjs';
 
 /** Independent sessions keep a missing manufacturer's service from hiding other devices. */
 export class LightingClient extends EventEmitter {
-  constructor({ clients, strimerControl } = {}) {
+  constructor({ clients, strimerControl, hardware } = {}) {
     super();
-    this.clients = clients || [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()];
+    this.clients = clients || (hardware ? integratedClients(hardware) : [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()]);
     this.backend = 'windows'; this.host = null; this.port = null; this.protocol = null;
     this.devices = []; this.details = {}; this.routes = new Map(); this.errors = new Map(); this.invalid = false;
-    this.strimerControl = strimerControl ?? new StrimerControl();
+    this.hardware = hardware; this.controlQueue = Promise.resolve(); this.quitting = false; this.hardwareQuitPromise = null;
+    this.strimerControl = strimerControl ?? (hardware ? new InProcessStrimerControl(hardware) : new StrimerControl());
     this.strimerControl.on('lost', error => {
       const provider=this.wirelessProvider();
       if(!provider)return;
@@ -66,24 +68,75 @@ export class LightingClient extends EventEmitter {
   }
   async connect() { return this.scan(); }
   wirelessProvider() { const values=this.clients.filter(client=>client instanceof LianLiWirelessClient||client.backend==='lianli-wireless');return values.length===1?values[0]:null; }
-  async setStrimerControl(enabled, confirmed=false) {
+  setStrimerControl(enabled, confirmed=false) {
+    if (typeof enabled !== 'boolean') return Promise.reject(new BridgeError('Bitte die Strimer-Steuerung ein- oder ausschalten.','INVALID_STRIMER_CONTROL',400));
+    if (enabled && this.quitting) return Promise.reject(new BridgeError('Batto gibt die Geräte gerade zum Beenden zurück. Eine neue Übernahme ist gesperrt.','RGB_QUITTING',409));
+    const operation = this.controlQueue.then(() => this.setStrimerControlInternal(enabled,confirmed));
+    this.controlQueue = operation.catch(() => {});
+    return operation;
+  }
+  async setStrimerControlInternal(enabled, confirmed=false) {
     const provider=this.wirelessProvider();
     if(!provider)throw new BridgeError('Die Strimer-Wireless-Anbindung ist nicht eindeutig verfügbar.','WIRELESS_PROVIDER_UNAVAILABLE',422);
-    if(enabled && confirmed!==true)throw new BridgeError('Bestätige zuerst die vorübergehende Pause der L-Connect-Dienste.','WIRELESS_CONSENT_REQUIRED',400);
+    if(enabled && confirmed!==true && this.strimerControl.status.requiresServicePause!==false)throw new BridgeError('Bestätige zuerst die vorübergehende Pause der L-Connect-Dienste.','WIRELESS_CONSENT_REQUIRED',400);
     if(enabled && this.strimerControl.status.enabled && this.strimerControl.status.phase==='active')return this.devices.map(publicController);
     const ids=this.devices.filter(device=>this.routes.get(device.id)===provider).map(device=>device.id);
     if(ids.length)this.emit('providerDisconnected',{deviceIds:ids,message:'Die Strimer-Steuerung wird übergeben.'});
     await provider.close();this.refresh();
     if(enabled) {
       try {
-        await this.strimerControl.start();provider.setLeaseOwner?.({pid:process.pid,startTicks:this.strimerControl.ownerStartUtcTicks});const devices=await this.refreshStrimer();
-        if(!provider.connected || !provider.devices.length)throw new BridgeError('Batto konnte trotz Übergabe keine Strimer-Kabel öffnen. L-Connect wird wieder gestartet.','WIRELESS_HANDOFF_NO_CABLES',422);
+        await this.strimerControl.start(confirmed);if(!this.strimerControl.inProcess)provider.setLeaseOwner?.({pid:process.pid,startTicks:this.strimerControl.ownerStartUtcTicks});const devices=await this.refreshStrimer();
+        if(!provider.connected || !provider.devices.length)throw new BridgeError(this.strimerControl.inProcess?'Batto kann den Wireless-Controller noch nicht öffnen. Der gemeldete Zugriffsfehler muss zuerst behoben werden.':'Batto konnte trotz Übergabe keine Strimer-Kabel öffnen. L-Connect wird wieder gestartet.','WIRELESS_HANDOFF_NO_CABLES',422);
         return devices;
       } catch(error) {
         try { await provider.close(); } finally { provider.setLeaseOwner?.(null);try { await this.strimerControl.stop(); } finally { this.refresh(); } }throw error;
       }
     }
     provider.setLeaseOwner?.(null);try { await this.strimerControl.stop(); } finally { this.refresh(); }return this.devices.map(publicController);
+  }
+  prepareHardwareQuit() {
+    if (this.hardwareQuitPromise) return this.hardwareQuitPromise;
+    // Freeze new takeovers synchronously, before waiting for an accepted start
+    // whose native service pause may already precede its JavaScript reply.
+    this.quitting = true;
+    const operation = this.controlQueue.then(async () => {
+      let lease = await this.nativeControlLease();
+      const status = this.strimerControl.status;
+      if (this.leaseNeedsRelease(lease) || status.enabled || ['starting','restoring','active','error'].includes(status.phase)) {
+        if (lease) this.strimerControl.updateLease?.(lease);
+        if (this.wirelessProvider()) await this.setStrimerControlInternal(false);
+        else await this.strimerControl.stop(); // No device list is needed to return an owned service lease.
+        lease = await this.nativeControlLease();
+      }
+      if (this.leaseNeedsRelease(lease) || this.strimerControl.status.enabled
+        || ['starting','restoring','active'].includes(this.strimerControl.status.phase))
+        throw new BridgeError('Die Rückgabe der Strimer-Steuerung wurde nicht vollständig bestätigt. Bitte erneut ausschalten.','WIRELESS_RESTORE_FAILED',422);
+    });
+    this.controlQueue = operation.catch(() => {});
+    this.hardwareQuitPromise = operation.catch(error => {
+      this.quitting = false; // Preserve the same client and lease for an OFF retry.
+      throw error;
+    }).finally(() => { this.hardwareQuitPromise = null; });
+    return this.hardwareQuitPromise;
+  }
+  async nativeControlLease() {
+    // A missing, never-loaded engine cannot own a native lease. Once loaded,
+    // failure to inspect that engine must prevent shutdown rather than guess.
+    if (!this.hardware || (!this.hardware.component && this.hardware.available === false)) return null;
+    let lease;
+    try { lease = await this.hardware.request('wireless','control-status'); }
+    catch (error) {
+      if (!error.state || typeof error.state.active !== 'boolean' || typeof error.state.released !== 'boolean') throw error;
+      lease = error.state;
+    }
+    if (!lease || typeof lease.active !== 'boolean' || typeof lease.released !== 'boolean'
+      || typeof lease.retryRequired !== 'boolean' || !Array.isArray(lease.remaining)
+      || lease.remaining.some(value => typeof value !== 'string'))
+      throw new BridgeError('Der tatsächliche Strimer-Freigabestatus konnte nicht bestätigt werden.','WIRELESS_INVALID_DATA',502);
+    return lease;
+  }
+  leaseNeedsRelease(lease) {
+    return !!lease && (lease.active || lease.released !== true || lease.retryRequired || lease.remaining.length > 0);
   }
   async scan() {
     const results = await Promise.allSettled(this.clients.map(client => client.connected ? client.scan() : client.connect()));

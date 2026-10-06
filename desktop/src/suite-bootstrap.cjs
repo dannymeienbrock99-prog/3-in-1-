@@ -14,6 +14,22 @@ handle('fan-control-refresh',()=>runtime.fanControl.inspect());
 handle('fan-control-enable',value=>{if(typeof value?.enabled!=='boolean')throw Error('Bitte den Lüftermodus ein- oder ausschalten.');return runtime.fanControl.enable(value.enabled);});
 handle('fan-control-manual',value=>runtime.fanControl.setManual(value));
 handle('fan-control-curve',value=>runtime.fanControl.setCurve(value));
+let restartingAsAdmin=false;
+handle('hardware-admin-restart',async()=>{
+ if(restartingAsAdmin)throw Error('Der Neustart wird bereits vorbereitet.');
+ if(!app.isPackaged||process.platform!=='win32')throw Error('Der Administrator-Neustart ist in der installierten Windows-Version verfügbar.');
+ const check=()=>{if(runtime.getDual?.()?.running())throw Error('Beende zuerst die Kameraausgaben unter Dual Stream.');const fan=runtime.fanControl.snapshot();if(fan.enabled||fan.phase!=='off')throw Error('Schalte die PC-Lüftersteuerung vor dem Neustart aus.');const strimer=runtime.rgb.bridge?.client?.strimerControl?.status;if(strimer?.enabled||['starting','restoring','active'].includes(strimer?.phase))throw Error('Gib vor dem Neustart die Strimer-Steuerung zurück.');};
+ check();restartingAsAdmin=true;
+ try{
+  const result=await dialog.showMessageBox({type:'question',title:'Direkten Gerätezugriff freigeben',message:'Batto als Administrator neu starten?',detail:'Windows zeigt eine Freigabe für Batto. Dadurch kann Batto Mainboardlüfter direkt prüfen und die bestätigte Strimer-Übernahme ausführen. Die Steuerung bleibt nach dem Neustart aus.',buttons:['Batto neu starten','Abbrechen'],defaultId:0,cancelId:1});
+  if(result.response!==0)return {ok:false,canceled:true};check();
+  app.releaseSingleInstanceLock();
+  try{const launched=await require('./services/admin-restart.cjs').launchOwnAsAdministrator({executable:process.execPath,pid:process.pid});if(launched?.accepted!==true){app.requestSingleInstanceLock();return {ok:false,canceled:true};}}
+  catch(error){app.requestSingleInstanceLock();throw error;}
+  try{check();}catch(error){app.requestSingleInstanceLock();throw error;}
+  app.quit();return {ok:true,restarting:true};
+ }finally{restartingAsAdmin=false;}
+});
 handle('fan-control-link',value=>{const links={fancontrol:'https://github.com/Rem0o/FanControl.Releases',corsair:'https://github.com/EvanMulawski/FanControl.CorsairLink',asus:'https://github.com/Karmel0x/AsusFanControl'};const url=links[value?.kind];if(!url)throw Error('Unbekannte Lüfterhilfe.');return shell.openExternal(url);});
 handle('rgb-start',()=>runtime.rgb.openUi());
 handle('rgb-state',()=>runtime.rgb.snapshot());
@@ -50,10 +66,21 @@ handle('plugin',()=>{const file=path.join(app.isPackaged?process.resourcesPath:p
 handle('forget-memory',()=>{runtime.jarvis.memory=[];runtime.jarvis.save('jarvis-memory.json',[]);return {ok:true};});
 app.whenReady().then(async()=>{
  const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..');
- runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),desktopFanRoot:path.join(resources,app.isPackaged?'DesktopFanControl':'components/desktop-fan-control/publish'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
+ runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),hardwareRoot:app.isPackaged?path.join(resources,'BattoHardware'):path.resolve(resources,'../components/batto-hardware/publish'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
  runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));
 let closePromise;
 function close(){return closePromise||(closePromise=Promise.resolve().then(()=>runtime?.close()));}
-module.exports={close,onAcceptedEvent:event=>runtime?.jarvis.onEvent(event),onEvent:event=>{require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};
+async function releaseHardwareForQuit(){
+ if(!runtime)return;
+ try{
+  await runtime.fanControl.prepareHardwareQuit();
+  const bridge=runtime.rgb.bridge;
+  if(bridge?.client?.prepareHardwareQuit){bridge.engine.stop();if(bridge.engine.framePromise)await bridge.engine.framePromise.catch(()=>{});await bridge.client.prepareHardwareQuit();}
+ }catch(error){
+  runtime.fanControl.cancelHardwareQuit();
+  throw error;
+ }
+}
+module.exports={close,releaseHardwareForQuit,onAcceptedEvent:event=>runtime?.jarvis.onEvent(event),onEvent:event=>{require('./dual-stream/bootstrap.cjs').getService()?.overlayEvent(event);},onChat:batch=>{runtime?.jarvis.onChat(batch);for(const m of batch)require('./dual-stream/bootstrap.cjs').getService()?.overlayChat(m);},getRuntime:()=>runtime};

@@ -38,7 +38,7 @@ function confirmed(result,ids,effectId){
  if(received.length!==ids.length||new Set(received).size!==ids.length||ids.some(id=>!received.includes(id))||(effectId!==undefined&&result.effectId!==effectId))throw Error('Die RGB-Anwendung konnte nicht vollständig bestätigt werden.');
 }
 class RgbService{
- constructor({root,directory,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastCustomSettings=null;this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
+ constructor({root,directory,hardware,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,hardware,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastCustomSettings=null;this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
  softwareEffects(){
   const effects=Object.entries(EFFECT_NAMES).map(([id,name])=>({id,name})),ids=new Set(effects.map(effect=>effect.id));
   try{const supplied=JSON.parse(fs.readFileSync(path.join(this.root,'server/effect-catalog.json'),'utf8'));if(Array.isArray(supplied))for(const effect of supplied){if(effect&&typeof effect.id==='string'&&/^[a-z][a-z0-9]{0,63}$/.test(effect.id)&&typeof effect.name==='string'&&!ids.has(effect.id)){effects.push({id:effect.id,name:clean(effect.name)});ids.add(effect.id);}}}catch{}
@@ -59,7 +59,7 @@ class RgbService{
    let bridge;
    try{
     const factory=this.bridgeFactory||(await import(pathToFileURL(path.join(this.root,'server/index.mjs')).href)).createBridge;
-    bridge=factory({port:0,embedded:true,profileDirectory:this.directory});
+    bridge=factory({port:0,embedded:true,profileDirectory:this.directory,hardware:this.hardware});
     const address=await bridge.listen();
     if(this.closed){await this.dispose(bridge);throw Error('Die RGB-Steuerung ist geschlossen.');}
     this.bridge=bridge;this.url=`http://127.0.0.1:${address.port}/?embedded=1`;this.error='';

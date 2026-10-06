@@ -204,6 +204,58 @@ test('closing waits for an in-flight hardware command and rejects queued later w
   await assert.rejects(f.service.enable(true), /geschlossen/);
 });
 
+test('quit preflight finishes accepted manual and curve commands, blocks new commands synchronously, then releases', async () => {
+  let entered, release;
+  const enteredPromise = new Promise(resolve => entered = resolve), gate = new Promise(resolve => release = resolve);
+  let firstManual = true;
+  const f = fixture({ request: async command => { if (command === 'manual' && firstManual) { firstManual = false; entered(); await gate; } } });
+  await f.service.enable(true);
+  const first = f.service.setManual({ id: channel.id, duty: 50, fanConfirmed: true }); await enteredPromise;
+  const second = f.service.setManual({ id: channel.id, duty: 55, fanConfirmed: true });
+  const curve = f.service.setCurve({ id: channel.id, sensorId: sensor.id, points: [{ temperature: 30, duty: 40 }, { temperature: 80, duty: 100 }], fanConfirmed: true });
+  const preflight = f.service.prepareHardwareQuit(); assert.equal(preflight, f.service.prepareHardwareQuit());
+  assert.throws(() => f.service.cancelHardwareQuit(), /zuerst abgeschlossen/);
+  await assert.rejects(f.service.enable(true), /Beenden/);
+  await assert.rejects(f.service.setManual({ id: channel.id, duty: 65, fanConfirmed: true }), /Beenden/);
+  await assert.rejects(f.service.setCurve({ id: channel.id, sensorId: sensor.id, points: [{ temperature: 30, duty: 40 }, { temperature: 80, duty: 100 }], fanConfirmed: true }), /Beenden/);
+  assert(!f.calls.some(call => call.command === 'disable'));
+  release(); await first; await second; await curve; const state = await preflight;
+  assert.equal(state.enabled, false); assert.equal(state.phase, 'off'); assert.equal(f.service.native, null); assert.equal(f.service.closed, false);
+  assert.deepEqual(f.calls.map(call => call.command), ['start', 'scan', 'enable', 'manual', 'manual', 'curve', 'disable', 'close']);
+  await assert.rejects(f.service.enable(true), /Beenden/);
+  f.service.cancelHardwareQuit(); await f.service.enable(true); assert.equal(f.creations, 2); await f.service.close();
+});
+
+test('quit preflight waits for an accepted enable while the visible switch is still OFF', async () => {
+  let entered, release;
+  const enteredPromise = new Promise(resolve => entered = resolve), gate = new Promise(resolve => release = resolve);
+  const f = fixture({ request: async command => { if (command === 'enable') { entered(); await gate; } } });
+  const enabling = f.service.enable(true); await enteredPromise; assert.equal(f.service.snapshot().enabled, false);
+  const acceptedManual = f.service.setManual({ id: channel.id, duty: 55, fanConfirmed: true });
+  const preflight = f.service.prepareHardwareQuit();
+  await assert.rejects(f.service.enable(true), /Beenden/);
+  await assert.rejects(f.service.setManual({ id: channel.id, duty: 65, fanConfirmed: true }), /Beenden/);
+  release(); await enabling; await acceptedManual; await preflight;
+  assert.deepEqual(f.calls.map(call => call.command), ['start', 'scan', 'enable', 'manual', 'disable', 'close']);
+  assert.equal(f.service.snapshot().enabled, false); assert.equal(f.closes, 1); await f.service.close();
+});
+
+test('failed quit preflight permits explicit OFF retry and a fresh quit attempt without duplicate release writes', async () => {
+  const f = fixture({ close: async count => { if (count === 1) throw Error('Synthetic preflight close timeout'); } });
+  await f.service.enable(true); await f.service.setManual({ id: channel.id, duty: 55, fanConfirmed: true });
+  const failed = f.service.prepareHardwareQuit(); await assert.rejects(failed, /preflight close timeout/);
+  assert.equal(f.service.snapshot().enabled, true); assert.equal(f.service.closed, false);
+  await f.service.enable(false); assert.equal(f.calls.filter(call => call.command === 'disable').length, 1); assert.equal(f.closes, 2);
+  await f.service.enable(true);
+  const retry = f.service.prepareHardwareQuit(); assert.notEqual(retry, failed); await retry;
+  assert.equal(f.service.snapshot().enabled, false); assert.equal(f.closes, 3); await f.service.close();
+});
+
+test('idle quit preflight is harmless and canceling it leaves the service usable', async () => {
+  const f = fixture(); await f.service.prepareHardwareQuit(); assert.equal(f.creations, 0); assert.deepEqual(f.calls, []);
+  f.service.cancelHardwareQuit(); await f.service.enable(true); assert.equal(f.service.snapshot().enabled, true); await f.service.close();
+});
+
 test('late exit and telemetry from a released helper cannot change a newly enabled session', async () => {
   const sessions = [];
   const service = new DesktopFanService({ platform: 'win32', exists: () => true, readMetadata: async () => desktop,

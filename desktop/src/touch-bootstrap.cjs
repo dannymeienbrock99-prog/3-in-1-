@@ -105,5 +105,4 @@ ipcMain.handle('touch:action',async(event,{command,value}={})=>{
 });
 let closePromise;
 function close(){if(closePromise)return closePromise;closing=true;clearTimeout(visualTimer);closePromise=(async()=>{await deck?.close();await demand?.close();await host?.close();})();return closePromise;}
-app.on('before-quit',()=>{void close();});
 module.exports={getDeck,getExistingDeck:()=>deck,getDetachedWindow:windows.existing,close,...(process.env.BATTO_TEST_INSTANCE==='1'?{getPackages,getHost}:{} )};

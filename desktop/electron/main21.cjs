@@ -1069,7 +1069,11 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   if (quitting) return;
   quitting = true;
-  shutdown().finally(() => {shutdownComplete=true;app.quit();});
+  require('../src/suite-bootstrap.cjs').releaseHardwareForQuit().then(()=>shutdown().finally(() => {shutdownComplete=true;app.quit();})).catch(async error=>{
+    quitting=false;
+    try{await showMainWindow();}catch(restoreError){bridgeLog('error','Runtime','QUIT_WINDOW_RESTORE_FAILED',{message:restoreError.message});}
+    dialog.showErrorBox('Geräte konnten nicht zurückgegeben werden',error.message+'\nBatto bleibt geöffnet. Bitte die Steuerung erneut ausschalten und danach beenden.');
+  });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin'&&!gamingMode) app.quit(); });
 

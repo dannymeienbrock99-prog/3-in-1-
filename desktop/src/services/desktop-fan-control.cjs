@@ -174,28 +174,31 @@ class JsonLineNativeHost {
 
 class DesktopFanService {
   constructor({ helperPath = helperLocation(), platform = process.platform, readMetadata = readWindowsMetadata,
-    exists = fs.existsSync, nativeFactory, spawnProcess = spawn, requestTimeoutMs = 10_000,
+    exists = fs.existsSync, nativeFactory, inProcess = false, spawnProcess = spawn, requestTimeoutMs = 10_000,
     now = Date.now, onChange = () => {}, external = {}, heartbeatMs = 2000,
     schedule = setInterval, unschedule = clearInterval } = {}) {
-    Object.assign(this, { helperPath, platformName: platform, readMetadata, exists, nativeFactory, spawnProcess, requestTimeoutMs, now, onChange, heartbeatMs, schedule, unschedule });
+    Object.assign(this, { helperPath, platformName: platform, readMetadata, exists, nativeFactory, inProcess, spawnProcess, requestTimeoutMs, now, onChange, heartbeatMs, schedule, unschedule });
     this.platform = blankPlatform(); this.prerequisites = prerequisitesFrom(); this.enabled = false; this.phase = 'off'; this.error = ''; this.channels = []; this.sensors = [];
     this.native = null; this.inspected = false; this.ownsControl = false; this.releaseAcknowledged = false; this.closed = false; this.queue = Promise.resolve(); this.closePromise = null; this.heartbeatTimer = null; this.heartbeatPromise = null; this.releaseVerification = 'none';
+    this.quitLatch = false; this.quitPreparing = false; this.quitPromise = null;
     this.external = { path: text(external.path, 1024), version: text(external.version, 100), pluginPresent: external.pluginPresent === true, status: 'not-configured' };
   }
   snapshot() {
     const helperExists = this.exists(this.helperPath), supportedBrand = ['asus', 'msi'].includes(this.platform.brand);
     const missingPawn = this.prerequisites.pawnIO === false, missingAdmin = this.prerequisites.administrator !== true;
-    const native = this.platformName === 'win32' && helperExists && this.platform.kind === 'desktop' && supportedBrand && !missingPawn;
+    const eligible = this.platformName === 'win32' && helperExists && this.platform.kind === 'desktop' && supportedBrand && !missingPawn;
+    const native = eligible && (!this.inProcess || !missingAdmin);
     const reason = this.platformName !== 'win32' ? 'Die PC-Lüftersteuerung benötigt Windows.'
       : !helperExists ? 'Die PC-Lüfterkomponente fehlt. Bitte die Installation reparieren.'
       : this.platform.kind === 'portable' ? 'Diese Steuerung ist ausschließlich für Desktop-PCs verfügbar.'
       : this.platform.kind === 'unknown' ? 'Der Desktop-PC wurde noch nicht sicher erkannt.'
       : !supportedBrand ? 'Die Mainboard-Lüftersteuerung unterstützt ASUS- und MSI-Desktop-PCs.'
       : missingPawn ? 'Für die direkte Mainboardsteuerung fehlt PawnIO.'
+      : this.inProcess && missingAdmin ? 'Für direkten Mainboardzugriff Batto als Administrator starten. Es wird kein eigener Lüfterhelfer geöffnet.'
       : '';
     const curveAvailable = this.enabled && this.phase === 'ready' && this.sensors.some(sensor => this.freshTemperature(sensor));
     return copy({ enabled: this.enabled, phase: this.phase, platform: this.platform, channels: this.channels, sensors: this.sensors,
-      error: this.error, prerequisites: this.prerequisites, availability: { native, reason, requiresElevation: native && missingAdmin }, external: this.external, releaseVerification: this.releaseVerification,
+      error: this.error, prerequisites: this.prerequisites, availability: { native, reason, inProcess: this.inProcess, requiresElevation: eligible && missingAdmin }, external: this.external, releaseVerification: this.releaseVerification,
       curveAvailability: { available: curveAvailable, reason: curveAvailable ? '' : 'Temperaturkurven benötigen einen Sensor mit nachweislich aktuellem Messzeitpunkt. Dieser Dienst liefert derzeit keinen solchen Sensor.' } });
   }
   changed() { try { this.onChange(this.snapshot()); } catch {} }
@@ -221,7 +224,24 @@ class DesktopFanService {
   inspect() { return this.serial(() => this.inspectInternal()); }
   enable(value) {
     if (typeof value !== 'boolean') return Promise.reject(Error('Bitte die PC-Lüftersteuerung ein- oder ausschalten.'));
+    if (value && this.quitLatch) return Promise.reject(Error('Die PC-Lüftersteuerung wird gerade für das Beenden freigegeben.'));
     return this.serial(() => value ? this.enableInternal() : this.disableInternal());
+  }
+  prepareHardwareQuit() {
+    if (this.quitPromise) return this.quitPromise;
+    // Set this synchronously, before waiting for any already accepted start or
+    // manual/curve operation. Those queued operations finish before release.
+    this.quitLatch = true; this.quitPreparing = true;
+    this.quitPromise = this.serial(() => this.disableInternal()).then(result => {
+      this.quitPreparing = false; return result;
+    }, error => {
+      this.quitLatch = false; this.quitPreparing = false; this.quitPromise = null; throw error;
+    });
+    return this.quitPromise;
+  }
+  cancelHardwareQuit() {
+    if (this.quitPreparing) throw Error('Die laufende Rückgabe der PC-Lüftersteuerung muss zuerst abgeschlossen werden.');
+    this.quitLatch = false; this.quitPromise = null;
   }
   ensureOpen() { if (this.closed) throw Error('Die PC-Lüftersteuerung ist geschlossen.'); }
   nativeState(state) {
@@ -326,6 +346,7 @@ class DesktopFanService {
     return !!sensor && Number.isFinite(sensor.celsius) && Number.isFinite(stamp) && current - stamp <= 10_000 && stamp - current <= 2_000;
   }
   setManual(value) {
+    if (this.quitLatch) return Promise.reject(Error('Die PC-Lüftersteuerung wird gerade für das Beenden freigegeben.'));
     if (!value || typeof value !== 'object' || Array.isArray(value) || !Number.isInteger(value.duty) || value.duty < 30 || value.duty > 100)
       return Promise.reject(Error('Die Lüfterleistung muss eine ganze Zahl zwischen 30 und 100 Prozent sein.'));
     if (value.fanConfirmed !== true) return Promise.reject(Error('Bitte bestätigen, dass der ausgewählte Anschluss einen Lüfter und keine Pumpe steuert.'));
@@ -341,6 +362,7 @@ class DesktopFanService {
     });
   }
   setCurve(value) {
+    if (this.quitLatch) return Promise.reject(Error('Die PC-Lüftersteuerung wird gerade für das Beenden freigegeben.'));
     if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.points) || value.points.length < 2 || value.points.length > 20)
       return Promise.reject(Error('Eine Lüfterkurve benötigt 2 bis 20 Punkte.'));
     if (value.fanConfirmed !== true) return Promise.reject(Error('Bitte bestätigen, dass der ausgewählte Anschluss einen Lüfter und keine Pumpe steuert.'));

@@ -31,7 +31,8 @@ async function readJson(request, limit = 64 * 1024) {
   catch { throw new BridgeError('Ungültiger JSON-Inhalt.', 'INVALID_JSON', 400); }
 }
 
-export function createBridge({ client = new LightingClient(), dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
+export function createBridge({ client, hardware, dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
+  client ??= new LightingClient({hardware});
   const engine = new EffectEngine(client);
   const readRazer = createRazerProbe();
   let lastError = null, operation = Promise.resolve();

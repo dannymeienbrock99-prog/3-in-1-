@@ -10,12 +10,13 @@
   host.innerHTML = `<div class="pc-fan-heading"><div><span class="pc-fan-kicker">KÜHLUNG · DESKTOP-PC</span><h3>PC-Lüftersteuerung</h3><p>Dein Mainboard erkennen und unterstützte Lüfter einstellen.</p></div><label class="pc-fan-toggle"><input data-pc-fan="enabled" type="checkbox" role="switch" aria-label="PC-Lüftersteuerung einschalten" disabled><span class="pc-fan-switch" aria-hidden="true"></span><span data-pc-fan="toggle-label">Aus</span></label></div>
     <div class="pc-fan-overview"><div class="pc-fan-board"><span class="pc-fan-board-icon" aria-hidden="true">▣</span><div><span data-pc-fan="brand" class="pc-fan-brand">Mainboard</span><strong data-pc-fan="model">Erkennung wird geladen …</strong><small data-pc-fan="platform">Nur für Desktop-PCs</small></div></div><div class="pc-fan-connection"><span data-pc-fan="phase" class="pc-fan-pill">Aus</span><button type="button" data-pc-fan="refresh">Erkennung aktualisieren</button></div></div>
     <p data-pc-fan="status" class="pc-fan-status" role="status" aria-live="polite">Die Steuerung ist beim Programmstart ausgeschaltet.</p>
+    <button type="button" data-pc-fan="admin-restart" hidden>Batto als Administrator neu starten</button>
     <p data-pc-fan="error" class="pc-fan-error" role="alert" hidden></p>
     <p data-pc-fan="curve-availability" class="pc-fan-footnote" hidden>Dieser Treiber bietet hier manuelle Steuerung. Temperaturkurven benötigen bestätigte aktuelle Messwerte.</p>
     <div data-pc-fan="channels" class="pc-fan-channels"></div>
     <p class="pc-fan-footnote">Der Schalter aktiviert nur Battos Lüftersteuerung. Beim Ausschalten beendet Batto seine Regelung und fordert die Hardware-Regelung an. Die Lüfter werden dadurch nicht angehalten.</p>
     <p data-pc-fan="release-note" class="pc-fan-footnote" hidden>Rückgabe über den Treiber angefordert; die tatsächliche Drehzahl im BIOS oder Herstellerprogramm prüfen.</p>
-    <details class="pc-fan-external"><summary>Fan Control und Corsair ergänzen</summary><div><p>Fan Control und das CorsairLink-Plugin sind zusätzliche Programme. Ihre Lüfterregler bedienst du in Fan Control. Ein erkanntes ASUS- oder MSI-Mainboard allein garantiert keinen Zugriff auf seine Lüfteranschlüsse.</p><p>CorsairLink benötigt exklusiven Zugriff auf unterstützte Corsair-Controller. Bei laufendem iCUE wird das Plugin hier nicht automatisch geladen. Eine Übernahme kann auch die RGB-Steuerung verändern.</p><div class="pc-fan-links"><button type="button" data-fan-link="fancontrol">Fan Control ansehen ↗</button><button type="button" data-fan-link="corsair">CorsairLink-Plugin ansehen ↗</button><button type="button" data-fan-link="asus">ASUS-Projekt ansehen ↗</button></div><small>AsusFanControl unterstützt ausgewählte ASUS-Notebooks. Es wird für deine PC-Lüfter nicht ausgeführt.</small></div></details>`;
+    <details class="pc-fan-external"><summary>Direkte Geräteanbindung</summary><div><p>Batto liest und regelt unterstützte Mainboardanschlüsse im eigenen Prozess. ASUS und MSI werden mit ihrem tatsächlichen Modellnamen angezeigt. Die verfügbaren Regler hängen vom verbauten Steuerchip ab.</p><p>Für den Mainboardzugriff benötigt Batto Administratorrechte und den installierten PawnIO-Treiber. Beim Einschalten werden zuerst die Anschlüsse gelesen. Änderungen werden erst mit „Anwenden“ übertragen.</p><small>RGB-Controller und Pumpen werden nicht als Mainboardlüfter übernommen.</small></div></details>`;
   const find = name => host.querySelector(`[data-pc-fan="${name}"]`);
   const enabledInput = find('enabled'), channelsHost = find('channels');
   const fanChannels = () => (Array.isArray(state?.channels) ? state.channels : []).filter(c => c?.kind === 'fan' && typeof c.id === 'string');
@@ -69,6 +70,8 @@
     find('phase').textContent = phaseNames[state?.phase] || 'Aus';
     find('phase').dataset.phase = state?.phase || 'off';
     find('refresh').disabled = pending || transitional;
+    find('admin-restart').hidden = !(state?.availability?.inProcess && state.availability.requiresElevation);
+    find('admin-restart').disabled = pending || transitional;
     find('release-note').hidden = enabled || state?.releaseVerification !== 'api-only';
     const channels = fanChannels();
     find('curve-availability').hidden = !ready() || channels.length === 0 || (state?.curveAvailability?.available !== false && freshSensors().length > 0);
@@ -78,7 +81,7 @@
     else if (ready()) message = channels.length ? `${channels.length} ${channels.length === 1 ? 'steuerbarer Lüfteranschluss' : 'steuerbare Lüfteranschlüsse'} · Änderungen erst mit „Anwenden“ übernehmen.` : 'Keine unterstützten Lüfteranschlüsse gemeldet. Es wird kein Lüfter übernommen.';
     else if (enabled) message = 'Die Übernahme wird geprüft. Beachte den Verbindungsstatus.';
     else if (platform.kind === 'desktop' && state?.releaseVerification === 'api-only') message = 'Batto steuert keine Lüfter. Hardware-Regelung angefordert.';
-    else if (platform.kind === 'desktop' && state?.availability?.native && state.availability.requiresElevation) message = 'Aktiviere den Schalter und bestätige die Windows-Abfrage. Batto startet nur seinen Lüfterhelfer mit Administratorrechten und prüft deine Mainboardanschlüsse. iCUE bleibt aktiv. Lüfterleistung erst mit „Anwenden“ ändern.';
+    else if (platform.kind === 'desktop' && state?.availability?.native && state.availability.requiresElevation) message = state.availability.inProcess ? 'Starte Batto als Administrator, um die Mainboardanschlüsse direkt zu prüfen. Änderungen erst mit „Anwenden“ übertragen.' : 'Aktiviere den Schalter und bestätige die Windows-Abfrage. Die unterstützten Mainboardanschlüsse werden geprüft. Lüfterleistung erst mit „Anwenden“ ändern.';
     else if (platform.kind === 'desktop' && state?.availability?.native) message = 'Hardware-Regelung bleibt aktiv. Aktiviere Batto, um die unterstützten Lüfteranschlüsse einzustellen.';
     else if (platform.kind === 'desktop' && !message) message = 'Mainboard erkannt. Für diese Anschlüsse ist noch keine unterstützte Steuerung verfügbar.';
     find('status').textContent = lastMessage || message;
@@ -106,6 +109,7 @@
     run(() => request('fan-control-enable',{enabled}));
   });
   find('refresh').addEventListener('click', () => run(() => request('fan-control-refresh')));
+  find('admin-restart').addEventListener('click', () => run(() => request('hardware-admin-restart')));
   channelsHost.addEventListener('input', event => {
     const input = event.target, card = input.closest('[data-fan-channel]');
     if (!card) return;

@@ -1,12 +1,12 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { EventEmitter } from 'node:events';
 import { BridgeError, publicController } from './openrgb.mjs';
 import { assertDeviceAllowed } from './device-policy.mjs';
+import { KingstonCodec as InProcessKingstonCodec } from './kingston-codec.mjs';
 
-const codecPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../native-kingston/bin/PRISM-KingstonCodec.exe');
+export { InProcessKingstonCodec as KingstonCodec };
 const execFileAsync = promisify(execFile);
 const ENDPOINT = 'ws://127.0.0.1:55599/';
 const MAX_TEXT = 256 * 1024;
@@ -155,102 +155,81 @@ export async function inspectKingstonService() {
   }
 }
 
-export class KingstonCodec {
-  constructor({ executable = codecPath, timeout = 4000 } = {}) { this.executable = executable; this.timeout = timeout; this.child = null; this.sequence = 0; this.pending = new Map(); this.buffer = ''; }
-  start() {
-    if (this.child && this.child.exitCode === null && !this.child.killed) return;
-    const child = spawn(this.executable, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    this.child = child; this.buffer = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', chunk => {
-      if (this.child !== child) return;
-      this.buffer += chunk;
-      if (Buffer.byteLength(this.buffer) > MAX_TEXT * 2) return this.fail(invalid('Der Kingston-Protokollcodec meldet zu große Daten.'));
-      let newline;
-      while ((newline = this.buffer.indexOf('\n')) >= 0) {
-        const line = this.buffer.slice(0, newline).replace(/^\ufeff/, '').trim(); this.buffer = this.buffer.slice(newline + 1);
-        if (!line) continue;
-        try {
-          const message = JSON.parse(line), pending = this.pending.get(message.requestId);
-          if (!pending) continue;
-          this.pending.delete(message.requestId); clearTimeout(pending.timer);
-          if (message.ok === true && typeof message.result === 'string') pending.resolve(message.result);
-          else pending.reject(invalid('Der Kingston-Protokollcodec konnte die Nachricht nicht lesen.'));
-        } catch { this.fail(invalid('Der Kingston-Protokollcodec meldet ungültige Daten.')); }
-      }
-    });
-    child.stderr.on('data', () => {}); child.stdin.on('error', () => {});
-    child.on('error', () => { if (this.child === child) this.fail(unavailable('Der Kingston-Protokollcodec fehlt. Bitte die aktuelle PRISM-Version erneut installieren.', 'KINGSTON_CODEC_UNAVAILABLE')); });
-    child.on('exit', () => { if (this.child === child) this.fail(unavailable('Der Kingston-Protokollcodec wurde beendet.', 'KINGSTON_CODEC_UNAVAILABLE')); });
-  }
-  request(command, data) {
-    if (!['encrypt', 'decrypt'].includes(command) || typeof data !== 'string' || Buffer.byteLength(data) > MAX_TEXT) return Promise.reject(invalid());
-    this.start(); const requestId = ++this.sequence;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(unavailable('Der Kingston-Protokollcodec antwortet nicht.', 'KINGSTON_CODEC_TIMEOUT')), this.timeout);
-      this.pending.set(requestId, { resolve, reject, timer });
-      this.child.stdin.write(JSON.stringify({ requestId, command, data }) + '\n', error => { if (error) this.fail(unavailable('Der Kingston-Protokollcodec ist nicht erreichbar.', 'KINGSTON_CODEC_UNAVAILABLE')); });
-    });
-  }
-  encrypt(data) { return this.request('encrypt', data); }
-  decrypt(data) { return this.request('decrypt', data); }
-  fail(error) {
-    const child = this.child; this.child = null;
-    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); } this.pending.clear();
-    // This is only PRISM's own text codec, never a Kingston process.
-    if (child && child.exitCode === null && !child.killed) child.kill();
-  }
-  close() { this.fail(unavailable('Kingston-Protokollcodec geschlossen.', 'KINGSTON_DISCONNECTED')); }
-}
-
 export class KingstonServiceClient extends EventEmitter {
-  constructor({ codec = new KingstonCodec(), verifyService = inspectKingstonService, createSocket = url => new WebSocket(url), timeout = 6000, platform = process.platform } = {}) {
+  constructor({ codec = new InProcessKingstonCodec(), verifyService = inspectKingstonService, createSocket = url => new WebSocket(url), timeout = 6000, platform = process.platform } = {}) {
     super(); this.codec = codec; this.verifyService = verifyService; this.createSocket = createSocket; this.timeout = timeout; this.platform = platform;
     this.backend = 'kingston'; this.host = '127.0.0.1'; this.port = 55599; this.protocol = null;
-    this.socket = null; this.identity = null; this.ready = false; this.devices = []; this.details = null; this.pending = null; this.queue = Promise.resolve();
+    this.socket = null; this.identity = null; this.ready = false; this.devices = []; this.details = null; this.pending = null; this.queue = Promise.resolve(); this.generation = 0;
   }
   get connected() { return this.ready && this.socket?.readyState === 1; }
   async connect() {
     if (this.platform !== 'win32') throw unavailable('Die Kingston-FURY-Anbindung benötigt Windows.', 'WINDOWS_REQUIRED');
     if (this.socket?.readyState === 1) return this.scan();
     this.close();
+    const generation = this.generation;
     try {
-      this.identity = await this.verifyService();
-      if (!this.identity?.verified) throw unavailable('Die Kingston-Dienstidentität wurde nicht bestätigt.', 'KINGSTON_SERVICE_UNVERIFIED');
-    } catch (error) { this.fail(error, false); throw error; }
+      const identity = await this.verifyService();
+      if (generation !== this.generation) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
+      if (!identity?.verified) throw unavailable('Die Kingston-Dienstidentität wurde nicht bestätigt.', 'KINGSTON_SERVICE_UNVERIFIED');
+      this.identity = identity;
+    } catch (error) { if (generation === this.generation) this.fail(error, false); throw error; }
     const socket = this.createSocket(ENDPOINT); this.socket = socket;
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.close(); reject(unavailable('Kingston FURY CTRL antwortet nicht rechtzeitig.', 'KINGSTON_TIMEOUT')); }, this.timeout);
-      const settle = fn => value => { clearTimeout(timer); fn(value); };
-      socket.addEventListener('open', settle(resolve), { once: true });
-      socket.addEventListener('error', settle(() => { this.close(); reject(unavailable('Die lokale Kingston-FURY-Verbindung ist nicht erreichbar.')); }), { once: true });
-      socket.addEventListener('close', settle(() => reject(unavailable('Kingston FURY CTRL hat die Verbindung geschlossen.', 'KINGSTON_DISCONNECTED'))), { once: true });
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        socket.removeEventListener('open', opened); socket.removeEventListener('error', failed); socket.removeEventListener('close', closed);
+        if (error) { if (this.socket === socket && generation === this.generation) this.close(); reject(error); }
+        else resolve();
+      };
+      const opened = () => finish();
+      const failed = () => finish(unavailable('Die lokale Kingston-FURY-Verbindung ist nicht erreichbar.'));
+      const closed = () => finish(unavailable('Kingston FURY CTRL hat die Verbindung geschlossen.', 'KINGSTON_DISCONNECTED'));
+      const timer = setTimeout(() => finish(unavailable('Kingston FURY CTRL antwortet nicht rechtzeitig.', 'KINGSTON_TIMEOUT')), this.timeout);
+      socket.addEventListener('open', opened, { once: true });
+      socket.addEventListener('error', failed, { once: true });
+      socket.addEventListener('close', closed, { once: true });
     });
     if (this.socket !== socket || socket.readyState !== 1) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
-    socket.addEventListener('message', event => { if (this.socket === socket) this.receive(event.data).catch(error => this.fail(error)); });
+    socket.addEventListener('message', event => {
+      if (this.socket !== socket || generation !== this.generation) return;
+      this.receive(event.data, socket, generation).catch(error => {
+        if (this.socket === socket && generation === this.generation) this.fail(error);
+      });
+    });
     socket.addEventListener('error', () => { if (this.socket === socket) this.fail(unavailable('Kingston FURY CTRL ist nicht erreichbar.')); });
     socket.addEventListener('close', () => { if (this.socket === socket) this.fail(unavailable('Kingston FURY CTRL wurde getrennt.', 'KINGSTON_DISCONNECTED')); });
     return this.scan();
   }
-  async receive(data) {
+  async receive(data, socket = this.socket, generation = this.generation) {
+    if (this.socket !== socket || generation !== this.generation) return;
+    const pending = this.pending;
     if (typeof data !== 'string' || Buffer.byteLength(data) > MAX_TEXT) throw invalid();
     const decoded = await this.codec.decrypt(data);
+    // A decrypt started by an earlier socket or request cannot acknowledge a
+    // newer request, even if the vendor reused the same API name.
+    if (this.socket !== socket || generation !== this.generation || this.pending !== pending) return;
     let message; try { message = JSON.parse(decoded); } catch { throw invalid(); }
-    if (!object(message?.root) || typeof message.root.api !== 'string' || !this.pending || message.root.api !== this.pending.api) throw invalid('Kingston FURY CTRL hat eine unerwartete Antwort geliefert.');
-    const pending = this.pending; this.pending = null; clearTimeout(pending.timer);
+    if (!object(message?.root) || typeof message.root.api !== 'string' || !pending || pending.socket !== socket || message.root.api !== pending.api) throw invalid('Kingston FURY CTRL hat eine unerwartete Antwort geliefert.');
+    this.pending = null; clearTimeout(pending.timer);
     if (String(message.root.status) === '0') pending.resolve(message.root);
     else pending.reject(new BridgeError(`Kingston FURY CTRL hat die Anfrage abgelehnt (Status ${text(String(message.root.status), 16)}).`, 'KINGSTON_REJECTED', 422));
   }
   request(api, values = {}, authorization) {
     if (!READ_APIS.has(api) && !(api === 'set_dram_led' && authorization === COLOR_WRITE)) return Promise.reject(new BridgeError('Diese Kingston-Funktion ist nicht freigegeben.', 'KINGSTON_API_FORBIDDEN', 400));
+    const socket = this.socket, generation = this.generation;
     const run = async () => {
-      if (this.socket?.readyState !== 1) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
-      const socket = this.socket;
+      if (this.socket !== socket || generation !== this.generation || socket?.readyState !== 1) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
       const packet = await this.codec.encrypt(JSON.stringify({ root: { ...values, api } }));
-      if (this.socket !== socket || socket.readyState !== 1) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
+      if (this.socket !== socket || generation !== this.generation || socket.readyState !== 1) throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => this.fail(unavailable('Kingston FURY CTRL antwortet nicht rechtzeitig. Bitte erneut verbinden.', 'KINGSTON_TIMEOUT')), this.timeout);
-        this.pending = { api, resolve, reject, timer };
+        const pending = { api, socket, resolve, reject, timer: null };
+        pending.timer = setTimeout(() => {
+          if (this.pending === pending && this.socket === socket && generation === this.generation)
+            this.fail(unavailable('Kingston FURY CTRL antwortet nicht rechtzeitig. Bitte erneut verbinden.', 'KINGSTON_TIMEOUT'));
+        }, this.timeout);
+        this.pending = pending;
         try { socket.send(packet); } catch { this.fail(unavailable('Die Kingston-Anfrage konnte nicht gesendet werden.', 'KINGSTON_DISCONNECTED')); }
       });
     };
@@ -258,12 +237,21 @@ export class KingstonServiceClient extends EventEmitter {
   }
   async scan() {
     if (this.socket?.readyState !== 1) return this.connect();
+    const socket = this.socket, generation = this.generation;
+    const current = () => {
+      if (this.socket !== socket || generation !== this.generation || socket.readyState !== 1)
+        throw unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED');
+    };
     this.ready = false; this.devices = [];
     try {
       const version = await this.request('get_version');
+      current();
       const type = await this.request('get_dram_type');
+      current();
       const api = await this.request('get_dram_api');
+      current();
       const info = await this.request('get_dram_info');
+      current();
       if (![2, 3, 4].includes(api.dram_api) || type.dram_type !== 2) throw new BridgeError('Diese Kingston-Schnittstelle unterstützt nur DDR5-RGB mit FURY-API 2, 3 oder 4.', 'KINGSTON_DDR5_UNSUPPORTED', 422);
       if (!object(info.dram) || Object.keys(info.dram).length < 1 || Object.keys(info.dram).length > 8) throw invalid('Kingston FURY CTRL meldet keinen verfügbaren RGB-Arbeitsspeicher.');
       const warnings = [], indices = new Set(), devices = [];
@@ -287,15 +275,18 @@ export class KingstonServiceClient extends EventEmitter {
         experimental: true, reason: 'Kingston-Herstellereffekte; physische LED-Anzahl wird nicht gemeldet.' }, warnings };
       this.protocol = api.dram_api; this.devices = devices; this.ready = true;
       return devices.map(publicController);
-    } catch (error) { this.fail(error, false); throw error; }
+    } catch (error) { if (this.socket === socket && generation === this.generation) this.fail(error, false); throw error; }
   }
   async applyNativeEffect(device, effectId, options = {}) {
     assertDeviceAllowed(device);
     if (!this.connected || !this.devices.includes(device)) throw new BridgeError('Kingston-RAM nicht mehr verfügbar. Bitte erneut suchen.', 'DEVICE_LIST_CHANGED', 409);
+    const socket = this.socket, generation = this.generation;
     const payload = buildKingstonEffect(device, effectId, options);
     let verified;
     try { verified = await this.verifyService(); }
-    catch (error) { this.fail(error); throw error; }
+    catch (error) { if (this.socket === socket && generation === this.generation) this.fail(error); throw error; }
+    if (this.socket !== socket || generation !== this.generation || !this.devices.includes(device))
+      throw new BridgeError('Kingston-RAM nicht mehr verfügbar. Bitte erneut suchen.', 'DEVICE_LIST_CHANGED', 409);
     if (!verified?.verified || verified.processId !== this.identity?.processId || verified.startTime !== this.identity?.startTime || verified.path !== this.identity?.path) {
       this.fail(unavailable('Der Kingston-Dienst hat sich geändert. Bitte erneut verbinden.', 'KINGSTON_SERVICE_CHANGED'));
       throw unavailable('Der Kingston-Dienst hat sich geändert. Bitte erneut verbinden.', 'KINGSTON_SERVICE_CHANGED');
@@ -313,6 +304,7 @@ export class KingstonServiceClient extends EventEmitter {
     if (emit) this.emit('disconnected', error);
   }
   close() {
+    this.generation++; this.queue = Promise.resolve();
     this.ready = false; this.devices = []; this.identity = null;
     const pending = this.pending; this.pending = null;
     if (pending) { clearTimeout(pending.timer); pending.reject(unavailable('Kingston-Verbindung geschlossen.', 'KINGSTON_DISCONNECTED')); }

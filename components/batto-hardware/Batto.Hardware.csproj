@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Batto.Hardware</AssemblyName>
+    <Version>1.0.0</Version>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <RuntimeFrameworkVersion>8.0.31</RuntimeFrameworkVersion>
+    <RollForward>LatestPatch</RollForward>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <SelfContained>false</SelfContained>
+    <WindowsSdkReferencePath Condition="'$(WindowsSdkReferencePath)'==''">$(MSBuildProjectDirectory)\..\..\..\native-sdk\windows-net8\lib\net8.0</WindowsSdkReferencePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**;publish/**;bin/**;obj/**" />
+    <Compile Include="../../PRISM/native-lianli/WinUsbDevice.cs" Link="Wireless/WinUsbDevice.cs" />
+    <Compile Include="../../PRISM/native-lianli/WirelessSession.cs" Link="Wireless/WirelessSession.cs" />
+    <Compile Include="../../PRISM/native-lianli/WirelessProtocol.cs" Link="Wireless/WirelessProtocol.cs" />
+    <Compile Include="../../PRISM/native-lianli/TinyUzEncoder.cs" Link="Wireless/TinyUzEncoder.cs" />
+    <Compile Include="../../PRISM/native-lianli/WirelessErrors.cs" Link="Wireless/WirelessErrors.cs" />
+    <Compile Include="../../PRISM/native-lianli/HidDevice.cs" Link="LianLi/HidDevice.cs" />
+    <Compile Include="../../PRISM/native-lianli/Protocol.cs" Link="LianLi/Protocol.cs" />
+    <Compile Include="../../PRISM/native-lianli/StrimerProtocol.cs" Link="LianLi/StrimerProtocol.cs" />
+    <Compile Include="../../PRISM/native/LightingCore.cs" Link="Windows/LightingCore.cs" />
+    <Compile Include="../../PRISM/native/CorsairSdk.cs" Link="Windows/CorsairSdk.cs" />
+    <Compile Include="../../PRISM/native/MsiSdk.cs" Link="Windows/MsiSdk.cs" />
+    <Compile Include="../desktop-fan-control/FanEngine.cs" Link="Fans/FanEngine.cs" />
+    <Compile Include="../desktop-fan-control/LibreBackend.cs" Link="Fans/LibreBackend.cs" />
+    <Compile Include="../desktop-fan-control/HardwarePolicy.cs" Link="Fans/HardwarePolicy.cs" />
+    <Compile Include="../desktop-fan-control/Models.cs" Link="Fans/Models.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <InternalsVisibleTo Include="Batto.Hardware.Tests" />
+    <Reference Include="Microsoft.Windows.SDK.NET"><HintPath>$(WindowsSdkReferencePath)\Microsoft.Windows.SDK.NET.dll</HintPath></Reference>
+    <Reference Include="WinRT.Runtime"><HintPath>$(WindowsSdkReferencePath)\WinRT.Runtime.dll</HintPath></Reference>
+    <EmbeddedResource Include="../../PRISM/server/lianli-effects.json" Link="lianli-effects.json" LogicalName="LianLiEffects" />
+  </ItemGroup>
+</Project>

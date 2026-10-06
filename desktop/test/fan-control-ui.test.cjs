@@ -1,14 +1,14 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname,'../src/renderer/fan-control-ui.js'),'utf8');
-const initial = () => ({enabled:false,phase:'off',platform:{kind:'desktop',brand:'asus',manufacturer:'ASUSTeK',model:'ROG CROSSHAIR TEST'},availability:{native:true,reason:''},channels:[],sensors:[],error:''});
+const initial = () => ({enabled:false,phase:'off',platform:{kind:'desktop',brand:'asus',manufacturer:'ASUSTeK',model:'ROG CROSSHAIR TEST'},availability:{native:true,inProcess:true,requiresElevation:false,reason:''},channels:[],sensors:[],error:''});
 function fixture(next = initial(), respond) {
   const calls = [], elements = new Map(), events = {}, cards = [];
   function element(dataset = {}) {
     return {dataset,disabled:false,checked:false,hidden:false,textContent:'',value:'',valueAsNumber:NaN,innerHTML:'',listeners:{},classList:{add(){}},setAttribute(key,value){this[key]=value;},addEventListener(name,fn){this.listeners[name]=fn;},closest(){return null;}};
   }
   const root = element(), channelHost = element();
-  for (const name of ['enabled','brand','model','platform','phase','refresh','status','error','toggle-label','release-note','curve-availability']) elements.set(name,element());
+  for (const name of ['enabled','brand','model','platform','phase','refresh','status','error','toggle-label','release-note','curve-availability','admin-restart']) elements.set(name,element());
   elements.set('channels',channelHost);
   root.querySelector = selector => elements.get(selector.match(/data-pc-fan="([^"]+)"/)?.[1]);
   root.querySelectorAll = () => [];
@@ -36,14 +36,19 @@ function fixture(next = initial(), respond) {
   return {calls,root,elements,channelHost,cards,settle,publish:value=>suiteListener({fanControl:value}),click:control=>channelHost.listeners.click({target:control}),change:control=>channelHost.listeners.change({target:control}),input:control=>channelHost.listeners.input({target:control})};
 }
 test('opening desktop fan controls only reads state, and publishing a ready state never applies cooling settings',async()=>{
-  const f=fixture();await f.settle();assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state']);assert.equal(f.elements.get('enabled').checked,false);assert.equal(f.elements.get('enabled').disabled,false);assert.equal(f.elements.get('brand').textContent,'ASUS');assert.equal(f.elements.get('model').textContent,'ROG CROSSHAIR TEST');
+  const f=fixture();await f.settle();assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state']);assert.equal(f.elements.get('enabled').checked,false);assert.equal(f.elements.get('enabled').disabled,false);assert.equal(f.elements.get('admin-restart').hidden,true);assert.equal(f.elements.get('brand').textContent,'ASUS');assert.equal(f.elements.get('model').textContent,'ROG CROSSHAIR TEST');
   f.publish({...initial(),enabled:true,phase:'ready'});await f.settle();assert.equal(f.calls.length,1);assert.equal(f.elements.get('enabled').checked,true);
 });
 
-test('a normal Windows session can deliberately activate its elevated helper and sees the Windows confirmation before activation',async()=>{
-  const state={...initial(),availability:{native:true,requiresElevation:true,reason:''}},f=fixture(state);await f.settle();
-  const toggle=f.elements.get('enabled');assert.equal(toggle.disabled,false);assert.match(f.elements.get('status').textContent,/Windows-Abfrage/);assert.match(f.elements.get('status').textContent,/iCUE bleibt aktiv/);
-  toggle.checked=true;toggle.listeners.change();await f.settle();assert.equal(f.calls[1].command,'fan-control-enable');assert.equal(f.calls[1].value.enabled,true);
+test('a normal Windows session keeps direct fan control blocked and requests a Batto administrator restart only on its button click',async()=>{
+  const state={...initial(),availability:{native:false,requiresElevation:true,inProcess:true,reason:'Für direkten Mainboardzugriff Batto als Administrator starten. Es wird kein eigener Lüfterhelfer geöffnet.'}},f=fixture(state);await f.settle();
+  const toggle=f.elements.get('enabled'), restart=f.elements.get('admin-restart');
+  assert.equal(toggle.disabled,true);assert.equal(toggle.checked,false);assert.equal(restart.hidden,false);assert.equal(restart.disabled,false);
+  assert.match(f.elements.get('status').textContent,/Batto als Administrator starten/);
+  assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state']);
+  toggle.checked=true;toggle.listeners.change();await f.settle();assert.equal(toggle.checked,false);assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state']);
+  restart.listeners.click();await f.settle();assert.deepEqual(f.calls.map(x=>x.command),['fan-control-state','hardware-admin-restart']);
+  assert.equal(f.calls[1].value,undefined);assert.equal(toggle.checked,false);assert.equal(toggle.disabled,true);
 });
 test('portable and unconfirmed chassis cannot request activation even if a synthetic native flag is present',async()=>{
   for (const kind of ['portable','unknown']) {

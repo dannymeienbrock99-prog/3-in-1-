@@ -28,19 +28,21 @@ export function strimerTransmissionState(result,device){
 }
 
 export function strimerControlPresentation(control){
+ const inProcess=control?.inProcess===true;
  const phase=['off','starting','active','restoring','error'].includes(control?.phase)?control.phase:'off';
  const enabled=control?.enabled===true;
  const changing=phase==='starting'||phase==='restoring';
  const returnRequired=enabled||phase==='active'||phase==='restoring';
  const title=phase==='starting'?'Strimer-Steuerung wird übernommen …':phase==='restoring'?'L-Connect wird wiederhergestellt …':phase==='error'?'Strimer-Steuerung benötigt Aufmerksamkeit':returnRequired?'Batto steuert Strimer Wireless':'Strimer-Steuerung ausgeschaltet';
  const message=typeof control?.message==='string'&&control.message.trim()?control.message:returnRequired?'L-Connect ist für diesen Modus pausiert. Effekte werden ausschließlich mit „Auf dieses Kabel übertragen“ ausgegeben.':'L-Connect bleibt zuständig. Du kannst die Strimer-Steuerung hier ausdrücklich an Batto übergeben.';
- return {phase,enabled,changing,returnRequired,title,message,button:returnRequired?'L-Connect wieder übernehmen lassen':'Strimer-Steuerung übernehmen'};
+ return {phase,enabled,changing,returnRequired,inProcess,requiresConsent:control?.requiresServicePause!==false,title:inProcess&&!changing&&phase!=='error'?(returnRequired?'Direkte Strimer-Steuerung in Batto':'Strimer-Steuerung ausgeschaltet'):title,message,button:inProcess?(returnRequired?'Strimer-Steuerung ausschalten':'Strimer direkt verbinden'):returnRequired?'L-Connect wieder übernehmen lassen':'Strimer-Steuerung übernehmen'};
 }
 
 export function strimerControlRequest(control,consent){
  const view=strimerControlPresentation(control);
  if(view.changing)throw new Error('Die Strimer-Steuerung wird gerade umgeschaltet.');
  if(view.returnRequired)return {enabled:false};
+ if(!view.requiresConsent)return {enabled:true};
  if(consent!==true)throw new Error('Bitte das Pausieren der L-Connect-Dienste ausdrücklich bestätigen.');
  return {enabled:true,confirmLConnectPause:true};
 }

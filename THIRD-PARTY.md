@@ -46,7 +46,7 @@ Unveränderte DirectShow-Leser-DLL aus OBS VirtualCam 2.1.2 (Miau Lightouch / Ca
 Der eigene lokale Multi-Chat-Quellstand entspricht dem bereitgestellten 2.4.7-Installer. Die Originalquellen werden separat erhalten. Piper-Runtime, Modell, Lizenzen und Quellarchive dieses Programms werden unverändert mitgeliefert; Herkunft und Hashes stehen in desktop/vendor/piper/README.md und manifest.json.
 
 ## PRISM 1.7.0 · Hersteller-Anbindungen
-Lian-Li-Protokoll und Effektzuordnungen: sgtaziz/lian-li-linux, Commit d335fdd459b0a308814497d36cf1d8c7dc1a782d, MIT; vollständige Lizenz unter PRISM/licenses/lian-li-linux-MIT.txt. Eigener Windows-HID-Helfer, keine Linux-Treiberinstallation.
+Lian-Li-Protokoll und Effektzuordnungen: sgtaziz/lian-li-linux, Commit d335fdd459b0a308814497d36cf1d8c7dc1a782d, MIT; vollständige Lizenz unter PRISM/licenses/lian-li-linux-MIT.txt. Eigene integrierte Windows-HID-Anbindung; keine Linux-Treiberinstallation.
 
 MSI Mystic Light SDK 1.0.0.08: https://www.msi.com/Landing/mystic-light-rgb-gaming-pc/download . Die proprietäre SDK-DLL wird nicht verteilt. Bei ausdrücklicher Einrichtung lädt PRISM sie direkt vom Hersteller und prüft die fest hinterlegten SHA-256-Werte. Erfordert lokal installiertes Mystic Light.
 
@@ -62,8 +62,13 @@ Die begrenzte eigene C#-Kompression verwendet das tinyuz-Format nach [sisong/tin
 
 Gekoppelte Kabel mit bekannten Layouts erhalten die 31 Softwareeffekte einschließlich eigener Muster als lokal abgespielte Schleife. Der separate kabelgebundene Lian-Li-Katalog bleibt bei 94 Herstellermodi. Die lokale Metadatenabfrage bestätigte 132-/174-LED-Kabel, jedoch keine sichtbaren Hardwarefarben. Weitere Firmwareversionen sind nicht an echter Hardware geprüft. Pause und Aus benötigen eine Funkbestätigung; Programm schließen beendet die Schleife nicht. L-Connect wird separat für die vorhandene Kopplung benötigt und nicht mitverteilt.
 
-## Optionale Desktop-Lüftersteuerung 1.15.0
+## Integrierte Desktop-Lüftersteuerung 1.16.0
 
-Der separate Helfer enthält unveränderte LibreHardwareMonitorLib 0.9.6 (MPL-2.0) und ihre festgelegten Abhängigkeiten. Vollständige Lizenztexte, Paketreferenzen und Quellbezüge liegen unter resources/DesktopFanControl/licenses; die getrennten Bibliotheken bleiben austauschbar. Der PawnIO-Systemtreiber wird nicht mitgeliefert oder automatisch installiert. Originaler Helferquellcode: components/desktop-fan-control in diesem Repository.
+Batto.Hardware.dll enthält unveränderte LibreHardwareMonitorLib 0.9.6 (MPL-2.0) und ihre festgelegten Abhängigkeiten. Vollständige Lizenztexte, Paketreferenzen und Quellbezüge liegen unter resources/BattoHardware/licenses; die getrennten Bibliotheken bleiben austauschbar. Der PawnIO-Systemtreiber wird nicht mitgeliefert oder automatisch installiert. Eigene Integrationsquellen: components/batto-hardware; verlinkte ursprüngliche Enginequellen: components/desktop-fan-control in diesem Repository.
 
-Fan Control und FanControl.CorsairLink werden nur über ihre offiziellen Projektseiten verlinkt; ihre Programme und Plugins werden nicht gebündelt. AsusFanControl ist ein Notebook-Projekt und wird nicht ausgeführt oder verteilt.
+Fan Control und FanControl.CorsairLink werden nicht gebündelt oder gestartet. AsusFanControl ist ein Notebook-Projekt und wird nicht ausgeführt oder verteilt.
+
+## Integrierter Hardwarezugriff und Kingston-Protokollcodec
+
+- `koffi` 3.3.2: [Koromix/Koffi](https://github.com/Koromix/koffi), MIT, Copyright 2026 Niels Martignène. Das unveränderte npm-Paket ruft die eigene Batto-Hardwarebibliothek innerhalb des Electron-Prozesses auf. Die vollständige Original-Lizenz bleibt im ausgelieferten npm-Paket erhalten; Version und Integrität stehen in `desktop/package-lock.json`.
+- `rijndael-js` 2.0.0: [Snack-X/rijndael-js](https://github.com/Snack-X/rijndael-js), MIT, Copyright 2016 Snack (Jaemin Noh). Der eigene Kingston-Codec verwendet diese unveränderte JavaScript-Bibliothek für das bestehende Rijndael-256-Dienstprotokoll innerhalb von Batto. Die vollständige [Original-Lizenz](https://github.com/Snack-X/rijndael-js/blob/master/LICENSE) liegt unter `PRISM/licenses/rijndael-js-MIT.txt` und wird mitgeliefert. Ein separates Codec-Programm wird nicht gestartet. Der offizielle bereits installierte Kingston-FURY-Dienst wird weiterhin benötigt.

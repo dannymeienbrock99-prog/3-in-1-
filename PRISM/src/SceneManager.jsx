@@ -1,25 +1,48 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
+import {Check,Copy,Download,Plus,Search,SlidersHorizontal,Star,Upload} from 'lucide-react';
 import {DEFAULT_CONFIG,EFFECT_NAMES,EFFECT_DETAILS,SCENES,SCENE_CATEGORIES,MAX_PROFILE_IMPORT_BYTES,importProfileDocument,downloadProfiles} from './data.js';
 import {availableSceneTargets,saveScene,sceneLibrary,validateSceneCollection} from './scene-library.js';
 import {isAnimatedEffect,renderFrame} from '../server/effect-renderer.mjs';
 import {CustomEffectEditor} from './CustomEffectEditor.jsx';
 import './scene-manager.css';
 
-export function SceneMiniPreview({config,label='Animierte Lichtvorschau',large=false}) {
+export function SceneMiniPreview({config,label='Animiertes Lichtband: Farben und Helligkeit',large=false}) {
  const canvas=useRef(null);
  useEffect(()=>{
   const element=canvas.current,context=element?.getContext('2d');if(!context)return;
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
   let frame,visible=true,last=0,elapsed=.8;
   const draw=()=>{
-   const colors=renderFrame(64,config,elapsed);context.clearRect(0,0,320,92);
-   context.fillStyle='#080808';context.fillRect(0,0,320,92);
-   for(let row=0;row<4;row++)for(let col=0;col<16;col++){
-    const color=colors[row*16+(row%2?15-col:col)],r=color&255,g=color>>>8&255,b=color>>>16&255;
-    const x=col*19+10,y=row*19+10+Math.sin(col*.45+row*.7)*3;
-    context.fillStyle=`rgba(${r},${g},${b},.16)`;context.fillRect(x-3,y-3,20,18);
-    context.fillStyle=`rgb(${r},${g},${b})`;context.fillRect(x,y,14,12);
-   }
+   const colors=renderFrame(64,config,elapsed);
+   const samples=colors.map(color=>({r:color&255,g:color>>>8&255,b:color>>>16&255}));
+   const brightness=samples.map(({r,g,b})=>(.2126*r+.7152*g+.0722*b)/255);
+   // The trace is the smoothed brightness of the actual rendered LEDs. Its
+   // colors come from that same frame; it never substitutes a preset image.
+   const points=brightness.map((_,index)=>{
+    let sum=0,weight=0;
+    for(let offset=-3;offset<=3;offset++){
+     const sample=Math.max(0,Math.min(brightness.length-1,index+offset));
+     const strength=4-Math.abs(offset);sum+=brightness[sample]*strength;weight+=strength;
+    }
+    return {x:index*320/(brightness.length-1),y:76-(sum/weight)*56};
+   });
+   context.clearRect(0,0,320,100);context.fillStyle='#0b1017';context.fillRect(0,0,320,100);
+   const light=context.createLinearGradient(0,0,320,0);
+   samples.forEach(({r,g,b},index)=>light.addColorStop(index/(samples.length-1),`rgb(${r},${g},${b})`));
+   const trace=()=>{
+    context.beginPath();context.moveTo(points[0].x,points[0].y);
+    for(let index=1;index<points.length-1;index++){
+     const point=points[index],next=points[index+1];
+     context.quadraticCurveTo(point.x,point.y,(point.x+next.x)/2,(point.y+next.y)/2);
+    }
+    context.lineTo(points.at(-1).x,points.at(-1).y);
+   };
+   trace();context.lineTo(320,100);context.lineTo(0,100);context.closePath();
+   context.globalAlpha=.12;context.fillStyle=light;context.fill();
+   context.strokeStyle=light;context.lineJoin='round';context.lineCap='round';
+   trace();context.globalAlpha=.08;context.lineWidth=20;context.stroke();
+   context.globalAlpha=.18;context.lineWidth=9;context.stroke();
+   context.globalAlpha=1;context.lineWidth=2.3;context.stroke();
   };
   const tick=now=>{if(now-last>=80){elapsed+=last?Math.min((now-last)/1000,.25):0;last=now;draw();}frame=requestAnimationFrame(tick);};
   const refresh=()=>{cancelAnimationFrame(frame);last=0;draw();if(visible&&!document.hidden&&!reduced.matches&&isAnimatedEffect(config))frame=requestAnimationFrame(tick);};
@@ -27,7 +50,7 @@ export function SceneMiniPreview({config,label='Animierte Lichtvorschau',large=f
   observer?.observe(element);document.addEventListener('visibilitychange',refresh);reduced.addEventListener('change',refresh);refresh();
   return()=>{cancelAnimationFrame(frame);observer?.disconnect();document.removeEventListener('visibilitychange',refresh);reduced.removeEventListener('change',refresh);};
  },[config]);
- return <canvas className={'scene-mini-preview'+(large?' scene-mini-preview-large':'')} ref={canvas} width="320" height="92" role="img" aria-label={label}/>;
+ return <canvas className={'scene-mini-preview'+(large?' scene-mini-preview-large':'')} ref={canvas} width="320" height="100" role="img" aria-label={label}/>;
 }
 
 function SceneColor({color,index,onChange,onRemove,canRemove}) {
@@ -64,17 +87,17 @@ export function SceneManager({config=DEFAULT_CONFIG,onChoose,active,devices=[],s
  };
  const exportScenes=items=>{try{downloadProfiles(items);notify(`${items.length} Szenen exportiert.`);}catch(error){notify(error.message,'error');}};
  return <section className="scene-manager" aria-label="Szenen verwalten">
-  <div className="scene-manager-heading"><div><h2>Szenen</h2><p>Wähle ein Lichtbild, passe es an und prüfe die Vorschau.</p></div><button type="button" className="primary" disabled={!profilesReady} onClick={()=>openEditor(null)}>+ Eigene Szene</button></div>
-  <div className="scene-toolbar"><label className="scene-search"><span className="scene-sr-only">Szenen suchen</span><input type="search" placeholder="Szenen suchen …" value={search} onChange={e=>setSearch(e.target.value)}/></label><label><span className="scene-sr-only">Szenenkategorie filtern</span><select aria-label="Szenenkategorie filtern" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Alle Kategorien</option>{categories.map(name=><option key={name}>{name}</option>)}</select></label><button type="button" aria-pressed={favoritesOnly} className={favoritesOnly?'scene-favorite-filter active':'scene-favorite-filter'} onClick={()=>setFavoritesOnly(!favoritesOnly)}>★ Favoriten</button><button type="button" disabled={!profilesReady} onClick={()=>fileInput.current.click()}>Importieren</button><button type="button" onClick={()=>exportScenes(scenes)}>Alle exportieren</button><input hidden ref={fileInput} type="file" accept=".json,application/json" aria-label="Szenendatei importieren" onChange={e=>{importFile(e.target.files?.[0]);e.target.value='';}}/></div>
+  <div className="scene-manager-heading"><div><h2>Szenen <span className="scene-library-count">{scenes.length}</span></h2><p>Deine Lichtstimmungen. Auswählen, anpassen, Vorschau prüfen.</p></div><button type="button" className="primary" disabled={!profilesReady} onClick={()=>openEditor(null)}><Plus size={17} aria-hidden="true"/> Eigene Szene</button></div>
+  <div className="scene-toolbar"><label className="scene-search"><Search size={18} aria-hidden="true"/><span className="scene-sr-only">Szenen suchen</span><input type="search" placeholder="Szenen suchen …" value={search} onChange={e=>setSearch(e.target.value)}/></label><label><span className="scene-sr-only">Szenenkategorie filtern</span><select aria-label="Szenenkategorie filtern" value={category} onChange={e=>setCategory(e.target.value)}><option value="">Alle Kategorien</option>{categories.map(name=><option key={name}>{name}</option>)}</select></label><button type="button" aria-pressed={favoritesOnly} className={favoritesOnly?'scene-favorite-filter active':'scene-favorite-filter'} onClick={()=>setFavoritesOnly(!favoritesOnly)}><Star size={17} aria-hidden="true"/> Favoriten</button><button type="button" disabled={!profilesReady} onClick={()=>fileInput.current.click()}><Upload size={17} aria-hidden="true"/> Importieren</button><button type="button" onClick={()=>exportScenes(scenes)}><Download size={17} aria-hidden="true"/> Alle exportieren</button><input hidden ref={fileInput} type="file" accept=".json,application/json" aria-label="Szenendatei importieren" onChange={e=>{importFile(e.target.files?.[0]);e.target.value='';}}/></div>
   {notice?<p className={'scene-notice '+notice.type} role={notice.type==='error'?'alert':'status'}>{notice.message}</p>:null}
   {!profilesReady?<p className="scene-empty" role="status">Deine gespeicherten Szenen werden geladen …</p>:null}
   <div className="scene-card-grid">{filtered.map(scene=><article key={scene.id} className={'scene-managed-card'+((active===scene.name||active===scene.id)?' selected':'')}>
-   <button type="button" className="scene-card-preview" aria-label={`Szene ${scene.name} in der Vorschau auswählen`} onClick={()=>choose(scene)}><SceneMiniPreview config={scene.config} label={`${scene.name}: ${EFFECT_NAMES[scene.config.effect]}`}/><span className="scene-card-name">{scene.name}</span><span className="scene-card-meta">{scene.category||'Eigene'} · {EFFECT_NAMES[scene.config.effect]}</span></button>
-   <button type="button" className="scene-card-favorite" disabled={!profilesReady} aria-label={`${scene.name} ${scene.favorite?'aus Favoriten entfernen':'als Favorit speichern'}`} aria-pressed={Boolean(scene.favorite)} onClick={()=>toggleFavorite(scene)}>{scene.favorite?'★':'☆'}</button>
-   <div className="scene-card-actions"><button type="button" disabled={!profilesReady} onClick={()=>openEditor(scene)}>Bearbeiten</button><button type="button" disabled={!profilesReady} aria-label={`${scene.name} duplizieren`} onClick={()=>openEditor(scene,{duplicate:true})}>Duplizieren</button></div>
+   <button type="button" className="scene-card-preview" aria-label={`Szene ${scene.name} in der Vorschau auswählen`} aria-pressed={active===scene.name||active===scene.id} onClick={()=>choose(scene)}><SceneMiniPreview config={scene.config} label={`${scene.name}: ${EFFECT_NAMES[scene.config.effect]}`}/><span className="scene-card-copy"><span className="scene-card-title-row"><span className="scene-card-name">{scene.name}</span>{active===scene.name||active===scene.id?<Check className="scene-selected-icon" size={17} aria-label="In der Vorschau ausgewählt"/>:null}</span><span className="scene-card-meta">{scene.category||'Eigene'} · {EFFECT_NAMES[scene.config.effect]}</span></span></button>
+   <button type="button" className="scene-card-favorite" disabled={!profilesReady} aria-label={`${scene.name} ${scene.favorite?'aus Favoriten entfernen':'als Favorit speichern'}`} aria-pressed={Boolean(scene.favorite)} onClick={()=>toggleFavorite(scene)}><Star size={19} fill={scene.favorite?'currentColor':'none'} aria-hidden="true"/></button>
+   <div className="scene-card-actions"><button type="button" disabled={!profilesReady} onClick={()=>openEditor(scene)}><SlidersHorizontal size={15} aria-hidden="true"/> Bearbeiten</button><button type="button" disabled={!profilesReady} aria-label={`${scene.name} duplizieren`} onClick={()=>openEditor(scene,{duplicate:true})}><Copy size={15} aria-hidden="true"/> Duplizieren</button></div>
   </article>)}</div>
   {!filtered.length?<p className="scene-empty">Keine Szene gefunden. Passe den Filter an oder erstelle deine eigene Szene.</p>:null}
-  <p className="scene-preview-hint">Die Karten und Änderungen zeigen eine Vorschau. Über „Auf Geräte anwenden“ im Beleuchtungsbereich übernimmst du das Licht auf deine Auswahl.</p>
+  <p className="scene-preview-hint">Die Lichtbänder zeigen Farben und Helligkeit des Effekts in der Vorschau. Mit „Auf Geräte anwenden“ im Beleuchtungsbereich übernimmst du das Licht auf deine Auswahl.</p>
   {draft?<section ref={editor} className="scene-editor" aria-label="Szene bearbeiten"><div className="scene-editor-heading"><h3>{draft.name||'Szene bearbeiten'}</h3><button type="button" onClick={()=>setDraft(null)}>Bearbeitung schließen</button></div><SceneMiniPreview config={draft.config} large label={`Vorschau der bearbeiteten Szene ${draft.name}`}/><div className="scene-editor-grid">
    <label>Name<input aria-label="Szenenname" value={draft.name} maxLength={60} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
    <label>Kategorie<input aria-label="Szenenkategorie" list="rgb-scene-categories" value={draft.category} maxLength={40} onChange={e=>setDraft({...draft,category:e.target.value})}/><datalist id="rgb-scene-categories">{categories.map(name=><option key={name} value={name}/>)}</datalist></label>

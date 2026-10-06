@@ -1,4 +1,10 @@
-# Batto 3-in-1 · 1.14.1
+# Batto 3-in-1 · 1.14.2
+
+## RGB-Oberfläche · 1.14.2
+
+Die integrierte RGB-Steuerung PRISM 1.8.2 bietet größere Gerätefelder, besser lesbare Einstellungen und eine Suche für alle 31 vorhandenen Effekte. **Setup**, **Strimer-Kabel** und **Szenen** sind direkt erreichbar. Das Kopfvideo lässt sich bei Bedarf aufklappen. Szenenkarten zeigen Lichtbänder aus den berechneten Effektfarben; Bearbeiten, Duplizieren, Favoriten sowie Import und Export bleiben verfügbar. Die Ansicht passt sich breiten und kleinen Fenstern an.
+
+PC-Bilder, Komponentenzuordnung, gespeicherte Profile und Geräteansteuerung bleiben erhalten. Beim Verschieben der Komponenten liegen transparente Auswahlflächen über dem PC-Bild. Änderungen bleiben weiterhin zunächst in der Vorschau.
 
 ## Strimer Wireless und Hauptnavigation · 1.14.1
 

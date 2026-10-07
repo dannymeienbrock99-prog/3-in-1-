@@ -29,6 +29,12 @@ Mainboard PWM needs the same existing hardware permissions as the linked fan bac
 
 ## Build
 
-Run `build.ps1`. It compiles linked source files, publishes a framework-dependent DLL, runs development-only ABI checks without hardware, and copies the already available .NET 8.0.31 runtime pack into a private framework layout. The published component contains no `.exe`; development test binaries are outside `publish`. The runtime licenses are included. No downloaded driver, helper installation or hardware change is part of the build.
+Run the repository's `Build.ps1` for the complete Windows build. It installs the desktop dependencies before the PRISM tests, prepares PRISM and its checksum-verified Windows SDK, and then runs this component's `build.ps1`.
+
+For an individual hardware-component build, first run `scripts/prepare-rgb.ps1` from a prepared source checkout. This component uses the verified references in `work/rgb-build/windows-sdk/lib/net8.0` by default; an existing verified SDK directory can be supplied with `-WindowsSdkReferences`. It no longer depends on a `native-sdk` directory outside the checkout. The .NET SDK setting permits newer .NET 8 feature bands, including the SDK installed by Windows CI, and applies to the test project as well.
+
+`components/batto-hardware/build.ps1` restores application and test dependencies from NuGet using their checked-in lock files in locked mode. The project explicitly downloads the exact `Microsoft.NETCore.App.Runtime.win-x64` package version `8.0.31`, so the build does not require an earlier DesktopFanControl build or a previously populated private cache. The package cache defaults to this component's `.packages` directory and can be changed with `-NuGetPackages`.
+
+The script compiles the linked source files, publishes a framework-dependent DLL, runs development-only ABI checks without hardware, and copies the pinned runtime into the private framework layout. The published component contains no `.exe`; development test binaries are outside `publish`. Runtime and dependency licenses are included. No downloaded driver, helper installation or hardware change is part of the build.
 
 Microsoft's hosting API supports framework-dependent components, so this layout deliberately supplies a private shared runtime rather than publishing the library as a standalone self-contained executable: [custom .NET hosting](https://learn.microsoft.com/en-us/dotnet/core/tutorials/netcore-hosting).

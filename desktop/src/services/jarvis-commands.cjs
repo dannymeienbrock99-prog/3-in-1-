@@ -23,7 +23,7 @@ const unavailable = () => ambiguous('Diese Funktion ist gerade nicht verfügbar.
 const NAVIGATION = {
   touchdeck: ['touch deck', 'batto touch deck', 'touchdeck', 'tuch deck'], dualstream: ['dual stream', 'dualstream'],
   jarvis: ['jarvis', 'javis', 'jarvis einstellungen', 'javis einstellungen'], sensors: ['pc werte', 'pc messwerte', 'messwerte', 'sensoren'],
-  fans: ['lufter', 'luftersteuerung', 'fan atlas'], rgb: ['rgb', 'rgb steuerung', 'rgb beleuchtung', 'prism', 'pc beleuchtung'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
+  fans: ['lufter', 'luftersteuerung', 'fan atlas', 'icue link lufter', 'pc icue lufter', 'pc und icue lufter'], rgb: ['rgb', 'rgb steuerung', 'rgb beleuchtung', 'prism', 'pc beleuchtung'], start: ['startseite', 'hauptseite'], dashboard: ['chat', 'multi chat', 'multichat'],
   wishlist: ['wunschliste'], widgets: ['widgets'], livecenter: ['live center'], moderation: ['moderation'],
   chatarchive: ['chatarchiv', 'chat archiv'], filters: ['filter', 'chat filter', 'chatfilter'], hologram: ['hologramm', 'chatfarben', 'chat farben', 'schottfarben', 'zettfarben'],
   platforms: ['plattformen'], commands: ['bot', 'bot befehle', 'kommands', 'comands'], broadcast: ['auto broadcast', 'autobroadcast', 'broadcast'],
@@ -364,7 +364,14 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransiti
       }
     }
   }
-  if (compound) return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
+  const navigation = /^(?:offne|offene|offnen|offnet|eroffne|zeige|zeig|(?:gehe|geh|wechsle|wechsel) (?:zu|zum|zur)|dexel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)$/.exec(text) || /^(?:(?:zu|zur|zum) )?(.+?) (?:offnen|anzeigen|wechseln)$/.exec(text);
+  if (compound) {
+    // A complete page name such as "PC und iCUE Lüfter" is one destination.
+    // Additional instructions still fail the exact catalog/alias match.
+    const query = navigation && targetText(navigation[1]);
+    if (query && choices(catalog, 'navigate').some(item => choiceMatches(item, query, NAVIGATION))) return select(catalog, 'navigate', query, NAVIGATION);
+    return ambiguous('Bitte gib mir einen Befehl nach dem anderen. Für mehrere Schritte kannst du eine gespeicherte Aktionskette nennen.');
+  }
   const rgb=rgbCommand(text,catalog);
   if(rgb)return rgb;
   // These exact, observed speech-recognition variants only open a harmless page.
@@ -397,11 +404,14 @@ function resolveCommand(input, {catalog = {}, sceneAliases = {}, withoutTransiti
   }
   const sceneMove=/^(?:(?:wechsle|wechsel|schalte) (?:zu|zur|auf|in) (?:die )?(?:szene )?(.+)|(?:(?:zu|zur|auf|in) (?:die )?)?(.+?) (?:wechseln|umschalten|machen|aktivieren))$/.exec(text);
   if(sceneMove){const query=targetText(sceneMove[1]||sceneMove[2]).replace(/^szene /,'');const key=Object.keys(SCENE_ALIASES).find(id=>SCENE_ALIASES[id].includes(query));if(key)return select(catalog,'scene',normalize(sceneAliases[key]||{pause:'Pause',spiel:'Spiel',start:'Start',ende:'Ende'}[key]));}
-  const navigation = /^(?:offne|offene|offnen|offnet|eroffne|zeige|zeig|(?:gehe|geh|wechsle|wechsel) (?:zu|zum|zur)|dexel zu) (?:mir )?(?:(?:den|die|das|der|dem) )?(.+?)(?: fenster)?$/.exec(text) || /^(?:(?:zu|zur|zum) )?(.+?)(?: fenster)? (?:offnen|anzeigen|wechseln)$/.exec(text);
   if (navigation) {
     // Polite questions become "das Touch Deck öffnen" after normalization.
     // Handle the article in this verb-last form just as in "öffne das Touch Deck".
-    const query = targetText(navigation[1]);
+    const fullQuery = targetText(navigation[1]);
+    // "Fenster" can be part of the actual page name ("Widget-Fenster").
+    // Prefer that exact catalog name before treating it as an optional suffix.
+    const query = choices(catalog, 'navigate').some(item => choiceMatches(item, fullQuery, NAVIGATION))
+      ? fullQuery : fullQuery.replace(/ fenster$/, '');
     if (query === 'start') return ambiguous('Meinst du die Startszene oder die Startseite? Sag: Startszene öffnen oder Startseite öffnen.');
     const known = choices(catalog, 'navigate').some(item => choiceMatches(item, query, NAVIGATION));
     if (known) return select(catalog, 'navigate', query, NAVIGATION);

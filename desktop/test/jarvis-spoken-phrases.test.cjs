@@ -66,7 +66,7 @@ test('the real reported Chatfarben transcripts route to the existing hologram pa
 test('every visible sidebar label resolves to an existing page, including the injected diagnostics page',t=>{
  const {catalog}=setup(t),renderer=path.join(__dirname,'../src/renderer');
  const html=fs.readFileSync(path.join(renderer,'index.html'),'utf8'),v21=fs.readFileSync(path.join(renderer,'v21-ui.js'),'utf8');
- const nav=[...html.matchAll(/<button[^>]*data-view="([^"]+)"[^>]*><b>.*?<\/b><span>(.*?)<\/span><\/button>/g)].map(m=>({id:m[1],name:m[2]}));
+ const nav=[...html.matchAll(/<button[^>]*data-view="([^"]+)"[^>]*><b>.*?<\/b><span>(.*?)<\/span><\/button>/g)].map(m=>({id:m[1],name:m[2].replace(/&amp;/g,'&')}));
  const panels=new Set([...html.matchAll(/data-view-panel="([^"]+)"/g)].map(m=>m[1]));
  const injectedId=/b\.dataset\.view\s*=\s*'([^']+)'/.exec(v21)?.[1],injectedName=/b\.innerHTML\s*=\s*'<b>.*?<\/b><span>(.*?)<\/span>'/.exec(v21)?.[1];
  assert.equal(injectedId,'diagnostics');assert.equal(injectedName,'Diagnose 2.1');assert.match(v21,/s\.dataset\.viewPanel\s*=\s*'diagnostics'/);

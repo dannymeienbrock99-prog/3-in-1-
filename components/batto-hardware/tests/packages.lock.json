@@ -2,21 +2,6 @@
   "version": 1,
   "dependencies": {
     "net8.0-windows7.0": {
-      "LibreHardwareMonitorLib": {
-        "type": "Direct",
-        "requested": "[0.9.6, )",
-        "resolved": "0.9.6",
-        "contentHash": "W4hQ5Ja51/1cEDZnh9kG5UHFBwjjY2+oIpSUhSsgeYXKRKezrkw3sEFrhQkrOuo53xkXyfWV8ZErMqQuGqWIMQ==",
-        "dependencies": {
-          "DiskInfoToolkit": "1.1.2",
-          "HidSharp": "2.6.4",
-          "Mono.Posix.NETStandard": "1.0.0",
-          "RAMSPDToolkit-NDD": "1.4.2",
-          "System.IO.Ports": "10.0.3",
-          "System.Management": "10.0.2",
-          "System.Threading.AccessControl": "10.0.3"
-        }
-      },
       "BlackSharp.Core": {
         "type": "Transitive",
         "resolved": "1.0.7",
@@ -34,6 +19,20 @@
         "type": "Transitive",
         "resolved": "2.6.4",
         "contentHash": "UcGvtnXFcatwHBXr+ei8GEXvg//wjGmDGQ6Xvb+7M4vHjURAhSLIJ+dSZv0BnAhQEpNlH8G4P7JxYnMH8Aph4g=="
+      },
+      "LibreHardwareMonitorLib": {
+        "type": "Transitive",
+        "resolved": "0.9.6",
+        "contentHash": "W4hQ5Ja51/1cEDZnh9kG5UHFBwjjY2+oIpSUhSsgeYXKRKezrkw3sEFrhQkrOuo53xkXyfWV8ZErMqQuGqWIMQ==",
+        "dependencies": {
+          "DiskInfoToolkit": "1.1.2",
+          "HidSharp": "2.6.4",
+          "Mono.Posix.NETStandard": "1.0.0",
+          "RAMSPDToolkit-NDD": "1.4.2",
+          "System.IO.Ports": "10.0.3",
+          "System.Management": "10.0.2",
+          "System.Threading.AccessControl": "10.0.3"
+        }
       },
       "Mono.Posix.NETStandard": {
         "type": "Transitive",
@@ -177,12 +176,17 @@
         "type": "Transitive",
         "resolved": "10.0.3",
         "contentHash": "PO3IM2ZXOJTjuuFDYMP62i290J41y891C+ytTa1HCDUo5FdywK/Ro6jflWHmbgZ2tz62EhRDa8WIT2vVJX45AQ=="
+      },
+      "batto.hardware": {
+        "type": "Project",
+        "dependencies": {
+          "LibreHardwareMonitorLib": "[0.9.6, )"
+        }
       }
     },
     "net8.0-windows7.0/win-x64": {
       "LibreHardwareMonitorLib": {
-        "type": "Direct",
-        "requested": "[0.9.6, )",
+        "type": "Transitive",
         "resolved": "0.9.6",
         "contentHash": "W4hQ5Ja51/1cEDZnh9kG5UHFBwjjY2+oIpSUhSsgeYXKRKezrkw3sEFrhQkrOuo53xkXyfWV8ZErMqQuGqWIMQ==",
         "dependencies": {

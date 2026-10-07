@@ -19,7 +19,7 @@ class TouchMobile{
  async start(){
   if(this.stopping)await this.stopping;if(this.server?.listening)return this.status();if(this.pending)return this.pending;
   this.pending=(async()=>{
-   const addresses=[...new Set(['127.0.0.1',...Object.values(os.networkInterfaces()).flat().filter(x=>x&&x.family==='IPv4'&&privateIp(x.address)).map(x=>x.address)])];
+   const addresses=this.host==='127.0.0.1'?['127.0.0.1']:[...new Set(['127.0.0.1',...Object.values(os.networkInterfaces()).flat().filter(x=>x&&x.family==='IPv4'&&privateIp(x.address)).map(x=>x.address)])];
    this.addresses=this.host==='0.0.0.0'?addresses:addresses.filter(x=>x===this.host);
    if(!this.addresses.length)throw Error('Bitte eine lokale Netzwerkadresse für das Touch Deck verwenden.');
    const server=http.createServer((req,res)=>{void this.handle(req,res).catch(()=>{if(!res.headersSent)res.writeHead(500,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:false,message:'Touch-Deck-Anfrage konnte nicht verarbeitet werden.'}));});});

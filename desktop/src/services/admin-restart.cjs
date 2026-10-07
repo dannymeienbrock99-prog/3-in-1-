@@ -137,8 +137,10 @@ async function awaitWithBindings(previous, api, {executable=process.execPath, pi
 }
 
 async function launchOwnAsAdministrator({executable=process.execPath, pid=process.pid} = {}) {
+  if (process.platform !== 'win32')
+    throw fail('Der Administrator-Neustart steht nur in der installierten Windows-Version bereit.', 'ADMIN_RESTART_UNAVAILABLE');
   validateOwn({executable,pid}, process.execPath, process.pid);
-  if (process.platform !== 'win32' || !isMainThread || !process.versions.electron || require('electron').app?.isPackaged !== true)
+  if (!isMainThread || !process.versions.electron || require('electron').app?.isPackaged !== true)
     throw fail('Der Administrator-Neustart steht nur in der installierten Windows-Version bereit.', 'ADMIN_RESTART_UNAVAILABLE');
   return new Promise((resolve,reject) => {
     // One Node thread in this process performs COM + runas. No launcher EXE or

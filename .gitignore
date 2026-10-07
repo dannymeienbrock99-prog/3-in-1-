@@ -49,3 +49,6 @@ touch-window.json
 /mobile/android/build/
 
 dual-window.json
+
+widget-windows.json
+.widget-windows-*.tmp

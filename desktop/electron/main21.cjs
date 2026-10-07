@@ -64,7 +64,7 @@ async function showMainWindow(){
  restoringWindow=(async()=>{
   if(!mainWindow||mainWindow.isDestroyed()){
    const win=createWindow(false);mainWindow=win;
-   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow())app.quit();});
+   win.on('closed',()=>{if(mainWindow===win)mainWindow=null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow()&&!require('../src/widget-bootstrap.cjs').getOpenCount())app.quit();});
    await new Promise((resolve,reject)=>{win.webContents.once('did-finish-load',resolve);win.webContents.once('did-fail-load',()=>reject(Error('Batto-Fenster konnte nicht geladen werden.')));});
   }
   if(restoreDetached){restoreDetached=false;setChatDetached(true);}
@@ -1020,7 +1020,7 @@ function registerIpc() {
 }
 
 async function shutdown() {
-  await Promise.allSettled([require('../src/touch-bootstrap.cjs').close(),require('../src/dual-stream/bootstrap.cjs').close(),require('../src/suite-bootstrap.cjs').close()]);
+  await Promise.allSettled([require('../src/touch-bootstrap.cjs').close(),require('../src/dual-stream/bootstrap.cjs').close(),require('../src/suite-bootstrap.cjs').close(),require('../src/widget-bootstrap.cjs').close()]);
   piperTts?.stop();
   tiktokMatch?.stop();
   chatExtras?.close();
@@ -1057,7 +1057,7 @@ else {
     initCore();
     registerIpc();
     mainWindow = createWindow(false);
-    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow())app.quit(); });
+    mainWindow.on('closed', () => { mainWindow = null;if(!gamingMode&&!detachedWindow&&!require('../src/touch-bootstrap.cjs').getDetachedWindow()&&!require('../src/dual-stream/bootstrap.cjs').getDetachedWindow()&&!require('../src/widget-bootstrap.cjs').getOpenCount())app.quit(); });
     if (currentConfig().windows.detachedOpen) setChatDetached(true);
     app.on('activate', () => { openFromTray(); });
     startExternalServices().catch((error) => bridgeLog('error', 'Runtime', 'START_EXTERNAL_FAILED', { message:error.message }));

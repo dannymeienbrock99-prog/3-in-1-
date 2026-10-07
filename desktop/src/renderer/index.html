@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./audio-output-ui.css" />
   <link rel="stylesheet" href="./gift-widget.css" />
   <link rel="stylesheet" href="./chat-extras-ui.css" />
+  <link rel="stylesheet" href="./widget-windows-ui.css" />
   <link rel="stylesheet" href="./chat-appearance-ui.css" />
   <link rel="stylesheet" href="./rule-editor-ui.css" />
   <link rel="stylesheet" href="./community-ui.css" />
@@ -50,6 +51,7 @@
           <button class="nav-item active" data-view="dashboard"><b>▣</b><span>Multi-Chat</span></button>
           <button class="nav-item" data-view="wishlist"><b>🎁</b><span>Wunschgeschenke</span></button>
           <button class="nav-item" data-view="widgets"><b>▧</b><span>TikFinity-Widgets</span></button>
+          <button class="nav-item" data-view="widget-windows"><b>↗</b><span>Widget-Fenster</span></button>
           <button class="nav-item" data-view="livecenter"><b>◉</b><span>TikTok LIVE Center</span></button>
           <button class="nav-item" data-view="chatarchive"><b>▤</b><span>Chatarchiv</span></button>
           <button class="nav-item" data-view="moderation"><b>♢</b><span>Moderation</span></button>
@@ -131,6 +133,7 @@
 
         <section class="view module-view" data-view-panel="wishlist"><div class="module-head"><div><h1>Wunschgeschenke</h1><p>Deine Geschenk-Bibliothek und kompakte Anzeige im Chat.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="wishlistModule"></div></section>
         <section class="view module-view" data-view-panel="widgets"><div class="module-head"><div><h1>TikFinity-Widgets</h1><p>Einblendungen für Follower, Geschenke und weitere Ereignisse.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="widgetsModule"></div></section>
+        <section class="view module-view" data-view-panel="widget-windows"><div class="module-head"><div><h1>Widget-Fenster</h1><p>Zwei zusätzliche Fenster für deine Widgets und Webseiten.</p></div><button data-back-dashboard>← Dashboard</button></div><div id="widgetWindowsRoot"></div></section>
         <section class="view module-view" data-view-panel="livecenter"><div class="module-head"><div><h1>TikTok LIVE Center</h1><p>Dein TikTok-LIVE verwalten.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="livecenterModule"></div></section>
         <section class="view module-view" data-view-panel="chatarchive"><div class="module-head"><div><h1>Chatarchiv</h1><p>Aufzeichnung, Suche und Export deiner Chatnachrichten.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="communityArchiveModule"></div></section>
         <section class="view module-view" data-view-panel="streamerbot"><div class="module-head"><div><h1>Streamer.bot</h1><p>Verbindung, wiederverwendbare Aktionen und Tests.</p></div><button data-back-dashboard>← Dashboard</button></div><div class="module-card" id="streamerbotModule"></div></section>
@@ -242,6 +245,7 @@
   <script src="./chat-widgets.js"></script>
   <script src="./gift-widget.js"></script>
   <script src="./chat-extras-ui.js"></script>
+  <script src="./widget-windows-ui.js"></script>
   <script src="./rule-editor-ui.js"></script>
   <script src="./community-ui.js"></script>
   <link rel="stylesheet" href="./battlebar.css">

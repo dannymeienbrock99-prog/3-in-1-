@@ -44,6 +44,21 @@ test('all visible tool pages can be opened by exact catalog name or common alias
   for (const [phrase, target] of [['Multi Chat öffnen', 'dashboard'], ['Öffne Chat', 'dashboard'], ['Touch Deck öffnen', 'touchdeck'], ['Dual Stream öffnen', 'dualstream'], ['Öffne die Einstellungen', 'settings'], ['Zeige mir die Lüfter', 'fans'], ['Öffne Jarvis', 'jarvis'], ['Jarvis Einstellungen öffnen', 'jarvis'], ['Chat Filter öffnen', 'filters'], ['Bot-Befehle öffnen', 'commands']]) action(phrase, {action: 'navigate', target});
   for (const item of catalog.actions.find(a => a.id === 'navigate').choices) action(`Öffne ${item.name}`, {action: 'navigate', target: item.id});
 });
+test('navigation preserves window names and still accepts an optional window suffix', () => {
+  for (const phrase of ['Öffne Widget-Fenster', 'Widget-Fenster öffnen', 'Öffne das Widget Fenster', 'Das Widget-Fenster anzeigen']) {
+    action(phrase, {action: 'navigate', target: 'widget-windows'});
+  }
+  for (const phrase of ['Öffne Touch Deck Fenster', 'Touch Deck Fenster öffnen']) {
+    action(phrase, {action: 'navigate', target: 'touchdeck'});
+  }
+  for (const phrase of ['Öffne PC & iCUE Lüfter', 'Öffne PC und iCUE Lüfter', 'iCUE LINK Lüfter öffnen']) {
+    action(phrase, {action: 'navigate', target: 'fans'});
+  }
+  assert.equal(resolve('Öffne Widget').kind, 'ambiguous');
+  assert.equal(resolve('Start Fenster öffnen').kind, 'ambiguous');
+  assert.equal(resolve('Öffne PC und iCUE Lüfter und mache Pause').kind, 'ambiguous');
+  assert.equal(resolve('Öffne PC und iCUE Lüfter nicht'), null);
+});
 test('source, overlay, bot and broadcast switches are explicit and validated', () => {
   for (const [input, expected] of [
     ['Kamera an', {action: 'source', target: 'camera', op: 'on'}], ['Schalte bitte die Webcam aus', {action: 'source', target: 'camera', op: 'off'}],

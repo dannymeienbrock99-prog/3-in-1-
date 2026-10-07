@@ -20,6 +20,13 @@ function sensorConfig(){const c=defaultConfig();c.profiles[0].buttons[0]={id:'cp
 test('construction leaves server, files, microphone and sensor polling asleep',t=>{
  let sensorReads=0;const {deck,directory,calls}=fixture(t,{getSensors:()=>{sensorReads++;return [];}});assert.equal(sensorReads,0);assert.equal(deck.mobile.server,null);assert.equal(deck.mobile.pending,null);assert.equal(deck.mobile.assets.size,0);assert(!fs.existsSync(path.join(directory,'touch-deck.json')));assert.deepEqual(calls,[]);assert.equal(deck.snapshot().mobile.running,false);assert.equal(sensorReads,1);
 });
+test('explicit loopback binding remains available when network adapter enumeration is unavailable',async t=>{
+ let queries=0;t.mock.method(os,'networkInterfaces',()=>{queries++;throw Error('Network adapter enumeration unavailable');});
+ const {deck}=fixture(t),state=await deck.mobileStart();
+ assert.equal(queries,0);assert.equal(state.running,true);assert.deepEqual(deck.mobile.addresses,['127.0.0.1']);
+ assert.deepEqual(state.urls,['http://127.0.0.1:'+deck.mobile.port]);assert.equal((await request(deck,'/')).status,200);
+ assert.equal((await request(deck,'/',{headers:{Host:'192.168.1.50:'+deck.mobile.port}})).status,403);
+});
 test('stale ordinary keys cannot execute a replacement action at the same position',async t=>{
  const {deck,calls}=fixture(t),position=guardedPosition(deck,{profileId:'main',path:[],index:0});
  const config=deck.snapshot();config.profiles[0].buttons[0]={id:'replacement',type:'action',title:'Ersatz',steps:[{action:'show'}]};deck.save(config);

@@ -13,7 +13,7 @@
     <RollForward>LatestPatch</RollForward>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <SelfContained>false</SelfContained>
-    <WindowsSdkReferencePath Condition="'$(WindowsSdkReferencePath)'==''">$(MSBuildProjectDirectory)\..\..\..\native-sdk\windows-net8\lib\net8.0</WindowsSdkReferencePath>
+    <WindowsSdkReferencePath Condition="'$(WindowsSdkReferencePath)'==''">$(MSBuildProjectDirectory)\..\..\work\rgb-build\windows-sdk\lib\net8.0</WindowsSdkReferencePath>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests/**;publish/**;bin/**;obj/**" />
@@ -35,6 +35,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <!-- Download the pinned private host runtime without making this DLL a self-contained executable. -->
+    <PackageDownload Include="Microsoft.NETCore.App.Runtime.win-x64" Version="[8.0.31]" />
     <InternalsVisibleTo Include="Batto.Hardware.Tests" />
     <Reference Include="Microsoft.Windows.SDK.NET"><HintPath>$(WindowsSdkReferencePath)\Microsoft.Windows.SDK.NET.dll</HintPath></Reference>
     <Reference Include="WinRT.Runtime"><HintPath>$(WindowsSdkReferencePath)\WinRT.Runtime.dll</HintPath></Reference>

@@ -2,12 +2,16 @@ param([string]$InnoCompiler = '',[switch]$PrepareVoice,[switch]$SkipInstaller,[s
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Build-Schritt fehlgeschlagen: $LASTEXITCODE" } }
+# RGB providers share the desktop runtime dependencies, including rijndael-js.
+# Install them before prepare-rgb.ps1 runs its provider tests on a clean checkout.
+Push-Location (Join-Path $PSScriptRoot 'desktop')
+try { npm ci; Check-Exit } finally { Pop-Location }
 if ($PrepareVoice) { python scripts/prepare-voice.py; Check-Exit }
 python scripts/prepare-virtualcam.py; Check-Exit
 if (-not (Test-Path jarvis/python/python.exe) -or -not (Test-Path jarvis/models/whisper-small/model.bin)) { throw 'Sprachpaket fehlt. Mit Python 3.12 und -PrepareVoice vorbereiten.' }
 & ./jarvis/python/python.exe -m unittest discover -s jarvis/tests -p 'test_*.py'; Check-Exit
 & ./scripts/prepare-rgb.ps1
-& ./components/desktop-fan-control/build.ps1
+& ./components/batto-hardware/build.ps1
 dotnet publish components/fanatlas-src/FanAtlas/FanAtlas.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet publish components/dual-stream/DualStreamHost.csproj -c Release -r win-x64 --self-contained true -p:RuntimeFrameworkVersion=8.0.31 -o FanAtlas; Check-Exit
 dotnet run --project components/dual-stream-registration-tests/RegistrationTests.csproj -c Release; Check-Exit
@@ -31,7 +35,6 @@ Copy-Item licenses/touch-deck/* dist/Extras/Touch-Deck-Licenses/ -Force
 Copy-Item components/dual-stream/LICENSE dist/Extras/DualStream-LICENSE.txt
 python scripts/prepare-obs-piper.py; Check-Exit
 Push-Location desktop
-npm ci; Check-Exit
 & .\node_modules\.bin\electron.cmd scripts/prepare-icons.cjs; Check-Exit
 npm run test:jarvis; Check-Exit
 npm run test:widgets; Check-Exit
@@ -59,5 +62,6 @@ if ($SkipInstaller) {
   Write-Output 'Build und Tests fertig. Privater Installer wird in CI nicht erstellt oder veröffentlicht.'
 } else {
   & (Join-Path $PSScriptRoot 'scripts/build-installer.ps1') -InnoCompiler $InnoCompiler -KeyFile $InstallerKeyFile
-  Write-Output 'Fertig: geschützter dist/Batto-3-in-1-Setup-1.15.0.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin'
+  $appVersion = (Get-Content (Join-Path $PSScriptRoot 'desktop/package.json') -Raw | ConvertFrom-Json).version
+  Write-Output "Fertig: geschützter dist/Batto-3-in-1-Setup-$appVersion.exe und dist/Extras/de.crazybatto.suite.streamDeckPlugin"
 }

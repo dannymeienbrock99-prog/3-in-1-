@@ -2,7 +2,7 @@
   'use strict';
   const ui = factory();
   if (typeof module === 'object' && module.exports) module.exports = ui;
-  if (root?.document) ui.mount(root.document.querySelector('#widgetWindowsRoot'), root.batto);
+  if (root?.document && new URLSearchParams(root.location?.search || '').get('detached') !== '1') ui.mount(root.document.querySelector('#widgetWindowsRoot'), root.batto);
 })(typeof window === 'object' ? window : null, function () {
   'use strict';
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
@@ -23,6 +23,17 @@
     return {id, name:label, url:href};
   }
   function hostname(url) { try { return new URL(url).hostname; } catch { return ''; } }
+  function background(value) {
+    const fit = ['cover','contain','stretch'].includes(value?.fit) ? value.fit : 'cover';
+    let imageUrl = '';
+    if (value?.hasImage && value.imageUrl) {
+      try {
+        const parsed = new URL(value.imageUrl);
+        if (parsed.protocol === 'file:' && (!parsed.hostname || parsed.hostname === 'localhost') && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) imageUrl = parsed.href;
+      } catch {}
+    }
+    return {hasImage:!!imageUrl,name:imageUrl ? String(value?.name || 'Hintergrundbild') : '',fit,imageUrl};
+  }
   function mount(host, api) {
     if (!host || !api?.widgetWindowsStatus) return;
     host.classList.add('widget-windows');
@@ -30,6 +41,7 @@
       <p class="ww-notice" role="status" aria-live="polite" data-ww-notice>Einstellungen werden geladen …</p>
       <p class="ww-error" role="alert" data-ww-error hidden></p>
       <div class="ww-windows" data-ww-windows></div>
+      <p class="ww-background-hint">Hintergrundbilder erscheinen hinter transparenten Widgets. Webseiten mit eigenem Hintergrund können das Bild verdecken.</p>
       <section class="ww-address-book" aria-labelledby="ww-address-heading"><div class="ww-section-heading"><div><h3 id="ww-address-heading">Deine HTTPS-Adressen</h3><p>Sechs Plätze für TikFinity, Overlays und weitere Seiten. Speichere eine Adresse und wähle sie oben für dein Fenster aus.</p></div><span class="ww-count">6 Speicherplätze</span></div><div class="ww-slots" data-ww-slots></div></section>`;
     const notice = host.querySelector('[data-ww-notice]');
     const errorBox = host.querySelector('[data-ww-error]');
@@ -47,7 +59,7 @@
     async function request(operation, success) {
       if (busy) return;
       busy = true; error = ''; render();
-      try { accept(await operation()); if (success) message = success; }
+      try { const result = await operation(); accept(result); if (success && !result?.canceled && !result?.cancelled) message = success; }
       catch (value) { error = String(value.message || value); }
       finally { busy = false; render(); }
     }
@@ -86,12 +98,27 @@
       const nextWindowsSignature = JSON.stringify([state.windows.map(win => [win.id,win.name]),state.slots.map(slot => [slot.id,slot.name,slot.url])]);
       if (nextWindowsSignature !== windowsSignature) {
         windowsSignature = nextWindowsSignature;
-        windowsHost.innerHTML = state.windows.map((win, index) => `<article class="ww-window" data-ww-window="${escape(win.id)}"><div class="ww-window-heading"><span class="ww-window-icon" aria-hidden="true">↗</span><div><h3>${escape(win.name || `Fenster ${index + 2}`)}</h3><small>Eigenes Fenster für eine Webseite</small></div><span class="ww-window-state" data-ww-state>Geschlossen</span></div><div class="ww-window-screen"><span class="ww-screen-icon" aria-hidden="true">▧</span><strong data-ww-source>Noch keine Adresse</strong><small data-ww-hostname></small></div><label class="ww-source-label">Gespeicherte Adresse<select data-ww-select aria-label="Adresse für ${escape(win.name || `Fenster ${index + 2}`)}"><option value="">Adresse auswählen …</option>${state.slots.map((slot, slotIndex) => `<option value="${escape(slot.id)}" ${slot.url ? '' : 'disabled'}>${slotIndex + 1} · ${escape(slot.name || 'Freier Platz')}${slot.url ? '' : ' — leer'}</option>`).join('')}</select></label><div class="ww-window-actions"><button class="primary" type="button" data-ww-action="open">↗ Fenster öffnen</button><button type="button" data-ww-action="reload">Neu laden</button><button type="button" data-ww-action="close">Schließen</button></div><div class="ww-window-footer"><label><input type="checkbox" data-ww-top> Immer im Vordergrund</label><small data-ww-detail>Öffnet sich erst auf deinen Klick.</small></div><p class="ww-window-error" data-ww-window-error hidden></p></article>`).join('');
+        windowsHost.innerHTML = state.windows.map((win, index) => `<article class="ww-window" data-ww-window="${escape(win.id)}"><div class="ww-window-heading"><span class="ww-window-icon" aria-hidden="true">↗</span><div><h3>${escape(win.name || `Fenster ${index + 2}`)}</h3><small>Eigene Webseite · eigener Hintergrund</small></div><span class="ww-window-state" data-ww-state>Geschlossen</span></div><div class="ww-window-screen" data-ww-screen><img class="ww-background-preview" data-ww-background-preview alt="" hidden><span class="ww-screen-icon" data-ww-screen-icon aria-hidden="true">▧</span><strong data-ww-source>Noch keine Adresse</strong><small data-ww-hostname></small></div><div class="ww-background-controls"><div class="ww-background-heading"><strong>Hintergrundbild</strong><span data-ww-background-name>Kein Hintergrundbild</span></div><div class="ww-background-actions"><button type="button" data-ww-action="choose-background">Bild auswählen</button><button type="button" data-ww-action="clear-background">Bild entfernen</button><label>Bildanpassung<select data-ww-background-fit aria-label="Bildanpassung für ${escape(win.name || `Fenster ${index + 2}`)}"><option value="cover">Ausfüllen</option><option value="contain">Ganzes Bild</option><option value="stretch">Strecken</option></select></label></div></div><label class="ww-source-label">Gespeicherte Adresse<select data-ww-select aria-label="Adresse für ${escape(win.name || `Fenster ${index + 2}`)}"><option value="">Adresse auswählen …</option>${state.slots.map((slot, slotIndex) => `<option value="${escape(slot.id)}" ${slot.url ? '' : 'disabled'}>${slotIndex + 1} · ${escape(slot.name || 'Freier Platz')}${slot.url ? '' : ' — leer'}</option>`).join('')}</select></label><div class="ww-window-actions"><button class="primary" type="button" data-ww-action="open">↗ Fenster öffnen</button><button type="button" data-ww-action="reload">Neu laden</button><button type="button" data-ww-action="close">Schließen</button></div><div class="ww-window-footer"><label><input type="checkbox" data-ww-top> Immer im Vordergrund</label><small data-ww-detail>Öffnet sich erst auf deinen Klick.</small></div><p class="ww-window-error" data-ww-window-error hidden></p></article>`).join('');
       }
       for (const win of state.windows) {
         const card = [...windowsHost.querySelectorAll('[data-ww-window]')].find(item => item.dataset.wwWindow === win.id);
         if (!card) continue;
         const slot = state.slots.find(item => item.id === win.slotId);
+        const image = background(win.background);
+        const preview = card.querySelector('[data-ww-background-preview]');
+        card.querySelector('[data-ww-screen]').dataset.hasBackground = String(image.hasImage);
+        preview.hidden = !image.hasImage;
+        if (image.hasImage) {
+          if (preview.getAttribute('src') !== image.imageUrl) preview.src = image.imageUrl;
+          preview.style.objectFit = image.fit === 'stretch' ? 'fill' : image.fit;
+        } else preview.removeAttribute('src');
+        card.querySelector('[data-ww-screen-icon]').hidden = image.hasImage;
+        const imageName = card.querySelector('[data-ww-background-name]');
+        imageName.textContent = image.name || 'Kein Hintergrundbild'; imageName.title = image.name;
+        card.querySelector('[data-ww-background-fit]').value = image.fit;
+        card.querySelector('[data-ww-background-fit]').disabled = busy || !image.hasImage;
+        card.querySelector('[data-ww-action="choose-background"]').disabled = busy;
+        card.querySelector('[data-ww-action="clear-background"]').disabled = busy || !image.hasImage;
         card.dataset.open = String(!!win.open);
         card.querySelector('[data-ww-state]').textContent = win.error ? 'Bitte prüfen' : win.open ? (win.loading ? 'Wird geladen …' : 'Geöffnet') : 'Geschlossen';
         card.querySelector('[data-ww-source]').textContent = slot?.name || 'Noch keine Adresse';
@@ -144,6 +171,9 @@
       } else if (event.target.matches('[data-ww-top]')) {
         const value = event.target.checked;
         request(() => api.widgetWindowAlwaysOnTop({id:card.dataset.wwWindow,value}));
+      } else if (event.target.matches('[data-ww-background-fit]')) {
+        const fit = event.target.value;
+        request(() => api.widgetWindowSetBackground({id:card.dataset.wwWindow,fit}));
       }
     });
     windowsHost.addEventListener('click', event => {
@@ -155,10 +185,12 @@
       if (action === 'open') request(() => api.widgetWindowOpen({id,slotId:card.querySelector('[data-ww-select]').value}));
       else if (action === 'reload') request(() => api.widgetWindowReload({id}));
       else if (action === 'close') request(() => api.widgetWindowClose({id}));
+      else if (action === 'choose-background') request(() => api.widgetWindowChooseBackground({id}), 'Hintergrundbild gespeichert. Es gilt nur für dieses Zusatzfenster.');
+      else if (action === 'clear-background') request(() => api.widgetWindowClearBackground({id}), 'Hintergrundbild entfernt.');
     });
     api.onWidgetWindowsUpdate?.(value => { try { accept(value); } catch (value) { reportError(value); } });
     render(); request(() => api.widgetWindowsStatus());
     return {update:accept};
   }
-  return {address,captureSlot,hostname,mount};
+  return {address,captureSlot,hostname,background,mount};
 });

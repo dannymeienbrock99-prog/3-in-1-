@@ -1,9 +1,11 @@
-# Batto 3-in-1 · 1.18.0
+# Batto 3-in-1 · 1.18.1
 
 
 ## Zwei zusätzliche Widget-Fenster
 
 Unter **Widget-Fenster** stehen **Fenster 2** und **Fenster 3** für HTTPS-Webseiten und Widgets bereit. Sechs benannte Plätze lassen sich speichern und jedem Fenster getrennt zuweisen. **Fenster öffnen** öffnet ein eigenständiges Fenster; Auswahl, Neuladen, Schließen und **Immer im Vordergrund** sind unabhängig. Größe und Position werden separat gespeichert. Webseiten starten nur beim bewussten Öffnen; Schließen gibt ihre Ansicht frei. Der ursprüngliche Multi-Chat mit seiner bisherigen Entkopplung bleibt unverändert. Adressen und Fensterdaten liegen separat in der lokalen Datei widget-windows.json.
+
+Für jedes Fenster lässt sich über **Bild auswählen** ein eigenes PNG- oder JPG-Hintergrundbild hinterlegen. **Ausfüllen**, **Ganzes Bild** und **Strecken** passen das Bild an die Fenstergröße an; **Bild entfernen** löscht nur den Hintergrund dieses Fensters. Batto übernimmt das Bild in seinen eigenen lokalen Speicher, damit die Auswahl nach einem Neustart erhalten bleibt. Transparente Widgets zeigen das Bild dahinter; Webseiten mit einer eigenen deckenden Fläche können es verdecken.
 
 ## Corsair iCUE LINK direkt steuern
 

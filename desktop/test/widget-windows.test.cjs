@@ -5,11 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {pathToFileURL} = require('node:url');
+const {pathToFileURL, fileURLToPath} = require('node:url');
 const {EventEmitter} = require('node:events');
 const {WidgetWindows, httpsUrl, restoreState, windowBounds, TOOLBAR_HEIGHT} = require('../electron/widget-windows.cjs');
 
-function fixture(t, {initialState, readStored = false, fileLoad, loadTimeoutMs} = {}) {
+function fixture(t, {initialState, readStored = false, fileLoad, loadTimeoutMs, electronOverrides = {}} = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'batto-widget-windows-'));
   t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
   const windows = [], views = [], sessions = new Map(), changes = [];
@@ -59,9 +59,10 @@ function fixture(t, {initialState, readStored = false, fileLoad, loadTimeoutMs} 
   class View {
     constructor(options) { this.options = options; this.webContents = new Contents(options.webPreferences); views.push(this); }
     setBounds(value) { this.bounds = value; }
+    setBackgroundColor(value) { this.backgroundColor = value; }
   }
   const screen = {getAllDisplays: () => [{workArea: {x: 0, y: 0, width: 1920, height: 1080}}], getPrimaryDisplay: () => ({workArea: {x: 0, y: 0, width: 1920, height: 1080}})};
-  const manager = new WidgetWindows({directory, electron: {BrowserWindow: Window, WebContentsView: View, screen},
+  const manager = new WidgetWindows({directory, electron: {BrowserWindow: Window, WebContentsView: View, screen, ...electronOverrides},
     onChange: state => changes.push(state), loadTimeoutMs, ...(readStored ? {} : {initialState})});
   return {directory, manager, windows, views, sessions, changes, screen};
 }
@@ -137,6 +138,7 @@ test('remote widget uses a separate sandboxed WebContentsView without preload or
   assert.equal(windows[0].options.parent, undefined);
   assert.deepEqual(views[0].webContents.loads, ['https://example.org/widget-a']);
   assert.equal(views[0].bounds.y, TOOLBAR_HEIGHT);
+  assert.equal(views[0].backgroundColor, '#00000000');
 });
 
 test('toolbar identity accepts only the exact local window and its own main frame', async t => {
@@ -332,4 +334,129 @@ test('a late failed navigation cannot overwrite a newer successful explicit sele
   assert.equal(manager.status().windows[0].url, 'https://example.org/widget-b');
   assert.equal(manager.status().windows[0].error, null);
   assert.equal(manager.status().windows[0].loading, false);
+});
+
+const BACKGROUND_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+function backgroundFixture(t, options = {}) {
+  let selected;
+  const electronOverrides = {
+    nativeImage: {createFromBuffer: () => ({isEmpty: () => false, getSize: () => ({width: 1, height: 1}), toPNG: () => BACKGROUND_PNG})},
+    dialog: {showOpenDialog: async () => ({canceled: false, filePaths: [selected]})}
+  };
+  const value = fixture(t, {initialState: populated(), electronOverrides, ...options});
+  selected = path.join(value.directory, 'Personal Background.png'); fs.writeFileSync(selected, BACKGROUND_PNG);
+  return {...value, electronOverrides, source: selected};
+}
+
+test('old widget configuration restores independent empty backgrounds without changing slots or Chat', t => {
+  const {manager, directory} = fixture(t, {initialState: populated()});
+  fs.writeFileSync(path.join(directory, 'chat-window.json'), 'original chat');
+  assert.deepEqual(manager.status().windows.map(window => window.background), [
+    {hasImage: false, name: '', fit: 'cover', imageUrl: ''}, {hasImage: false, name: '', fit: 'cover', imageUrl: ''}
+  ]);
+  assert.equal(manager.status().slots[0].url, 'https://example.org/widget-a');
+  assert.equal(fs.readFileSync(path.join(directory, 'chat-window.json'), 'utf8'), 'original chat');
+});
+
+test('choosing a background persists only the chosen widget and never opens or reloads a web page', async t => {
+  const {manager, directory, source, views, windows} = backgroundFixture(t);
+  const original = path.join(directory, 'chat-window.json'); fs.writeFileSync(original, '{"original":true}');
+  const state = await manager.chooseBackground({id: 'widget-1'});
+  assert.equal(state.windows[0].background.hasImage, true);
+  assert.equal(state.windows[0].background.name, 'Personal Background.png');
+  assert.equal(state.windows[1].background.hasImage, false);
+  assert.equal(views.length + windows.length, 0);
+  assert.deepEqual(fs.readFileSync(source), BACKGROUND_PNG);
+  assert.equal(fs.readFileSync(original, 'utf8'), '{"original":true}');
+  const stored = JSON.parse(fs.readFileSync(manager.file, 'utf8'));
+  assert.match(stored.windows[0].background.file, /^[a-f0-9]{32}\.png$/u);
+  assert.equal('imageUrl' in stored.windows[0].background, false);
+  assert.equal('source' in stored.windows[0].background, false);
+  assert.equal(stored.windows[1].background.file, '');
+});
+
+test('per-window image and fit survive restart while clearing one leaves the other and source intact', async t => {
+  const {manager, directory, source, electronOverrides} = backgroundFixture(t);
+  await manager.chooseBackground({id: 'widget-1'}); await manager.chooseBackground({id: 'widget-2'});
+  manager.setBackground({id: 'widget-1', fit: 'contain'}); manager.setBackground({id: 'widget-2', fit: 'stretch'});
+  const before = manager.status().windows.map(window => window.background);
+  assert.notEqual(before[0].imageUrl, before[1].imageUrl);
+  const restarted = new WidgetWindows({directory, electron: electronOverrides});
+  assert.deepEqual(restarted.status().windows.map(window => window.background), before);
+  restarted.clearBackground({id: 'widget-1'});
+  assert.equal(restarted.status().windows[0].background.hasImage, false);
+  assert.equal(restarted.status().windows[0].background.fit, 'contain');
+  assert.equal(fs.existsSync(fileURLToPath(before[0].imageUrl)), false);
+  assert.equal(fs.existsSync(fileURLToPath(before[1].imageUrl)), true);
+  assert.equal(fs.existsSync(source), true);
+});
+
+test('cancelled chooser preserves previous image, fit, and saved configuration exactly', async t => {
+  const {manager, electronOverrides} = backgroundFixture(t);
+  await manager.chooseBackground({id: 'widget-1'}); manager.setBackground({id: 'widget-1', fit: 'contain'});
+  const before = manager.status(), saved = fs.readFileSync(manager.file, 'utf8');
+  electronOverrides.dialog.showOpenDialog = async () => ({canceled: true, filePaths: []});
+  assert.deepEqual(await manager.chooseBackground({id: 'widget-1'}), {...before, canceled: true});
+  assert.equal(fs.readFileSync(manager.file, 'utf8'), saved);
+});
+
+test('failed image import and invalid fit preserve the active background and all saved settings', async t => {
+  const {manager, source} = backgroundFixture(t);
+  await manager.chooseBackground({id: 'widget-1'});
+  const before = manager.status(), saved = fs.readFileSync(manager.file, 'utf8');
+  fs.writeFileSync(source, '<svg>unsupported and untrusted</svg>');
+  await assert.rejects(manager.chooseBackground({id: 'widget-1'}), /statisches/);
+  assert.throws(() => manager.setBackground({id: 'widget-1', fit: 'file:///C:/private.png'}));
+  assert.deepEqual(manager.status(), before);
+  assert.equal(fs.readFileSync(manager.file, 'utf8'), saved);
+});
+
+test('failed configuration write rolls back the newly imported image without deleting the original', async t => {
+  const {manager, directory, source} = backgroundFixture(t);
+  await manager.chooseBackground({id: 'widget-1'});
+  const before = manager.status(), saved = fs.readFileSync(manager.file, 'utf8');
+  const originals = fs.readdirSync(path.join(directory, 'WidgetBackgrounds'));
+  manager._persist = () => { throw new Error('Storage failure fixture'); };
+  await assert.rejects(manager.chooseBackground({id: 'widget-1'}), /Storage failure/);
+  assert.deepEqual(manager.status(), before);
+  assert.equal(fs.readFileSync(manager.file, 'utf8'), saved);
+  assert.deepEqual(fs.readdirSync(path.join(directory, 'WidgetBackgrounds')), originals);
+  assert.equal(fs.existsSync(source), true);
+  assert.throws(() => manager.clearBackground({id: 'widget-1'}), /Storage failure/);
+  assert.equal(fs.existsSync(fileURLToPath(before.windows[0].background.imageUrl)), true);
+});
+
+test('clearing while a chooser is pending cancels its stale selection without importing later', async t => {
+  const {manager, source, electronOverrides, directory} = backgroundFixture(t);
+  let resolve;
+  electronOverrides.dialog.showOpenDialog = () => new Promise(done => { resolve = done; });
+  const selected = manager.chooseBackground({id: 'widget-1'});
+  await assert.rejects(manager.chooseBackground({id: 'widget-1'}), /bereits geöffnet/);
+  manager.clearBackground({id: 'widget-1'});
+  resolve({canceled: false, filePaths: [source]}); await selected;
+  assert.equal(manager.status().windows[0].background.hasImage, false);
+  assert.equal(fs.existsSync(path.join(directory, 'WidgetBackgrounds')), false);
+});
+
+test('choosing keeps a fit changed during the native dialog without overwriting another window', async t => {
+  const {manager, source, electronOverrides} = backgroundFixture(t);
+  let resolve;
+  electronOverrides.dialog.showOpenDialog = () => new Promise(done => { resolve = done; });
+  const selected = manager.chooseBackground({id: 'widget-1'});
+  manager.setBackground({id: 'widget-1', fit: 'stretch'});
+  manager.setBackground({id: 'widget-2', fit: 'contain'});
+  resolve({canceled: false, filePaths: [source]}); await selected;
+  assert.equal(manager.status().windows[0].background.fit, 'stretch');
+  assert.equal(manager.status().windows[1].background.fit, 'contain');
+});
+
+test('changing the local background in an open widget never injects code or reloads the remote page', async t => {
+  const {manager, views} = backgroundFixture(t);
+  await manager.open({id: 'widget-1'}); const remote = views[0].webContents;
+  await manager.chooseBackground({id: 'widget-1'});
+  manager.setBackground({id: 'widget-1', fit: 'contain'});
+  manager.clearBackground({id: 'widget-1'});
+  assert.deepEqual(remote.loads, ['https://example.org/widget-a']);
+  assert.equal(views[0].backgroundColor, '#00000000');
+  assert.equal(remote.isDestroyed(), false);
 });

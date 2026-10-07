@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {fileURLToPath} = require('node:url');
+const {WidgetBackgrounds, backgroundState, fitValue} = require('./widget-backgrounds.cjs');
 
 const SLOT_IDS = Object.freeze(Array.from({length: 6}, (_, index) => `slot-${index + 1}`));
 const WINDOW_IDS = Object.freeze(['widget-1', 'widget-2']);
@@ -34,7 +35,8 @@ function defaultState() {
   return {
     version: 1,
     slots: SLOT_IDS.map((id, index) => ({id, name: index === 0 ? 'TikFinity' : `Platz ${index + 1}`, url: ''})),
-    windows: WINDOW_IDS.map((id, index) => ({id, name: `Fenster ${index + 2}`, slotId: SLOT_IDS[index], bounds: null, alwaysOnTop: false}))
+    windows: WINDOW_IDS.map((id, index) => ({id, name: `Fenster ${index + 2}`, slotId: SLOT_IDS[index], bounds: null, alwaysOnTop: false,
+      background: backgroundState()}))
   };
 }
 
@@ -59,6 +61,7 @@ function restoreState(input) {
     if (SLOT_IDS.includes(previous.slotId)) window.slotId = previous.slotId;
     window.bounds = savedBounds(previous.bounds);
     window.alwaysOnTop = previous.alwaysOnTop === true;
+    window.background = backgroundState(previous.background);
   }
   return state;
 }
@@ -87,6 +90,8 @@ class WidgetWindows {
     this.uiFile = path.resolve(uiFile || path.join(__dirname, '../src/renderer/widget-window.html'));
     this.preloadFile = path.resolve(preloadFile || path.join(__dirname, 'widget-window-preload.cjs'));
     this.electron = electron;
+    this.backgrounds = new WidgetBackgrounds(this.directory, electron);
+    this.backgroundChoices = new Map();
     this.onChange = onChange;
     this.onAllClosed = onAllClosed;
     this.loadTimeoutMs = Number.isFinite(loadTimeoutMs) ? Math.max(10, Math.min(60000, loadTimeoutMs)) : 30000;
@@ -149,7 +154,7 @@ class WidgetWindows {
       slots: this.state.slots.map(slot => ({...slot})),
       windows: this.state.windows.map(window => {
         const record = this._record(window.id);
-        return {...window, bounds: window.bounds ? {...window.bounds} : null, open: !!record,
+        return {...window, background: this.backgrounds.status(window.background), bounds: window.bounds ? {...window.bounds} : null, open: !!record,
           loading: record?.loading === true, error: record?.error || null,
           url: record ? record.url : this._slot(window.slotId).url};
       }),
@@ -211,6 +216,8 @@ class WidgetWindows {
       contextIsolation: true, webSecurity: true, allowRunningInsecureContent: false,
       webviewTag: false, navigateOnDragDrop: false, backgroundThrottling: false
     }});
+    // Native view transparency preserves the HTTPS page itself and reveals our local background below it.
+    view.setBackgroundColor('#00000000');
     record.view = view;
     const contents = view.webContents;
     if (!this.securedSessions.has(contents.session)) {
@@ -356,6 +363,43 @@ class WidgetWindows {
     const next = {...this.state, windows: this.state.windows.map(item => item.id === id ? {...item, alwaysOnTop: value} : item)};
     this._persist(next); this.state = next;
     this._record(id)?.window.setAlwaysOnTop(value);
+    return this._changed();
+  }
+  async chooseBackground({id} = {}, parentWindow) {
+    this._window(id);
+    if (this.backgroundChoices.has(id)) throw new Error('Die Bildauswahl für dieses Fenster ist bereits geöffnet.');
+    const choice = {active: true};
+    this.backgroundChoices.set(id, choice);
+    try {
+      const source = await this.backgrounds.choose(parentWindow);
+      if (!source || !choice.active) return {...this.status(), canceled: true};
+      const imported = this.backgrounds.import(source);
+      const previous = this._window(id).background;
+      const background = {...imported, fit: previous.fit};
+      const next = {...this.state, windows: this.state.windows.map(window => window.id === id ? {...window, background} : window)};
+      try { this._persist(next); }
+      catch (error) { this.backgrounds.removeUnused(imported.file, this.state.windows); throw error; }
+      this.state = next;
+      this.backgrounds.removeUnused(previous.file, next.windows);
+      return this._changed();
+    } finally { if (this.backgroundChoices.get(id) === choice) this.backgroundChoices.delete(id); }
+  }
+  setBackground({id, fit} = {}) {
+    const previous = this._window(id);
+    const background = {...previous.background, fit: fitValue(fit)};
+    const next = {...this.state, windows: this.state.windows.map(window => window.id === id ? {...window, background} : window)};
+    this._persist(next); this.state = next;
+    return this._changed();
+  }
+  clearBackground({id} = {}) {
+    const previous = this._window(id);
+    const background = backgroundState({fit: previous.background.fit});
+    const next = {...this.state, windows: this.state.windows.map(window => window.id === id ? {...window, background} : window)};
+    this._persist(next);
+    this.state = next;
+    const pending = this.backgroundChoices.get(id);
+    if (pending) pending.active = false;
+    this.backgrounds.removeUnused(previous.background.file, next.windows);
     return this._changed();
   }
   close(id) {

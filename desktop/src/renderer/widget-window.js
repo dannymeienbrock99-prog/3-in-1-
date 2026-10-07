@@ -9,6 +9,8 @@
   const close = document.querySelector('#widgetWindowClose');
   const top = document.querySelector('#widgetWindowTop');
   const toolbar = document.querySelector('.widget-window-toolbar');
+  const backgroundImage = document.querySelector('#widgetWindowBackground');
+  const placeholder = document.querySelector('#widgetWindowPlaceholder');
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   let state = null, ownId = '', busy = false, lastError = '';
   function update(value) {
@@ -20,6 +22,20 @@
   }
   function render() {
     const own = state?.windows.find(item => item.id === ownId);
+    let imageUrl = '';
+    if (own?.background?.hasImage && own.background.imageUrl) {
+      try {
+        const parsed = new URL(own.background.imageUrl);
+        if (parsed.protocol === 'file:' && (!parsed.hostname || parsed.hostname === 'localhost') && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) imageUrl = parsed.href;
+      } catch {}
+    }
+    backgroundImage.hidden = !imageUrl;
+    placeholder.hidden = !!imageUrl;
+    if (imageUrl) {
+      if (backgroundImage.getAttribute('src') !== imageUrl) backgroundImage.src = imageUrl;
+      const fit = own.background.fit;
+      backgroundImage.style.objectFit = fit === 'stretch' ? 'fill' : fit === 'contain' ? 'contain' : 'cover';
+    } else backgroundImage.removeAttribute('src');
     toolbar.setAttribute('aria-busy',String(busy));
     name.textContent = own?.name || 'Zusatzfenster';
     status.textContent = lastError || own?.error || (own ? own.loading ? 'Seite wird geladen …' : 'Webseite geöffnet' : 'Einstellungen werden geladen …');

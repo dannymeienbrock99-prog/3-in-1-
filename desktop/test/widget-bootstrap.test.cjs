@@ -14,6 +14,9 @@ function fixture({ready=true}={}){
   close(id){calls.push(['close',id]);return this.status();}
   reload(id){calls.push(['reload',id]);return this.status();}
   setAlwaysOnTop(value){calls.push(['always-on-top',value]);return this.status();}
+  chooseBackground(value,parent){calls.push(['choose-background',value,parent]);return this.status();}
+  setBackground(value){calls.push(['set-background',value]);return this.status();}
+  clearBackground(value){calls.push(['clear-background',value]);return this.status();}
   getOpenCount(){return this.count;}
   closeAll(){calls.push(['close-all']);return this.status();}
   toolbarWindowId(sender,frame){return sender===toolbar.sender&&frame===sender.mainFrame?'widget-1':null;}
@@ -23,11 +26,11 @@ function fixture({ready=true}={}){
  const toolbar=surface(pathToFileURL(path.resolve(__dirname,'../src/renderer/widget-window.html')).href);
  const remote=surface('https://example.org/widget');
  for(const event of [main,toolbar,remote])windows.push({isDestroyed:()=>false,webContents:event.sender});
- const electron={app:{isReady:()=>ready,getPath:()=>'/unused'},ipcMain:{handle:(name,action)=>handlers.set(name,action)},BrowserWindow:{getAllWindows:()=>windows}};
+ const electron={app:{isReady:()=>ready,getPath:()=>'/unused'},ipcMain:{handle:(name,action)=>handlers.set(name,action)},BrowserWindow:{getAllWindows:()=>windows,fromWebContents:sender=>windows.find(window=>window.webContents===sender)}};
  const sandbox={module:{exports:{}},__dirname:path.dirname(sourcePath),process:{env:{BATTO_SUITE_DATA:'fixture-only'}},require:name=>name==='electron'?electron:name==='../electron/widget-windows.cjs'?{WidgetWindows}:require(name)};
  vm.runInNewContext(fs.readFileSync(sourcePath,'utf8'),sandbox,{filename:sourcePath});
  const invoke=(channel,event,value)=>handlers.get(channel)(event,value);
- return {main,toolbar,remote,handlers,calls,sent,invoke,get service(){return service;},get created(){return created;},api:sandbox.module.exports};
+ return {main,toolbar,remote,handlers,calls,sent,invoke,windows,get service(){return service;},get created(){return created;},api:sandbox.module.exports};
 }
 const normalized=value=>JSON.parse(JSON.stringify(value));
 test('bootstrap remains passive; lifecycle count and close do not instantiate or open a remote page',()=>{
@@ -77,4 +80,12 @@ test('early readiness failures and service errors propagate without claiming a s
 });
 test('open-count and orderly shutdown query only the existing widget manager',async()=>{
  const f=fixture();await f.invoke('widget-windows:status',f.main);f.service.count=2;assert.equal(f.api.getOpenCount(),2);f.api.close();assert.equal(f.calls.filter(call=>call[0]==='close-all').length,1);
+});
+
+test('background picker uses the trusted parent window; fit and removal target only the selected extra window',async()=>{
+ const f=fixture();await f.invoke('widget-windows:choose-background',f.main,{id:'widget-2'});
+ const choose=f.calls.find(call=>call[0]==='choose-background');assert.deepEqual(choose[1],{id:'widget-2'});assert.equal(choose[2],f.windows[0]);
+ await f.invoke('widget-windows:set-background',f.main,{id:'widget-2',fit:'contain'});
+ await f.invoke('widget-windows:clear-background',f.main,{id:'widget-2'});
+ assert.deepEqual(normalized(f.calls.filter(call=>['set-background','clear-background'].includes(call[0]))),[['set-background',{id:'widget-2',fit:'contain'}],['clear-background',{id:'widget-2'}]]);
 });

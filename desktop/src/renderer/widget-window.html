@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Batto Zusatzfenster</title>
   <link rel="stylesheet" href="./widget-window.css">
 </head>
@@ -12,7 +12,7 @@
     <div class="widget-window-heading"><strong id="widgetWindowName">Zusatzfenster</strong><span id="widgetWindowStatus" role="status" aria-live="polite">Wird geladen …</span><label class="widget-window-top" title="Fenster immer im Vordergrund"><input id="widgetWindowTop" type="checkbox" disabled><span>Vorne</span></label></div>
     <div class="widget-window-controls"><select id="widgetWindowSlot" aria-label="Gespeicherte Adresse auswählen" disabled><option>Adresse wird geladen …</option></select><button id="widgetWindowReload" type="button" title="Webseite neu laden" aria-label="Webseite neu laden" disabled>↻</button><button id="widgetWindowClose" type="button" title="Zusatzfenster schließen" aria-label="Zusatzfenster schließen" disabled>×</button></div>
   </header>
-  <main class="widget-window-background" aria-label="Webseitenbereich"><p>Die ausgewählte Webseite wird hier angezeigt.</p></main>
+  <main class="widget-window-background" aria-label="Webseitenbereich"><img id="widgetWindowBackground" class="widget-window-background-image" alt="" hidden><p id="widgetWindowPlaceholder">Die ausgewählte Webseite wird hier angezeigt.</p></main>
   <script src="./widget-window.js"></script>
 </body>
 </html>

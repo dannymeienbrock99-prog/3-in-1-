@@ -27,7 +27,7 @@ function getManager(){
 }
 function mainHandle(command,action){ipcMain.handle('widget-windows:'+command,async(event,value)=>{
  if(!localIndex(event))throw Error('Diese Webseite darf keine Batto-Fenster bedienen.');
- return action(getManager(),value);
+ return action(getManager(),value,event);
 });}
 mainHandle('status',service=>service.status());
 mainHandle('save-slot',(service,value)=>service.saveSlot(value));
@@ -36,6 +36,9 @@ mainHandle('select',(service,value)=>service.selectSlot(value));
 mainHandle('close',(service,value)=>service.close(value?.id));
 mainHandle('reload',(service,value)=>service.reload(value?.id));
 mainHandle('always-on-top',(service,value)=>service.setAlwaysOnTop(value));
+mainHandle('choose-background',(service,value,event)=>service.chooseBackground(value,BrowserWindow.fromWebContents(event.sender)));
+mainHandle('set-background',(service,value)=>service.setBackground(value));
+mainHandle('clear-background',(service,value)=>service.clearBackground(value));
 function toolbarHandle(command,action){ipcMain.handle('widget-toolbar:'+command,async(event,value)=>{
  const service=getManager(),id=service.toolbarWindowId(event.sender,event.senderFrame);
  if(!id)throw Error('Dieses Fenster darf keine Widgets bedienen.');

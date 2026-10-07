@@ -52,3 +52,4 @@ dual-window.json
 
 widget-windows.json
 .widget-windows-*.tmp
+**/WidgetBackgrounds/

@@ -52,6 +52,31 @@ test('ASUS/MSI desktop metadata is recognized independently of cooling support; 
   assert.equal(platformFromMetadata({ board: { Manufacturer: 'Unrelated' }, chassisTypes: [3] }).brand, 'other');
 });
 
+test('desktop and manufacturer metadata use the same conservative matrix as the native fan policy', () => {
+  const classify = (systemType, chassisTypes, manufacturer = 'ASUSTeK COMPUTER INC.') => platformFromMetadata({
+    board: { Manufacturer: manufacturer, Product: 'ROG CROSSHAIR X870E GLACIAL' }, system: { PCSystemType: systemType }, chassisTypes
+  });
+  assert.equal(classify(1, [3]).kind, 'desktop');
+  assert.equal(classify(3, []).kind, 'desktop');
+  assert.equal(classify(0, []).kind, 'unknown');
+  assert.equal(classify(2, [3]).kind, 'portable');
+  for (const chassis of [3, 4, 5, 6, 7, 15, 16]) assert.equal(classify(0, [chassis]).kind, 'desktop', `desktop chassis ${chassis}`);
+  for (const chassis of [13, 24, 35, 36]) {
+    assert.equal(classify(0, [chassis]).kind, 'unknown', `unconfirmed chassis ${chassis}`);
+    assert.equal(classify(1, [chassis]).kind, 'desktop');
+    assert.equal(classify(3, [chassis]).kind, 'desktop');
+  }
+  for (const chassis of [8, 9, 10, 11, 12, 14, 30, 31, 32]) {
+    assert.equal(classify(1, [3, chassis]).kind, 'portable', `portable chassis ${chassis}`);
+    assert.equal(classify(3, [chassis]).kind, 'portable');
+  }
+  for (const manufacturer of ['ASUS', 'ASUSTeK COMPUTER INC.', 'asus computer inc.']) assert.equal(classify(1, [3], manufacturer).brand, 'asus');
+  for (const manufacturer of ['MSI', 'MSI Computer Corp.', 'Micro-Star International Co., Ltd.', 'Micro Star International', 'MicroStar International'])
+    assert.equal(classify(1, [3], manufacturer).brand, 'msi');
+  for (const manufacturer of ['Unrelated', 'notASUS', 'ASUSish', 'ASUSTeKish', 'notMSI', 'MSIish', 'Micro-Starlight'])
+    assert.equal(classify(1, [3], manufacturer).brand, 'other');
+});
+
 test('Windows probe uses a fixed encoded read-only script and starts no hardware helper', async () => {
   const invocations = [];
   const result = await readWindowsMetadata({ platform: 'win32', env: { SystemRoot: 'C:/Windows' }, exec: async (...args) => {

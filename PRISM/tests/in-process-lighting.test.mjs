@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {InProcessStrimerControl,InProcessLianLiWirelessClient} from '../server/in-process-lighting.mjs';
+import {InProcessStrimerControl,InProcessLianLiWirelessClient,InProcessWindowsLightingClient} from '../server/in-process-lighting.mjs';
+import {LightingClient} from '../server/lighting-client.mjs';
 import {strimerControlPresentation,strimerControlRequest} from '../src/strimer-output.mjs';
 
 test('in-process takeover still requires consent and does not start any helper',async()=>{
@@ -34,4 +35,22 @@ test('wireless adapter forwards real native errors and service lease state',asyn
 test('failed takeover is not marked active without a native lease',async()=>{
  const control=new InProcessStrimerControl({available:true,request:async()=>{throw Object.assign(Error('Administratorrechte fehlen'),{state:{ok:false,active:false,released:true,remaining:[]}});}});
  await assert.rejects(control.start(true),/Administratorrechte/);assert.equal(control.status.enabled,false);assert.equal(control.status.phase,'error');
+});
+
+test('integrated Windows discovery retains diagnostics and exposes unavailable separate window through combined status',async()=>{
+ const calls=[];
+ const hardware={available:true,request:async(provider,command)=>{
+  calls.push([provider,command]);
+  return {devices:[{id:1,name:'Windows light',provider:'windows',ledCount:1}],environment:{windows:{deviceCount:1,available:true}},warnings:['fixture warning']};
+ }};
+ const client=new InProcessWindowsLightingClient(hardware,{platform:'win32'});
+ await client.scan();
+ assert.deepEqual(calls,[['windows','enumerate']]);
+ assert.deepEqual(client.details.windows,{deviceCount:1,available:true,inProcess:true,showWindowAvailable:false});
+ const combined=new LightingClient({clients:[client]});combined.refresh();
+ assert.equal(combined.details.windows.showWindowAvailable,false);
+ assert.equal(combined.details.windows.deviceCount,1);
+ assert.deepEqual(combined.details.warnings,['fixture warning']);
+ await assert.rejects(client.showWindow(),error=>error.code==='INTEGRATED_UI');
+ assert.equal(calls.length,1);
 });

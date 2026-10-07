@@ -75,3 +75,66 @@ test('a driver-only release reports the request instead of claiming physical BIO
 test('an unavailable native curve shows its limit and remains blocked even with a fresh fixture sensor',async()=>{
   const state={...initial(),enabled:true,phase:'ready',curveAvailability:{available:false,reason:'Kein bestätigter Messzeitpunkt'},channels:[{id:'cpu1',kind:'fan',name:'CPU_FAN',rpm:1000}],sensors:[{id:'cpu-temp',name:'CPU',celsius:45,updatedUtc:new Date().toISOString()}]},f=fixture(state);await f.settle();assert.equal(f.elements.get('curve-availability').hidden,false);const card=f.cards[0],confirmed=card.controls.get('input:confirmed'),select=card.controls.get('input:sensor'),apply=card.controls.get('action:curve');confirmed.checked=true;f.change(confirmed);select.value='cpu-temp';f.change(select);assert.equal(apply.disabled,true);f.click(apply);await f.settle();assert.equal(f.calls.length,1);assert.match(f.elements.get('error').textContent,/manuelle Steuerung/);
 });
+
+test('OFF and another activation keep the percentage draft but require new fan confirmation',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  const confirmed=f.cards[0].controls.get('input:confirmed'),duty=f.cards[0].controls.get('input:duty');confirmed.checked=true;f.change(confirmed);duty.value='75';duty.valueAsNumber=75;f.input(duty);
+  assert.equal(f.cards[0].controls.get('action:manual').disabled,false);
+  f.publish(initial());f.publish(state);
+  const card=f.cards[0];assert.equal(card.controls.get('input:duty').value,'75');assert.equal(card.controls.get('action:manual').disabled,true);assert.doesNotMatch(f.channelHost.innerHTML,/data-fan-input="confirmed"[^>]*checked/);
+  f.click(card.controls.get('action:manual'));await f.settle();assert.deepEqual(f.calls.map(item=>item.command),['fan-control-state']);assert.match(f.elements.get('error').textContent,/Bestätige zuerst/);
+});
+
+test('release and error states invalidate channel confirmation even when the device list is retained',async()=>{
+  for(const phase of ['releasing','error']) {
+    const state={...initial(),enabled:true,phase:'ready',channels:[{id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100}]},f=fixture(state);await f.settle();
+    const confirmed=f.cards[0].controls.get('input:confirmed');confirmed.checked=true;f.change(confirmed);
+    f.publish({...state,phase});f.publish(state);
+    assert.equal(f.cards[0].controls.get('action:manual').disabled,true);assert.doesNotMatch(f.channelHost.innerHTML,/data-fan-input="confirmed"[^>]*checked/);assert.equal(f.calls.length,1);
+  }
+});
+
+test('changed channel identity metadata resets confirmation and clamps its retained percentage to current bounds',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  const confirmed=f.cards[0].controls.get('input:confirmed'),duty=f.cards[0].controls.get('input:duty');confirmed.checked=true;f.change(confirmed);duty.value='55';duty.valueAsNumber=55;f.input(duty);
+  f.publish({...state,channels:[{...channel,name:'Different detected fan',device:'Different board',minDuty:60}]});
+  assert.equal(f.cards[0].controls.get('input:duty').value,'60');assert.equal(f.cards[0].controls.get('action:manual').disabled,true);assert.doesNotMatch(f.channelHost.innerHTML,/data-fan-input="confirmed"[^>]*checked/);assert.equal(f.calls.length,1);
+});
+
+test('fresh telemetry for unchanged topology preserves the visible draft and its explicit confirmation',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  const card=f.cards[0],confirmed=card.controls.get('input:confirmed'),duty=card.controls.get('input:duty');confirmed.checked=true;f.change(confirmed);duty.value='75';duty.valueAsNumber=75;f.input(duty);
+  f.publish({...state,channels:[{...channel,rpm:1450,duty:45}]});
+  assert.equal(f.cards[0],card);assert.equal(card.controls.get('input:duty').value,'75');assert.equal(card.controls.get('action:manual').disabled,false);assert.equal(card.controls.get('reading:rpm').textContent,'1.450 RPM');assert.equal(f.calls.length,1);
+});
+
+test('failed or releasing hardware stops presenting old RPM and duty as current readings',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1400,duty:65,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  assert.equal(f.cards[0].controls.get('reading:rpm').textContent,'1.400 RPM');assert.equal(f.cards[0].controls.get('reading:duty').textContent,'Leistung 65 %');
+  for(const phase of ['error','releasing','off']) {
+    f.publish({...state,phase,enabled:phase!=='off'});assert.equal(f.cards[0].controls.get('reading:rpm').textContent,'— RPM');assert.equal(f.cards[0].controls.get('reading:duty').textContent,'Leistung —');assert.equal(f.cards[0].controls.get('action:manual').disabled,true);
+    if(phase==='error')assert.match(f.elements.get('status').textContent,/erneut ausschalten/);
+    if(phase==='releasing')assert.match(f.elements.get('status').textContent,/fordert die Hardware-Regelung an/);
+  }
+  f.publish({...state,channels:[{...channel,rpm:0,duty:30}]});assert.equal(f.cards[0].controls.get('reading:rpm').textContent,'0 RPM');assert.equal(f.cards[0].controls.get('reading:duty').textContent,'Leistung 30 %');assert.equal(f.calls.length,1);
+});
+
+test('validation errors survive unrelated telemetry and clear when the user starts a new action',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  const confirmed=f.cards[0].controls.get('input:confirmed'),duty=f.cards[0].controls.get('input:duty');confirmed.checked=true;f.change(confirmed);duty.value='20';duty.valueAsNumber=20;f.input(duty);f.click(f.cards[0].controls.get('action:manual'));await f.settle();
+  assert.match(f.elements.get('error').textContent,/30 und 100/);assert.equal(f.elements.get('error').hidden,false);
+  f.publish({...state,channels:[{...channel,rpm:1450}]});assert.match(f.elements.get('error').textContent,/30 und 100/);assert.equal(f.elements.get('error').hidden,false);assert.equal(f.calls.length,1);
+  f.elements.get('refresh').listeners.click();await f.settle();assert.equal(f.elements.get('error').hidden,true);assert.deepEqual(f.calls.map(item=>item.command),['fan-control-state','fan-control-refresh']);
+});
+
+test('a native failure takes priority over a retained validation hint without discarding the visible percentage draft',async()=>{
+  const channel={id:'board/fan1',kind:'fan',name:'CHA_FAN1',provider:'Native',device:'Test',rpm:1000,minDuty:30,maxDuty:100},state={...initial(),enabled:true,phase:'ready',channels:[channel]},f=fixture(state);await f.settle();
+  const confirmed=f.cards[0].controls.get('input:confirmed'),duty=f.cards[0].controls.get('input:duty');confirmed.checked=true;f.change(confirmed);duty.value='20';duty.valueAsNumber=20;f.input(duty);f.click(f.cards[0].controls.get('action:manual'));await f.settle();assert.match(f.elements.get('error').textContent,/30 und 100/);
+  f.publish({...state,phase:'error',error:'Die Verbindung wurde unterbrochen.'});assert.equal(f.elements.get('error').textContent,'Die Verbindung wurde unterbrochen.');assert.equal(f.cards[0].controls.get('input:duty').value,'20');assert.match(f.elements.get('status').textContent,/erneut ausschalten/);
+});
+
+test('an older release-status message cannot override a later confirmed connection or native failure',async()=>{
+  const state={...initial(),enabled:true,phase:'ready'},f=fixture(state,command=>command==='fan-control-enable'?{...initial(),releaseVerification:'api-only'}:state);await f.settle();const toggle=f.elements.get('enabled');toggle.checked=false;toggle.listeners.change();await f.settle();assert.equal(f.elements.get('status').textContent,'Batto steuert keine Lüfter. Hardware-Regelung angefordert.');
+  f.publish({...state,phase:'error',error:'Rückgabe nicht bestätigt'});assert.match(f.elements.get('status').textContent,/erneut ausschalten/);assert.doesNotMatch(f.elements.get('status').textContent,/Batto steuert keine Lüfter/);
+  f.publish(state);assert.match(f.elements.get('status').textContent,/Keine unterstützten Lüfteranschlüsse/);
+});

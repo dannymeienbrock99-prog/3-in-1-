@@ -5,7 +5,15 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { decodeTinyUz } from './fixtures/tinyuz-decode.mjs';
 
-const helper = process.env.PRISM_WIRELESS_FIXTURE_HELPER || process.env.PRISM_LIANLI_FIXTURE_HELPER || fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
+// Batto's integrated binding compiles the same protocol source. Prefer its
+// current fixture runner over a separately published, possibly older helper.
+const integratedHelpers = [
+  '../../components/batto-hardware/tests/bin/Release/net8.0-windows/win-x64/Batto.Hardware.Tests.exe',
+  '../../components/batto-hardware/tests/bin/Release/net8.0-windows/Batto.Hardware.Tests.exe',
+].map(relative => fileURLToPath(new URL(relative, import.meta.url)));
+const legacyHelper = fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
+const helper = process.env.PRISM_WIRELESS_FIXTURE_HELPER || process.env.PRISM_LIANLI_FIXTURE_HELPER
+  || integratedHelpers.find(existsSync) || legacyHelper;
 const fixture = process.platform === 'win32' && existsSync(helper) ? (() => {
   const result = spawnSync(helper, ['--wireless-fixtures'], { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr);

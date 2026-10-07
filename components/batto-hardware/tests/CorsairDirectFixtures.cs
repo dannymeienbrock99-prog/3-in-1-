@@ -74,6 +74,13 @@ internal static class CorsairDirectFixtures
         int previous = fake.ColorWrites; Reject(() => Call(module, new { command = "set", deviceId = fake.Identity.Id, colors }), "unknown topology RGB rejected");
         Check(fake.ColorWrites == previous, "unknown topology emits no color packet");
         Call(module, new { command = "release-control" }); fake.Unknown = false;
+        fake.UnlistedLedRow = true;
+        var incomplete = Element(Call(module, new { command = "take-control", confirmICuePause = true }));
+        Check(incomplete.GetProperty("channels").GetArrayLength() == 1 && !incomplete.GetProperty("rgbAvailable").GetBoolean(), "unlisted LED row disables RGB while retaining verified fan detection");
+        previous = fake.ColorWrites;
+        Reject(() => Call(module, new { command = "set", deviceId = fake.Identity.Id, colors }), "incomplete LED topology cannot receive a full-hub frame");
+        Check(fake.ColorWrites == previous, "incomplete LED topology emits no color packet");
+        Call(module, new { command = "release-control" }); fake.UnlistedLedRow = false;
         fake.Fans = 9;
         var nine = Element(Call(module, new { command = "take-control", confirmICuePause = true }));
         var nineChannels = nine.GetProperty("channels");
@@ -113,6 +120,16 @@ internal static class CorsairDirectFixtures
         var ledLast = new byte[19]; ledLast[6] = 2; BinaryPrimitives.WriteUInt16LittleEndian(ledLast.AsSpan(15), 2); BinaryPrimitives.WriteUInt16LittleEndian(ledLast.AsSpan(17), 34);
         Check(CorsairDirectProtocol.LedTopologyMatches(ledLast, [new(2, 1, 0, "LAST-QX", CorsairDirectProtocol.FindModel(1, 0))]), "LED last-channel index is inclusive as in primary protocol reader");
         Check(!CorsairDirectProtocol.LedTopologyMatches(ledLast.AsSpan(0, 18), [new(2, 1, 0, "LAST-QX", CorsairDirectProtocol.FindModel(1, 0))]), "truncated final LED row never enables RGB");
+        var ledChannels = new[] { new CorsairDirectProtocol.Channel(2, 1, 0, "LAST-QX", CorsairDirectProtocol.FindModel(1, 0)) };
+        var unlistedLed = (byte[])ledLast.Clone();
+        BinaryPrimitives.WriteUInt16LittleEndian(unlistedLed.AsSpan(11), 2); BinaryPrimitives.WriteUInt16LittleEndian(unlistedLed.AsSpan(13), 34);
+        Check(!CorsairDirectProtocol.LedTopologyMatches(unlistedLed, ledChannels), "unlisted connected LED channel prevents incomplete full-hub RGB");
+        BinaryPrimitives.WriteUInt16LittleEndian(unlistedLed.AsSpan(11), 0);
+        Check(!CorsairDirectProtocol.LedTopologyMatches(unlistedLed, ledChannels), "unlisted nonzero LED count fails closed even without connected status");
+        BinaryPrimitives.WriteUInt16LittleEndian(unlistedLed.AsSpan(13), 0);
+        Check(CorsairDirectProtocol.LedTopologyMatches(unlistedLed, ledChannels), "empty unlisted channel does not shift the known LED layout");
+        Check(!CorsairDirectProtocol.LedTopologyMatches(ledLast, [ledChannels[0], ledChannels[0]]), "duplicate topology channel cannot confirm full-hub RGB");
+        Check(!CorsairDirectProtocol.LedTopologyMatches(ledLast, [ledChannels[0] with { Index = 0 }]), "controller channel zero cannot become an LED device");
         Reject(() => CorsairDirectProtocol.Manual(new(1, 7, 0, "PUMP", CorsairDirectProtocol.FindModel(7, 0)), 50), "pump speed packet rejected independently of active session");
         return new { ok = true, passed = checks.Count, checks = checks.ToArray(), realHardwarePackets = 0, realServiceControls = 0, childProcesses = 0 };
     }
@@ -121,7 +138,7 @@ internal static class CorsairDirectFixtures
         public CorsairDirectIdentity Identity { get; } = new("corsair-link-fixture", "synthetic-only", "HUB-FIXTURE", "iCUE LINK System Hub", 0x1b1c, 0x0c3f);
         internal readonly List<string> Events = [];
         internal readonly List<byte[]> Commands = [];
-        internal bool Disposed, FailHardware, BadIdentity, Unknown;
+        internal bool Disposed, FailHardware, BadIdentity, Unknown, UnlistedLedRow;
         internal int ModeWrites, SpeedWrites, ColorWrites, Fans = 1;
         internal byte[] LastDuty = [], LastColor = [];
         byte endpoint; int topologyReads;
@@ -156,8 +173,9 @@ internal static class CorsairDirectFixtures
                 }
                 if (endpoint == 0x20)
                 {
-                    raw[7] = (byte)(Fans + 1); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(12), 2); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(14), 20);
+                    raw[7] = (byte)(Fans + 1 + (UnlistedLedRow ? 1 : 0)); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(12), 2); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(14), 20);
                     for (int index = 0; index < Fans; index++) { BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(16 + index * 4), 2); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(18 + index * 4), 34); }
+                    if (UnlistedLedRow) { BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(8 + (Fans + 2) * 4), 2); BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(10 + (Fans + 2) * 4), 34); }
                 }
             }
             else if (command[0] == 6 && endpoint == 0x18) { SpeedWrites++; LastDuty = data.AsSpan(6).ToArray(); }

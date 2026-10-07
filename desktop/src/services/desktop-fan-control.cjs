@@ -8,7 +8,7 @@ const { ElevatedFanHost } = require('./elevated-fan-host.cjs');
 const execute = promisify(execFile);
 const MAX_LINE = 512 * 1024;
 const PORTABLE_CHASSIS = new Set([8, 9, 10, 11, 12, 14, 30, 31, 32]);
-const DESKTOP_CHASSIS = new Set([3, 4, 5, 6, 7, 13, 15, 16, 24, 35, 36]);
+const DESKTOP_CHASSIS = new Set([3, 4, 5, 6, 7, 15, 16]);
 const copy = value => JSON.parse(JSON.stringify(value));
 const text = (value, max = 240) => typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, max) : '';
 const blankPlatform = () => ({ kind: 'unknown', brand: 'other', manufacturer: '', model: '', chassisTypes: [] });
@@ -24,7 +24,7 @@ function platformFromMetadata(value) {
   const systemType = Number(system.PCSystemType ?? system.pcSystemType);
   // A laptop marker takes precedence over a misleading OEM enclosure value.
   const portable = systemType === 2 || chassisTypes.some(type => PORTABLE_CHASSIS.has(type));
-  const desktop = !portable && (systemType === 1 || chassisTypes.some(type => DESKTOP_CHASSIS.has(type)));
+  const desktop = !portable && (systemType === 1 || systemType === 3 || chassisTypes.some(type => DESKTOP_CHASSIS.has(type)));
   const brand = /(?:^|\b)(?:asus|asustek)(?:\b|$)/i.test(manufacturer) ? 'asus'
     : /(?:^|\b)(?:msi|micro[- ]?star)(?:\b|$)/i.test(manufacturer) ? 'msi' : 'other';
   return { kind: portable ? 'portable' : desktop ? 'desktop' : 'unknown', brand, manufacturer, model, chassisTypes };

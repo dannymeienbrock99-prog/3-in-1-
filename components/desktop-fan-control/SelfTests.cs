@@ -82,6 +82,23 @@ internal static class SelfTests
             Check(Blocked(new(true, "Unknown", "Test", true, true)), "Unknown manufacturer fails closed");
             Check(Blocked(new(true, "ASUSTeK", "Test", false, true)), "Non-admin fails closed");
             Check(Blocked(new(true, "MSI", "Test", true, false)), "Missing driver fails closed");
+            Check(HardwarePolicy.IsDesktop(1, [3]), "ASUS inventory desktop metadata");
+            Check(HardwarePolicy.IsDesktop(3, []), "Workstation metadata accepted");
+            Check(!HardwarePolicy.IsDesktop(0, []), "Unknown enclosure fails closed");
+            Check(!HardwarePolicy.IsDesktop(2, [3]), "Portable system type takes precedence");
+            foreach (ushort chassis in new ushort[] { 3, 4, 5, 6, 7, 15, 16 })
+                Check(HardwarePolicy.IsDesktop(0, [chassis]), "Known desktop chassis " + chassis);
+            foreach (ushort chassis in new ushort[] { 13, 24, 35, 36 })
+            {
+                Check(!HardwarePolicy.IsDesktop(0, [chassis]), "Unconfirmed chassis " + chassis);
+                Check(HardwarePolicy.IsDesktop(1, [chassis]) && HardwarePolicy.IsDesktop(3, [chassis]), "Explicit desktop/workstation metadata " + chassis);
+            }
+            foreach (ushort chassis in new ushort[] { 8, 9, 10, 11, 12, 14, 30, 31, 32 })
+                Check(!HardwarePolicy.IsDesktop(1, [3, chassis]) && !HardwarePolicy.IsDesktop(3, [chassis]), "Portable chassis takes precedence " + chassis);
+            foreach (string manufacturer in new[] { "ASUS", "ASUSTeK COMPUTER INC.", "asus computer inc.", "MSI", "MSI Computer Corp.", "Micro-Star International Co., Ltd.", "Micro Star International", "MicroStar International" })
+                Check(HardwarePolicy.SupportedManufacturer(manufacturer), "Supported manufacturer " + manufacturer);
+            foreach (string manufacturer in new[] { "Unrelated", "notASUS", "ASUSish", "ASUSTeKish", "notMSI", "MSIish", "Micro-Starlight" })
+                Check(!HardwarePolicy.SupportedManufacturer(manufacturer), "Manufacturer word boundary " + manufacturer);
             HardwarePolicy.Validate(new(true, "Micro-Star International Co., Ltd.", "Test", true, true)); count++;
             Console.WriteLine(JsonSerializer.Serialize(new { ok = true, checks = count, realHardwareWrites = 0 }, JsonProtocol.Options));
             return 0;

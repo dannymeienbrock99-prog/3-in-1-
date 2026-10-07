@@ -1,4 +1,8 @@
-# Batto 3-in-1 · 1.18.1
+# Batto 3-in-1 · 1.18.2
+
+Die Reparatur gleicht die Desktop-/Workstation- und ASUS-/MSI-Erkennung zwischen Oberfläche und Geräteanbindung ab. Alte Lüftermesswerte und Anschlussbestätigungen werden nach einer Unterbrechung nicht weiter als aktuell verwendet; Fehlermeldungen bleiben lesbar. Die direkte Corsair-Steuerung weist unvollständige LED-Zuordnungen zurück. Im integrierten Windows-RGB-Modus wird keine nicht verfügbare separate Fensteraktion mehr angeboten.
+
+Beim ROG CROSSHAIR X870E GLACIAL liefert die verwendete Hardwarebibliothek bisher keine belegte Anschlusszuordnung für die manuelle Mainboard-Lüfterregelung. Ein erkannter Modellname allein bestätigt diese Steuerung nicht. Bestehende RGB-Effekte, Widgets, Multi-Chat und Profile bleiben erhalten.
 
 
 ## Zwei zusätzliche Widget-Fenster

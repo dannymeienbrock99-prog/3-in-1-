@@ -112,6 +112,13 @@ internal static class CorsairDirectProtocol
         // Unlike RPM's row count, the LED header is the inclusive last channel index;
         // the four-byte rows include channel zero. See OpenLinkHub getLedDevices().
         if (reply.Length < 7 || reply[6] > MaximumChannels || 7 + (reply[6] + 1) * 4 > reply.Length || channels.Any(c => c.Known == null)) return false;
+        int lastChannel = reply[6];
+        var indices = channels.Select(c => c.Index).ToHashSet();
+        if (indices.Count != channels.Length || indices.Any(index => index < 1 || index > lastChannel)) return false;
+        // Full-hub color data must account for every reported LED channel.
+        // Extra LED rows cannot be omitted merely because discovery lacked a serial.
+        for (int index = 1; index <= reply[6]; index++)
+            if (!indices.Contains(index) && BinaryPrimitives.ReadUInt16LittleEndian(reply.Slice(9 + index * 4, 2)) != 0) return false;
         foreach (var channel in channels)
         {
             if (channel.Index > reply[6]) return false;

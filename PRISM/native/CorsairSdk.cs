@@ -265,7 +265,11 @@ internal sealed class CorsairLightingService
 
     public object Release()
     {
-        if (initialized) disconnect!();
+        if (initialized)
+        {
+            int code = disconnect!();
+            if (code != 0) throw CueError(code);
+        }
         initialized = false; Volatile.Write(ref sessionState, 0); devices.Clear();
         // Keep the loaded library/delegates alive until process exit, avoiding
         // unloading a DLL while its asynchronous callback is still completing.

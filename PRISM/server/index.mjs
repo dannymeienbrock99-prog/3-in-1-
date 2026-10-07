@@ -31,8 +31,8 @@ async function readJson(request, limit = 64 * 1024) {
   catch { throw new BridgeError('Ungültiger JSON-Inhalt.', 'INVALID_JSON', 400); }
 }
 
-export function createBridge({ client, hardware, dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
-  client ??= new LightingClient({hardware});
+export function createBridge({ client, hardware, corsairDirectControl, dist = path.resolve(serverDirectory, '../dist'), port = 4783, embedded = false, profileDirectory = null, inventory = systemInventory } = {}) {
+  client ??= new LightingClient({hardware,corsairDirectControl});
   const engine = new EffectEngine(client);
   const readRazer = createRazerProbe();
   let lastError = null, operation = Promise.resolve();
@@ -161,7 +161,16 @@ export function createBridge({ client, hardware, dist = path.resolve(serverDirec
   });
   server.requestTimeout = 15_000; server.headersTimeout = 10_000;
   server.on('close', () => { engine.stop(); client.close(); });
-  return { server, client, engine, status, listen: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.off('error', reject); try { const address = server.address(); client.setUiPort?.(address.port); resolve(address); } catch (error) { server.close(() => reject(error)); } }); }) };
+  return { server, client, engine, status,
+    suspendWindowsLighting(){
+      // Block new SDK writes immediately, before an earlier HTTP operation or
+      // frame may finish. The native SDK is released only after those drain.
+      client.beginWindowsLightingSuspend();
+      return serialize(async()=>{if(engine.framePromise)await engine.framePromise.catch(()=>{});await client.suspendWindowsLighting();return status();});
+    },
+    resumeWindowsLighting(){return serialize(async()=>{if(engine.framePromise)await engine.framePromise.catch(()=>{});await client.resumeWindowsLighting();return status();});},
+    refreshCorsairDirectLighting(){return serialize(async()=>{await client.refreshCorsairDirect();return status();});},
+    listen: () => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.off('error', reject); try { const address = server.address(); client.setUiPort?.(address.port); resolve(address); } catch (error) { server.close(() => reject(error)); } }); }) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { decodeTinyUz } from './fixtures/tinyuz-decode.mjs';
 
-const helper = process.env.PRISM_LIANLI_FIXTURE_HELPER || fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
+const helper = process.env.PRISM_WIRELESS_FIXTURE_HELPER || process.env.PRISM_LIANLI_FIXTURE_HELPER || fileURLToPath(new URL('../native-lianli/bin/PRISM-LianLi.exe', import.meta.url));
 const fixture = process.platform === 'win32' && existsSync(helper) ? (() => {
   const result = spawnSync(helper, ['--wireless-fixtures'], { encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(result.status, 0, result.stderr);
@@ -56,6 +56,8 @@ test('wireless RGB packets address one actual receiver and carry the documented 
   const join = start => Buffer.concat(packets.slice(start, start + 4).map(x => x.subarray(4)));
   const header = join(0);
   assert.deepEqual(header, join(4));
+  assert.deepEqual(header, join(8));
+  assert.deepEqual(header, join(12));
   assert.equal(header[0], 18); assert.equal(header[1], 32);
   assert.equal(header.subarray(2, 8).toString('hex'), '010203040506');
   assert.equal(header.subarray(8, 14).toString('hex'), '090807060504');
@@ -63,9 +65,9 @@ test('wireless RGB packets address one actual receiver and carry the documented 
   assert.equal(header.readUInt16BE(32), 80); assert.equal(header[34], 0);
   assert(header.subarray(35, 40).every(x => x === 0));
   const chunks = [];
-  for (let i = 8; i < packets.length; i += 4) {
+  for (let i = 16; i < packets.length; i += 4) {
     for (let chunk = 0; chunk < 4; chunk++) assert.equal(packets[i + chunk][1], chunk);
-    const payload = join(i); assert.equal(payload[18], (i - 8) / 4 + 1);
+    const payload = join(i); assert.equal(payload[18], (i - 16) / 4 + 1);
     chunks.push(payload.subarray(20));
   }
   const compressed = Buffer.concat(chunks).subarray(0, header.readUInt32BE(20));

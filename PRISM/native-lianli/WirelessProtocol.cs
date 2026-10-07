@@ -117,7 +117,9 @@ internal static class WirelessProtocol
                 BinaryPrimitives.WriteUInt16BigEndian(rf.AsSpan(32, 2), intervalTicks); rf[34] = fraction;
             }
             else compressed.AsSpan((index - 1) * 220, Math.Min(220, compressed.Length - (index - 1) * 220)).CopyTo(rf.AsSpan(20));
-            for (int repeat = 0; repeat < (index == 0 ? 2 : 1); repeat++)
+            // The tested upstream uploader repeats the header four times;
+            // an RF receiver may miss its first header while changing effects.
+            for (int repeat = 0; repeat < (index == 0 ? 4 : 1); repeat++)
                 for (int chunk = 0; chunk < 4; chunk++)
                 {
                     var usb = new byte[64]; usb[0] = 0x10; usb[1] = (byte)chunk;

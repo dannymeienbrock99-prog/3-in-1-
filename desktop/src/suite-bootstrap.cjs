@@ -14,11 +14,15 @@ handle('fan-control-refresh',()=>runtime.fanControl.inspect());
 handle('fan-control-enable',value=>{if(typeof value?.enabled!=='boolean')throw Error('Bitte den Lüftermodus ein- oder ausschalten.');return runtime.fanControl.enable(value.enabled);});
 handle('fan-control-manual',value=>runtime.fanControl.setManual(value));
 handle('fan-control-curve',value=>runtime.fanControl.setCurve(value));
+handle('corsair-direct:status',()=>runtime.corsairDirect.inspect());
+handle('corsair-direct:enumerate',()=>runtime.corsairDirect.enumerate());
+handle('corsair-direct:control',async value=>{if(typeof value?.enabled!=='boolean')throw Error('Bitte die direkte Corsair-Steuerung ein- oder ausschalten.');const state=await runtime.corsairDirect.enable(value.enabled,value);if(state.active)await runtime.rgb.refreshCorsairDirect();return state;});
+handle('corsair-direct:manual',value=>runtime.corsairDirect.setManual(value));
 let restartingAsAdmin=false;
 handle('hardware-admin-restart',async()=>{
  if(restartingAsAdmin)throw Error('Der Neustart wird bereits vorbereitet.');
  if(!app.isPackaged||process.platform!=='win32')throw Error('Der Administrator-Neustart ist in der installierten Windows-Version verfügbar.');
- const check=()=>{if(runtime.getDual?.()?.running())throw Error('Beende zuerst die Kameraausgaben unter Dual Stream.');const fan=runtime.fanControl.snapshot();if(fan.enabled||fan.phase!=='off')throw Error('Schalte die PC-Lüftersteuerung vor dem Neustart aus.');const strimer=runtime.rgb.bridge?.client?.strimerControl?.status;if(strimer?.enabled||['starting','restoring','active'].includes(strimer?.phase))throw Error('Gib vor dem Neustart die Strimer-Steuerung zurück.');};
+ const check=()=>{if(runtime.getDual?.()?.running())throw Error('Beende zuerst die Kameraausgaben unter Dual Stream.');const fan=runtime.fanControl.snapshot();if(fan.enabled||fan.phase!=='off')throw Error('Schalte die PC-Lüftersteuerung vor dem Neustart aus.');const corsair=runtime.corsairDirect.snapshot();if(corsair.returnRequired||corsair.enabled||corsair.phase!=='off')throw Error('Gib vor dem Neustart die direkte Corsair-Steuerung zurück.');const strimer=runtime.rgb.bridge?.client?.strimerControl?.status;if(strimer?.enabled||['starting','restoring','active'].includes(strimer?.phase))throw Error('Gib vor dem Neustart die Strimer-Steuerung zurück.');};
  check();restartingAsAdmin=true;
  try{
   const result=await dialog.showMessageBox({type:'question',title:'Direkten Gerätezugriff freigeben',message:'Batto als Administrator neu starten?',detail:'Windows zeigt eine Freigabe für Batto. Dadurch kann Batto Mainboardlüfter direkt prüfen und die bestätigte Strimer-Übernahme ausführen. Die Steuerung bleibt nach dem Neustart aus.',buttons:['Batto neu starten','Abbrechen'],defaultId:0,cancelId:1});
@@ -67,7 +71,7 @@ handle('forget-memory',()=>{runtime.jarvis.memory=[];runtime.jarvis.save('jarvis
 app.whenReady().then(async()=>{
  const resources=app.isPackaged?process.resourcesPath:path.resolve(__dirname,'../..');
  runtime=new SuiteRuntime({directory,fanRoot:process.env.BATTO_FAN_ROOT||path.join(resources,'FanAtlas'),hardwareRoot:app.isPackaged?path.join(resources,'BattoHardware'):path.resolve(resources,'../components/batto-hardware/publish'),rgbRoot:path.join(resources,'PRISM'),voiceCode:path.join(resources,'jarvis'),voiceBundle:process.env.BATTO_VOICE_ROOT||path.join(resources,'jarvis'),obs:getObsClient(),getDual:()=>require('./dual-stream/bootstrap.cjs').getService(),getHost:()=>require('../electron/main21.cjs').getSuiteHost()});
- runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));
+ runtime.on('message',value=>broadcast('suite:message',value));runtime.on('voice',value=>broadcast('suite:voice',value));runtime.on('state',value=>broadcast('suite:state',value));runtime.on('corsair-direct',value=>broadcast('corsair-direct:update',value));
  try{await runtime.start();}catch(e){runtime.jarvis.say('Lokale Verbindung: '+e.message,'error',false);}
 }).catch(e=>console.error('Suite:',e.message));
 let closePromise;
@@ -75,10 +79,12 @@ function close(){return closePromise||(closePromise=Promise.resolve().then(()=>r
 async function releaseHardwareForQuit(){
  if(!runtime)return;
  try{
+  await runtime.corsairDirect.prepareHardwareQuit();
   await runtime.fanControl.prepareHardwareQuit();
   const bridge=runtime.rgb.bridge;
   if(bridge?.client?.prepareHardwareQuit){bridge.engine.stop();if(bridge.engine.framePromise)await bridge.engine.framePromise.catch(()=>{});await bridge.client.prepareHardwareQuit();}
  }catch(error){
+  runtime.corsairDirect.cancelHardwareQuit?.();
   runtime.fanControl.cancelHardwareQuit();
   throw error;
  }

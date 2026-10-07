@@ -1,4 +1,12 @@
-# Batto 3-in-1 · 1.16.0
+# Batto 3-in-1 · 1.17.0
+
+## Corsair iCUE LINK direkt steuern
+
+Unter **PC & iCUE Lüfter → Corsair iCUE LINK** erkennt **Controller erkennen** den unterstützten USB-Hub und zeigt seine echte Kennung. Nach ausdrücklicher Bestätigung pausiert **Direkt übernehmen** die drei geprüften Corsair-Gerätedienste. Batto öffnet den Hub im eigenen Prozess und liest die angeschlossenen Modelle, Drehzahlen und Sensoren. Die iCUE-GUI wird nicht beendet. Pumpen erhalten keinen manuellen Lüfterregler. **Leistung anwenden** schreibt nur den ausgewählten, erneut geprüften Lüfter; **Zurückgeben** fordert den Hardwaremodus an und stellt die vorherigen Dienste wieder her. Ohne bestätigte Rückgabe bleibt die Übernahme für einen erneuten Ausschaltversuch erhalten.
+
+Ein Hub mit vollständig bestätigter LED-Anordnung erscheint während der Übernahme auch in **RGB-Steuerung**. Dort bleiben alle 31 Effekte, eigene Muster, Zonen und gespeicherten Profile verfügbar. Die direkte HUB-Anbindung benötigt während dieser Sitzung kein laufendes iCUE-SDK. Andere Geräte wie RAM, LIGHTING NODE CORE und über iCUE gemeldete ASUS-Komponenten behalten ihre bisherigen Hersteller-Anbindungen; während der direkten Corsair-Übernahme ist die iCUE-SDK-Ausgabe pausiert. Die drei Corsair-Dienste werden ausschließlich bei bewusster Übernahme angehalten. Eine getrennte Steuerungs-EXE wird weder installiert noch gestartet.
+
+Die Strimer-Wireless-Ausgabe wiederholt den Effektkopf viermal mit der dokumentierten Pause zwischen Funkpaketen. Ohne passende Bestätigung wird dieselbe geprüfte RGB-Schleife höchstens dreimal übertragen. Geänderte Gerätezuordnung verhindert einen erneuten Transfer. Die Oberfläche meldet weiterhin ausdrücklich, ob der Empfänger den Effekt bestätigt hat.
 
 ## Direkte Geräteanbindung in Batto
 

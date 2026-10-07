@@ -188,25 +188,13 @@ internal sealed class WirelessSession : IDisposable
         // validated before the first lighting packet leaves this process.
         var current = await Current(cable);
         var upload = WirelessProtocol.BuildUpload(current, cable.Transmitter.Master, frames, interval);
-        using var uploadDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        foreach (var packet in upload.Packets)
-        {
-            await cable.Transmitter.Device.WritePacket(packet, uploadDeadline.Token);
-            await Task.Delay(1, uploadDeadline.Token);
-        }
-        bool confirmed = false;
-        for (int attempt = 0; attempt < 3; attempt++)
-        {
-            await Task.Delay(150);
-            try
-            {
-                var reported = await Current(cable);
-                if (WirelessProtocol.Acknowledged(reported, cable.Snapshot, cable.Transmitter.Master, upload.EffectIndex)) { confirmed = true; break; }
-            }
-            catch (Exception error) when (error is IOException or OperationCanceledException or TimeoutException) { }
-        }
-        return new { deviceId = id, transmitted = true, confirmed, effectIndex = Convert.ToHexString(upload.EffectIndex).ToLowerInvariant(),
-            frameCount = upload.FrameCount, intervalMs = upload.IntervalMs, acknowledgement = confirmed ? "Funkempfänger bestätigt den Effekt" : "Übertragen; Funkbestätigung steht aus" };
+        using var uploadDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(16));
+        var outcome = await WirelessUploadRunner.Send(upload, current, cable.Transmitter.Master,
+            cable.Transmitter.Device.WritePacket, () => Current(cable),
+            (milliseconds, token) => Task.Delay(milliseconds, token), uploadDeadline.Token);
+        return new { deviceId = id, transmitted = true, confirmed = outcome.Confirmed, attempts = outcome.Attempts,
+            observedEffectIndex = outcome.ObservedEffectIndex, effectIndex = Convert.ToHexString(upload.EffectIndex).ToLowerInvariant(),
+            frameCount = upload.FrameCount, intervalMs = upload.IntervalMs, acknowledgement = outcome.Confirmed ? "Funkempfänger bestätigt den Effekt" : "Übertragen; Funkbestätigung steht aus" };
     }
 
     void DisposeHandles()
@@ -216,4 +204,41 @@ internal sealed class WirelessSession : IDisposable
         receivers.Clear(); transmitters.Clear(); cables.Clear();
     }
     public void Dispose() => DisposeHandles();
+}
+
+internal sealed record WirelessUploadOutcome(bool Confirmed, int Attempts, string? ObservedEffectIndex);
+// A finite repeat of the same validated RGB loop, never a bind/PWM/sync command.
+// Injection permits hardware-independent checks against missed RF headers.
+internal static class WirelessUploadRunner
+{
+    internal static async Task<WirelessUploadOutcome> Send(WirelessUpload upload, WirelessReceiver target, WirelessMaster master,
+        Func<byte[], CancellationToken, Task> write, Func<Task<WirelessReceiver>> read,
+        Func<int, CancellationToken, Task> delay, CancellationToken token)
+    {
+        string? observed = null;
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            token.ThrowIfCancellationRequested();
+            var fresh = await read();
+            if (fresh.Mac != target.Mac || fresh.MasterMac != master.Mac || fresh.Channel != target.Channel
+                || fresh.RxType != target.RxType || fresh.DeviceType != target.DeviceType || fresh.LedCount != target.LedCount || fresh.MotherboardSync)
+                throw new IOException("Die Strimer-Verbindung hat sich vor der Übertragung geändert. Bitte erneut suchen.");
+            for (int packet = 0; packet < upload.Packets.Length; packet++)
+            {
+                await write(upload.Packets[packet], token);
+                // Four fragments form one RF frame. Repeated headers need the
+                // manufacturer's 20 ms settling time between complete frames.
+                await delay(packet < 15 && packet % 4 == 3 ? 20 : 1, token);
+            }
+            for (int poll = 0; poll < 4; poll++)
+            {
+                await delay(250, token);
+                var reported = await read();
+                observed = Convert.ToHexString(reported.EffectIndex).ToLowerInvariant();
+                if (WirelessProtocol.Acknowledged(reported, target, master, upload.EffectIndex))
+                    return new(true, attempt, observed);
+            }
+        }
+        return new(false, 3, observed);
+    }
 }

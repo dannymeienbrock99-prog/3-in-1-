@@ -48,7 +48,7 @@ class BattoHardware extends EventEmitter {
   request(provider,command,values={}) {
     if (this.closed) return Promise.reject(Error('Die Batto-Geräteanbindung ist geschlossen.'));
     if(this.closePromise&&!['close','shutdown','disable','release','release-control'].includes(command))return Promise.reject(Error('Die Batto-Geräteanbindung wird geschlossen.'));
-    if (!['wireless','fan','windows','lianli','inventory'].includes(provider) || typeof command!=='string' || !/^[a-z][a-z-]{0,40}$/.test(command)) return Promise.reject(Error('Ungültige Geräteanfrage.'));
+    if (!['wireless','fan','windows','lianli','inventory','corsair-direct'].includes(provider) || typeof command!=='string' || !/^[a-z][a-z-]{0,40}$/.test(command)) return Promise.reject(Error('Ungültige Geräteanfrage.'));
     const requestId=++this.sequence;
     const input=Buffer.from(JSON.stringify({...values,provider,command,requestId}),'utf8');
     if (input.length>MAX_BYTES) return Promise.reject(Error('Die Geräteanfrage ist zu groß.'));

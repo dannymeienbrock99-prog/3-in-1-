@@ -38,7 +38,7 @@ function confirmed(result,ids,effectId){
  if(received.length!==ids.length||new Set(received).size!==ids.length||ids.some(id=>!received.includes(id))||(effectId!==undefined&&result.effectId!==effectId))throw Error('Die RGB-Anwendung konnte nicht vollständig bestätigt werden.');
 }
 class RgbService{
- constructor({root,directory,hardware,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,hardware,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastCustomSettings=null;this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
+ constructor({root,directory,hardware,corsairDirectControl,bridgeFactory,fetchRequest=fetch,onChange=()=>{}}){Object.assign(this,{root,directory,hardware,corsairDirectControl,bridgeFactory,fetchRequest,onChange});this.bridge=null;this.starting=null;this.stopping=false;this.closed=false;this.queue=Promise.resolve();this.corsairSdkSuppressed=false;this.url=null;this.error='';this.lastSettings={...DEFAULT_SETTINGS,colors:[...DEFAULT_SETTINGS.colors]};this.lastCustomSettings=null;this.lastBrightness=80;this.lastTargets=[];this.lastZoneIds={};this.lastNativeSettings=new Map();this.seenSelections=new Map();this.revision=0;}
  softwareEffects(){
   const effects=Object.entries(EFFECT_NAMES).map(([id,name])=>({id,name})),ids=new Set(effects.map(effect=>effect.id));
   try{const supplied=JSON.parse(fs.readFileSync(path.join(this.root,'server/effect-catalog.json'),'utf8'));if(Array.isArray(supplied))for(const effect of supplied){if(effect&&typeof effect.id==='string'&&/^[a-z][a-z0-9]{0,63}$/.test(effect.id)&&typeof effect.name==='string'&&!ids.has(effect.id)){effects.push({id:effect.id,name:clean(effect.name)});ids.add(effect.id);}}}catch{}
@@ -59,7 +59,7 @@ class RgbService{
    let bridge;
    try{
     const factory=this.bridgeFactory||(await import(pathToFileURL(path.join(this.root,'server/index.mjs')).href)).createBridge;
-    bridge=factory({port:0,embedded:true,profileDirectory:this.directory,hardware:this.hardware});
+    bridge=factory({port:0,embedded:true,profileDirectory:this.directory,hardware:this.hardware,corsairDirectControl:this.corsairDirectControl});
     const address=await bridge.listen();
     if(this.closed){await this.dispose(bridge);throw Error('Die RGB-Steuerung ist geschlossen.');}
     this.bridge=bridge;this.url=`http://127.0.0.1:${address.port}/?embedded=1`;this.error='';
@@ -84,6 +84,33 @@ class RgbService{
    this.error=this.bridge!==bridge||this.url!==url||this.stopping||this.closed?'Der RGB-Dienst wurde beendet. Bitte RGB erneut öffnen.':error.name==='TimeoutError'?'Die RGB-Oberfläche antwortet nicht. Bitte RGB erneut laden.':error.message==='fetch failed'?'Die lokale RGB-Oberfläche ist nicht erreichbar. Bitte RGB erneut laden.':error.message;
    this.changed();throw Error(this.error);
   }
+ }
+ async nativeCorsairSdk(suspended){
+  if(!this.hardware?.available)throw Error('Die integrierte Windows-RGB-Anbindung fehlt.');
+  const result=await this.hardware.request('windows',suspended?'suspend-corsair':'resume-corsair');
+  if(result?.suspended!==suspended||result.inProcess!==true)throw Error('Die iCUE-SDK-Übergabe wurde nicht bestätigt.');
+ }
+ async suspendForCorsairDirect(){
+  this.corsairSdkSuppressed=true;
+  this.bridge?.client.beginWindowsLightingSuspend?.();
+  if(this.starting)await this.starting;
+  this.bridge?.client.beginWindowsLightingSuspend?.();
+  await this.queue;
+  // Also latch the shared native provider if RGB has not been opened yet;
+  // subsequent UI startup must not reconnect iCUE while the hub is owned.
+  if(this.bridge)await this.bridge.suspendWindowsLighting();else await this.nativeCorsairSdk(true);
+  this.changed();
+ }
+ async resumeAfterCorsairDirect(){
+  if(this.starting)await this.starting;
+  await this.queue;
+  if(this.bridge)await this.bridge.resumeWindowsLighting();else await this.nativeCorsairSdk(false);
+  this.corsairSdkSuppressed=false;this.changed();
+ }
+ async refreshCorsairDirect(){
+  if(this.starting)await this.starting;
+  if(this.bridge)await this.bridge.refreshCorsairDirectLighting();
+  this.changed();return this.snapshot();
  }
  settings(value){
   if(!value||!this.softwareEffects().some(effect=>effect.id===value.effect)||!Array.isArray(value.colors)||value.colors.length<1||value.colors.length>8||value.colors.some(c=>typeof c!=='string'||!/^#[0-9a-f]{6}$/i.test(c)))throw Error('Ungültige RGB-Einstellungen.');

@@ -5,8 +5,28 @@ using Batto.Hardware;
 
 unsafe class Program
 {
-    static int Main()
+    static int Main(string[] args)
     {
+        if (args.SequenceEqual(new[]{"--wireless-fixtures"}))
+        {
+            Console.WriteLine(JsonSerializer.Serialize(Prism.LianLi.WirelessProtocol.Fixtures(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+            return 0;
+        }
+        if (args.SequenceEqual(new[] { "--corsair-discover-only" }))
+        {
+            // Explicit diagnostic: USB metadata only; no transport, HID reports or SCM access.
+            var identities = CorsairDirectTransport.Discover();
+            var candidates = HidSharp.DeviceList.Local.GetHidDevices(CorsairDirectProtocol.Vid).Take(16).Select(device =>
+            {
+                try { return (object)new { path = device.DevicePath, vendorId = device.VendorID, productId = device.ProductID, input = device.GetMaxInputReportLength(), output = device.GetMaxOutputReportLength(),
+                    accepted = CorsairDirectTransport.Supported(device), serial = device.GetSerialNumber(), name = device.GetProductName() }; }
+                catch (Exception error) { return new { path = device.DevicePath, error = error.Message }; }
+            }).ToArray();
+            Console.WriteLine(JsonSerializer.Serialize(new { readOnly = true, inProcess = true, metadataOnly = true,
+                hubs = identities, candidates, hardwarePackets = 0, fanWrites = 0, realServiceControls = 0 }));
+            return 0;
+        }
+        if (args.Length != 0) throw new ArgumentException("Unknown test argument.");
         var checks = new List<string>();
         void Check(string name, bool passed) { if (!passed) throw new Exception("Check failed: " + name); checks.Add(name); }
         JsonElement Call(string request)
@@ -75,6 +95,24 @@ unsafe class Program
         Check("inventoryStatusNoInspection",inventoryStatus.GetProperty("processId").GetInt32()==Environment.ProcessId&&!inventoryStatus.GetProperty("platformCached").GetBoolean()&&!inventoryStatus.GetProperty("kingstonCached").GetBoolean());
         var inventoryClosed=Call("{\"requestId\":26,\"provider\":\"inventory\",\"command\":\"close\"}").GetProperty("result");
         Check("inventoryCloseNoInspection",inventoryClosed.GetProperty("closed").GetBoolean()&&!inventoryClosed.GetProperty("platformCached").GetBoolean()&&!inventoryClosed.GetProperty("kingstonCached").GetBoolean());
+        var corsairPure=Call("{\"requestId\":27,\"provider\":\"corsair-direct\",\"command\":\"self-test\"}").GetProperty("result");
+        Check("corsairProtocolPure",corsairPure.GetProperty("passed").GetBoolean()&&corsairPure.GetProperty("capturedFirmwareReply").GetBoolean()&&corsairPure.GetProperty("hardwarePackets").GetInt32()==0&&corsairPure.GetProperty("realServiceControls").GetInt32()==0);
+        Check("corsairPureHasNoDeviceOrService",!corsairPure.GetProperty("corsairModuleCreated").GetBoolean()&&!corsairPure.GetProperty("serviceControlCreated").GetBoolean());
+        var corsairStatus=Call("{\"requestId\":28,\"provider\":\"corsair-direct\",\"command\":\"status\"}").GetProperty("result");
+        Check("corsairIdleOwnership",!corsairStatus.GetProperty("active").GetBoolean()&&!corsairStatus.GetProperty("enabled").GetBoolean()&&!corsairStatus.GetProperty("ownsControl").GetBoolean()&&corsairStatus.GetProperty("released").GetBoolean()&&!corsairStatus.GetProperty("retryRequired").GetBoolean()&&corsairStatus.GetProperty("remaining").GetArrayLength()==0);
+        Check("corsairIdleNoInventedDevices",corsairStatus.GetProperty("hubs").GetArrayLength()==0&&corsairStatus.GetProperty("channels").GetArrayLength()==0&&corsairStatus.GetProperty("devices").GetArrayLength()==0&&corsairStatus.GetProperty("sensors").GetArrayLength()==0);
+        var corsairClose=Call("{\"requestId\":29,\"provider\":\"corsair-direct\",\"command\":\"close\"}").GetProperty("result");
+        Check("corsairCloseWithoutOpening",corsairClose.GetProperty("released").GetBoolean()&&!corsairClose.GetProperty("state").GetProperty("active").GetBoolean());
+        var missingConsent=Call("{\"requestId\":30,\"provider\":\"corsair-direct\",\"command\":\"take-control\",\"confirmICuePause\":false}");
+        Check("corsairErrorCodeRetained",!missingConsent.GetProperty("ok").GetBoolean()&&missingConsent.GetProperty("error").GetProperty("code").GetString()=="CORSAIR_CONFIRMATION_REQUIRED");
+        Check("corsairErrorOwnershipRetained",missingConsent.GetProperty("result").GetProperty("released").GetBoolean()&&!missingConsent.GetProperty("result").GetProperty("active").GetBoolean());
+        Check("corsairNoArbitraryDriver",Rejected("{\"requestId\":31,\"provider\":\"corsair-direct\",\"command\":\"load-driver\"}"));
+        Check("corsairNoInjectedService",Rejected("{\"requestId\":32,\"provider\":\"corsair-direct\",\"command\":\"take-control\",\"confirmICuePause\":false,\"service\":\"other\"}"));
+        var corsairStillPure=Call("{\"requestId\":33,\"provider\":\"corsair-direct\",\"command\":\"self-test\"}").GetProperty("result");
+        Check("corsairIdleNeverConstructedScm",!corsairStillPure.GetProperty("serviceControlCreated").GetBoolean());
+        var corsairFixtures=JsonSerializer.SerializeToElement(CorsairDirectFixtures.Run());
+        Check("corsairIndependentFixtureCoverage",corsairFixtures.GetProperty("ok").GetBoolean()&&corsairFixtures.GetProperty("passed").GetInt32()>=40&&corsairFixtures.GetProperty("realHardwarePackets").GetInt32()==0&&corsairFixtures.GetProperty("realServiceControls").GetInt32()==0&&corsairFixtures.GetProperty("childProcesses").GetInt32()==0);
+        Check("wirelessUploadPureTransport",WirelessUploadFixtures.Run()>0);
         delegate* unmanaged[Cdecl]<byte*, int, nint*, int*, int> direct = &NativeExports.Invoke;
         nint response=0;int responseLength=0;
         Check("nullOutputRejected", direct(null,0,null,null)==-1);
@@ -82,6 +120,6 @@ unsafe class Program
         byte[] oversized=new byte[NativeExports.MaximumRequestBytes+1];fixed(byte* ptr=oversized) Check("oversizedInputRejected",direct(ptr,oversized.Length,&response,&responseLength)==-1);
         var malformed=NativeExports.Execute([0xff,0xff]);using var malformedDoc=JsonDocument.Parse(malformed);
         Check("invalidUtf8Rejected",!malformedDoc.RootElement.GetProperty("ok").GetBoolean());
-        Console.WriteLine(JsonSerializer.Serialize(new { passed=checks.Count,checks,hardwarePackets=0,fanWrites=0,realServiceControls=0 }));return 0;
+        Console.WriteLine(JsonSerializer.Serialize(new { passed=checks.Count,checks,corsairFixtures,hardwarePackets=0,fanWrites=0,realServiceControls=0 }));return 0;
     }
 }

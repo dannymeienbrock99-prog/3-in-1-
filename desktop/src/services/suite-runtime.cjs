@@ -9,6 +9,7 @@ const {controlAudio}=require('./jarvis-audio.cjs');
 const {JarvisModeration}=require('./jarvis-moderation.cjs');
 const {RgbService}=require('./rgb-service.cjs');
 const {DesktopFanService}=require('./desktop-fan-control.cjs');
+const {CorsairDirectControl}=require('./corsair-direct-control.cjs');
 const {BattoHardware,InProcessFanHost}=require('./batto-hardware.cjs');
 const {platformFromMetadata}=require('./desktop-fan-control.cjs');
 const TEST=process.env.BATTO_TEST_INSTANCE==='1',FAN_PORT=TEST?17668:17658,SUITE_PORT=TEST?17666:17656;
@@ -59,7 +60,8 @@ class SuiteRuntime extends EventEmitter{
   this.fan=new FanClient({root:fanRoot,data:path.join(directory,'FanAtlas')});this.voice=new VoiceClient({codeRoot:voiceCode,bundledRoot:voiceBundle,data:path.join(directory,'Voice')});
   this.hardware=hardware||new BattoHardware({root:hardwareRoot||path.join(path.dirname(fanRoot),'BattoHardware')});
   this.fanControl=new DesktopFanService({helperPath:path.join(this.hardware.root,'Batto.Hardware.dll'),inProcess:true,readMetadata:async()=>{const metadata=await this.hardware.request('inventory','platform');return {...platformFromMetadata(metadata),prerequisites:metadata.prerequisites};},nativeFactory:handlers=>new InProcessFanHost({...handlers,hardware:this.hardware}),onChange:()=>{if(!this.closed)this.emit('state',this.snapshot());}});
-  this.rgb=new RgbService({root:rgbRoot||path.join(path.dirname(fanRoot),'PRISM'),hardware:this.hardware,directory:path.join(directory,'RGB'),onChange:()=>{if(!this.closed)this.emit('state',this.snapshot());}});
+  this.corsairDirect=new CorsairDirectControl({hardware:this.hardware,beforeTakeover:()=>this.rgb.suspendForCorsairDirect(),afterRelease:()=>this.rgb.resumeAfterCorsairDirect(),onChange:value=>{if(!this.closed){this.emit('corsair-direct',value);this.emit('state',this.snapshot());}}});
+  this.rgb=new RgbService({root:rgbRoot||path.join(path.dirname(fanRoot),'PRISM'),hardware:this.hardware,corsairDirectControl:this.corsairDirect,directory:path.join(directory,'RGB'),onChange:()=>{if(!this.closed)this.emit('state',this.snapshot());}});
   this.jarvis=new JarvisCore({directory,getSensors:()=>this.fan.snapshot?.sensors||[],getFans:()=>{
    const snapshot=this.fan.snapshot,sensors=snapshot?.sensors||[];
    return (snapshot?.scene?.tiles||[]).filter(t=>t.kind!=='normal'||snapshot.scene.showNormalFans).map(t=>({id:t.id,name:t.name,kind:t.kind||'link',rpmSensorId:t.rpmSensorId,announce:t.announce,reference:[t.percentSensorId,t.rpmSensorId,t.maxRpm],percent:t.speedPercent,rpm:sensors.find(s=>s.id===t.rpmSensorId)}));
@@ -74,7 +76,7 @@ class SuiteRuntime extends EventEmitter{
  }
  getAudio(){if(this.closed)throw Error('Batto ist geschlossen.');if(!this.audio)this.audio=new TouchAudio({helperPath:path.join(this.fanRoot,'BattoAudioControl.exe'),getJarvis:()=>({volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted}),setJarvis:patch=>{this.jarvis.update({...this.jarvis.settings,...(patch.volume===undefined?{}:{speechVolume:patch.volume}),...(patch.muted===undefined?{}:{speechMuted:patch.muted})});return {volume:this.jarvis.settings.speechVolume,muted:this.jarvis.settings.speechMuted};}});return this.audio;}
  async start(){void this.fanControl.inspect().catch(()=>{});await this.fan.start();await this.startServer();this.timer=setInterval(async()=>{await this.fan.poll();if(!this.closed){this.jarvis.poll();this.emit('state',this.snapshot());}},2000);this.timer.unref();if(this.jarvis.settings.microphoneEnabled)this.voice.configure(this.jarvis.settings);}
- snapshot(){return {hardware:this.hardware.status,jarvis:this.jarvis.snapshot(),fan:this.fan.catalog?{...this.fan.catalog,state:this.fan.snapshot}:null,fanError:this.fan.error,fanControl:this.fanControl.snapshot(),rgb:this.rgb.snapshot(),voice:{status:this.voice.status,ready:this.voice.ready},bridge:{port:SUITE_PORT,available:!!this.server}};}
+ snapshot(){return {hardware:this.hardware.status,jarvis:this.jarvis.snapshot(),fan:this.fan.catalog?{...this.fan.catalog,state:this.fan.snapshot}:null,fanError:this.fan.error,fanControl:this.fanControl.snapshot(),corsairDirect:this.corsairDirect.snapshot(),rgb:this.rgb.snapshot(),voice:{status:this.voice.status,ready:this.voice.ready},bridge:{port:SUITE_PORT,available:!!this.server}};}
  listen(){if(this.listeningUntil>Date.now())return {ok:false,text:'Jarvis hört bereits zu.'};this.listeningUntil=Date.now()+45000;const s=this.jarvis.settings;const greeting=s.voiceEnabled&&s.greeting?`${s.address?s.address+', ':''}${s.greeting}`:'';if(this.voice.send({command:'listen',greeting})===false){this.listeningUntil=0;return {ok:false,text:this.voice.status};}clearTimeout(this.listenTimer);this.listenTimer=setTimeout(()=>{this.listeningUntil=0;if(!this.jarvis.settings.microphoneEnabled&&this.voice.child)this.voice.send({command:'microphone',enabled:false});},45000);this.listenTimer.unref();return {ok:true};}
  stopSpeech(){this.jarvis.cancelPendingModeration();this.jarvis.chatPending=[];clearTimeout(this.listenTimer);this.listeningUntil=0;if(this.voice.child){this.voice.send({command:'stop'});if(!this.jarvis.settings.microphoneEnabled)this.voice.send({command:'microphone',enabled:false});}return {ok:true};}
  async askAi(text,s,memory,signal){
@@ -87,15 +89,32 @@ class SuiteRuntime extends EventEmitter{
    if(req.headers.host!==`127.0.0.1:${SUITE_PORT}`||req.headers.origin&&req.headers.origin!==`http://127.0.0.1:${SUITE_PORT}`){res.writeHead(403).end();return;}
    const supplied=Buffer.from(String(req.headers.authorization||'').replace(/^Bearer /,''));if(supplied.length!==expected.length||!crypto.timingSafeEqual(supplied,expected)){res.writeHead(401).end();return;}
    const reply=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
-   if(req.method==='GET'&&req.url==='/api/state'){const dual=this.getDual?.();reply(200,{hardware:this.hardware.status,fanControl:this.fanControl.snapshot(),sensors:this.fan.snapshot?.sensors||[],voice:this.voice.status,program:dual?.config.program,scenes:this.jarvis.settings.sceneAliases,dual:dual?{revision:dual.revision,running:dual.running(),prepared:dual.state?.prepared===true,outputs:Object.fromEntries(Object.entries(dual.state?.outputs||{}).map(([id,value])=>[id,{state:value.state}]))}:null,bot:this.getHost?.()?.botStatus?.(),jarvis:{chatEnabled:this.jarvis.settings.chatEnabled,chatMode:this.jarvis.settings.chatMode,chatSource:this.jarvis.settings.chatSource,speechMuted:this.jarvis.settings.speechMuted},generatedUtc:new Date().toISOString()});return;}
+   if(req.method==='GET'&&req.url==='/api/state'){const dual=this.getDual?.();reply(200,{hardware:this.hardware.status,fanControl:this.fanControl.snapshot(),corsairDirect:this.corsairDirect.snapshot(),sensors:this.fan.snapshot?.sensors||[],voice:this.voice.status,program:dual?.config.program,scenes:this.jarvis.settings.sceneAliases,dual:dual?{revision:dual.revision,running:dual.running(),prepared:dual.state?.prepared===true,outputs:Object.fromEntries(Object.entries(dual.state?.outputs||{}).map(([id,value])=>[id,{state:value.state}]))}:null,bot:this.getHost?.()?.botStatus?.(),jarvis:{chatEnabled:this.jarvis.settings.chatEnabled,chatMode:this.jarvis.settings.chatMode,chatSource:this.jarvis.settings.chatSource,speechMuted:this.jarvis.settings.speechMuted},generatedUtc:new Date().toISOString()});return;}
    if(req.method==='GET'&&req.url==='/api/catalog'){reply(200,this.controls.catalog());return;}
-   if(req.method!=='POST'||!['/api/command','/api/control'].includes(req.url)){reply(404,{});return;}
+   if(req.method!=='POST'||!['/api/command','/api/control','/api/corsair-direct/enumerate','/api/corsair-direct/control','/api/corsair-direct/manual','/api/fan-control/inspect','/api/fan-control/control'].includes(req.url)){reply(404,{});return;}
    if(!String(req.headers['content-type']).startsWith('application/json')){reply(415,{});return;}
-   try{let body='';for await(const chunk of req){body+=chunk;if(body.length>8192){reply(413,{});return;}}const data=JSON.parse(body);if(req.url==='/api/control'){const result=await this.controls.execute(data);reply(200,result);return;}if(typeof data.text!=='string'||data.text.length>500){reply(400,{});return;}const result=await this.jarvis.execute(data.text,{source:'streamdeck'});reply(result.ok?200:409,result);}catch(e){reply(400,{ok:false,message:e.message});}
+   try{
+    let body='';for await(const chunk of req){body+=chunk;if(body.length>8192){reply(413,{});return;}}
+    const data=JSON.parse(body);if(!data||typeof data!=='object'||Array.isArray(data)){reply(400,{});return;}
+    if(req.url==='/api/corsair-direct/enumerate'){reply(200,await this.corsairDirect.enumerate());return;}
+    if(req.url==='/api/corsair-direct/control'){
+     if(typeof data.enabled!=='boolean')throw Error('Bitte die direkte Corsair-Steuerung ein- oder ausschalten.');
+     const state=await this.corsairDirect.enable(data.enabled,data);if(state.active)await this.rgb.refreshCorsairDirect();reply(200,state);return;
+    }
+    if(req.url==='/api/corsair-direct/manual'){reply(200,await this.corsairDirect.setManual(data));return;}
+    if(req.url==='/api/fan-control/inspect'){reply(200,await this.fanControl.inspect());return;}
+    if(req.url==='/api/fan-control/control'){
+     if(typeof data.enabled!=='boolean')throw Error('Bitte die PC-Lüftersteuerung ein- oder ausschalten.');
+     reply(200,await this.fanControl.enable(data.enabled));return;
+    }
+    if(req.url==='/api/control'){const result=await this.controls.execute(data);reply(200,result);return;}
+    if(typeof data.text!=='string'||data.text.length>500){reply(400,{});return;}
+    const result=await this.jarvis.execute(data.text,{source:'streamdeck'});reply(result.ok?200:409,result);
+   }catch(e){reply(400,{ok:false,message:e.message,...(e.code?{code:e.code}:{})});}
   });
   await new Promise((resolve,reject)=>{this.server.once('error',reject);this.server.listen(SUITE_PORT,'127.0.0.1',resolve);});
   fs.writeFileSync(path.join(this.directory,'bridge.json'),JSON.stringify({port:SUITE_PORT,token:this.token,pid:process.pid,protocol:1}));
  }
- async close(){this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.jarvis.cancelPendingModeration();this.voice.close();this.audio?.close();try{await this.fanControl.close();}finally{this.fan.close();this.server?.close();try{await this.rgb.close();}finally{await this.hardware.close();}}}
+ async close(){await this.corsairDirect.close();await this.fanControl.close();await this.rgb.close();this.closed=true;clearInterval(this.timer);clearTimeout(this.listenTimer);this.jarvis.cancelPendingModeration();this.voice.close();this.audio?.close();this.fan.close();this.server?.close();await this.hardware.close();}
 }
 module.exports={SuiteRuntime,FanClient,VoiceClient};

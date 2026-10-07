@@ -20,6 +20,7 @@ public static unsafe class NativeExports
     static readonly SemaphoreSlim WindowsGate = new(1, 1);
     static readonly SemaphoreSlim LianLiGate = new(1, 1);
     static readonly SemaphoreSlim InventoryGate = new(1, 1);
+    static readonly SemaphoreSlim CorsairGate = new(1, 1);
     static readonly ConcurrentDictionary<nint, int> Outputs = new();
     static WirelessSession? wireless;
     static FanModule? fan;
@@ -27,6 +28,8 @@ public static unsafe class NativeExports
     static LianLiModule? lianli;
     static ServicesModule? serviceControl;
     static InventoryModule? inventory;
+    static CorsairDirectModule? corsairDirect;
+    static CorsairOwnership? corsairOwnership;
     static object? lastWirelessScan;
 
     /// <summary>cdecl ABI: int Invoke(const uint8_t*, int32_t, uint8_t**, int32_t*). Result 0 means a JSON envelope was returned.</summary>
@@ -71,7 +74,7 @@ public static unsafe class NativeExports
             string provider = request.TryGetProperty("provider", out var providerValue) ? RequiredText(providerValue, 20) : "wireless";
             string command = request.TryGetProperty("command", out var commandValue) ? RequiredText(commandValue, 30) : throw new ArgumentException("Hardwarebefehl fehlt.");
             ValidateProperties(request, provider, command);
-            var gate = provider == "fan" ? FanGate : provider == "windows" ? WindowsGate : provider == "lianli" ? LianLiGate : provider == "inventory" ? InventoryGate : WirelessGate;
+            var gate = provider == "fan" ? FanGate : provider == "windows" ? WindowsGate : provider == "lianli" ? LianLiGate : provider == "inventory" ? InventoryGate : provider == "corsair-direct" ? CorsairGate : WirelessGate;
             if (!gate.Wait(TimeSpan.FromSeconds(5))) return Serialize(new { requestId, ok = false, error = new { code = "HARDWARE_BUSY", message = "Batto verarbeitet noch eine Hardwareanfrage. Bitte kurz warten." } });
             try
             {
@@ -79,6 +82,8 @@ public static unsafe class NativeExports
                 if (command == "self-test" && provider == "wireless") return Serialize(new { requestId, ok = true, result = SelfCheck() });
                 if (command == "self-test" && provider == "lianli") return Serialize(new { requestId, ok = true, result = LianLiSelfCheck() });
                 if (command == "self-test" && provider == "inventory") return Serialize(new { requestId, ok = true, result = InventoryModule.Fixtures() });
+                if (command == "self-test" && provider == "corsair-direct") return Serialize(new { requestId, ok = true, result = CorsairSelfCheck() });
+                if (provider == "corsair-direct") return DispatchCorsair(requestId, request);
                 if (provider == "fan")
                 {
                     fan ??= new FanModule();
@@ -89,6 +94,22 @@ public static unsafe class NativeExports
                 if (provider == "windows")
                 {
                     windows ??= new WindowsModule();
+                    if (command == "resume-corsair")
+                    {
+                        // Serialize resume with native takeover/release: a cached OFF snapshot alone can race a new ON.
+                        if (!CorsairGate.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("Die Corsair-Steuerung wird noch umgestellt.");
+                        try
+                        {
+                            if (corsairDirect != null)
+                            {
+                                var state = JsonSerializer.SerializeToElement(CachedCorsairStatus(), Json);
+                                if (!state.GetProperty("released").GetBoolean())
+                                    throw new CorsairDirectException("CORSAIR_RELEASE_REQUIRED", "Die direkte Corsair-Steuerung muss zuerst vollständig freigegeben werden.");
+                            }
+                            return Serialize(new { requestId, ok = true, result = windows.Dispatch(request) });
+                        }
+                        finally { CorsairGate.Release(); }
+                    }
                     return Serialize(new { requestId, ok = true, result = windows.Dispatch(request) });
                 }
                 if (provider == "lianli")
@@ -131,6 +152,7 @@ public static unsafe class NativeExports
             {
                 WirelessUsbException usb => usb.Code,
                 LightingException lighting => lighting.Code,
+                CorsairDirectException corsair => corsair.Code,
                 WirelessAnimationTooLargeException => "WIRELESS_ANIMATION_TOO_LARGE",
                 DecoderFallbackException or JsonException or ArgumentException or InvalidOperationException => "HARDWARE_INVALID_REQUEST",
                 OperationCanceledException or TimeoutException => "HARDWARE_TIMEOUT",
@@ -138,6 +160,61 @@ public static unsafe class NativeExports
             };
             return Serialize(new { requestId, ok = false, error = new { code, message = error.Message } });
         }
+    }
+
+    static object EmptyCorsairLease() => new { ok = true, active = false, released = true, retryRequired = false, confirmationRequired = false,
+        paused = Array.Empty<string>(), remaining = Array.Empty<string>(), services = Array.Empty<object>(), errors = Array.Empty<object>(), inProcess = true };
+    static object CachedCorsairStatus()
+    {
+        using var cached = JsonDocument.Parse("{\"command\":\"status\"}");
+        return corsairDirect!.Dispatch(cached.RootElement);
+    }
+    static byte[] DispatchCorsair(int requestId, JsonElement request)
+    {
+        // Keep service construction lazy: status, idle OFF and pure checks never access SCM.
+        corsairDirect ??= new CorsairDirectModule(
+            confirmed => (corsairOwnership ??= new CorsairOwnership()).Take(confirmed),
+            () => (object?)corsairOwnership?.Release() ?? EmptyCorsairLease(),
+            () => (object?)corsairOwnership?.Status() ?? EmptyCorsairLease());
+        try
+        {
+            object reply = corsairDirect.Dispatch(request);
+            var value = JsonSerializer.SerializeToElement(reply, Json);
+            if (value.TryGetProperty("ok", out var succeeded) && succeeded.ValueKind == JsonValueKind.False)
+            {
+                var state = value.TryGetProperty("state", out var snapshot) ? snapshot.Clone() : value;
+                string message = state.TryGetProperty("error", out var detail) && detail.ValueKind == JsonValueKind.String
+                    ? detail.GetString() ?? "" : "";
+                return Serialize(new { requestId, ok = false, result = state,
+                    error = new { code = "CORSAIR_RELEASE_REQUIRED", message = message.Length > 0 ? message : "Die Corsair-Steuerung benötigt einen erneuten Freigabeversuch." } });
+            }
+            return Serialize(new { requestId, ok = true, result = reply });
+        }
+        catch (Exception failure)
+        {
+            string code = failure switch
+            {
+                CorsairDirectException corsair => corsair.Code,
+                ArgumentException or InvalidOperationException or JsonException => "HARDWARE_INVALID_REQUEST",
+                TimeoutException or OperationCanceledException => "HARDWARE_TIMEOUT",
+                _ => "CORSAIR_HARDWARE_ERROR"
+            };
+            // The snapshot carries any remaining hardware/service ownership through errors for OFF retry.
+            return Serialize(new { requestId, ok = false, result = CachedCorsairStatus(), error = new { code, message = failure.Message } });
+        }
+    }
+    static object CorsairSelfCheck()
+    {
+        byte[] firmwareCapture = [0, 0, 0, 2, 0, 2, 9, 0xe8, 1];
+        var version = CorsairDirectProtocol.Firmware(CorsairDirectProtocol.Reply(firmwareCapture, CorsairDirectProtocol.FirmwareCommand));
+        var lease = JsonSerializer.SerializeToElement(CorsairOwnership.Fixtures(), Json);
+        bool passed = version == new Version(2, 9, 488)
+            && CorsairDirectProtocol.Packet(CorsairDirectProtocol.HardwareCommand, []).Length == 513
+            && lease.GetProperty("ok").GetBoolean() && lease.GetProperty("passed").GetInt32() >= 40;
+        if (!passed) throw new InvalidOperationException("Die interne direkte Corsair-Prüfung ist fehlgeschlagen.");
+        return new { passed = true, hardwarePackets = 0, fanWrites = 0, realServiceControls = 0, childProcesses = 0,
+            capturedFirmwareReply = true, serviceLeaseChecks = lease.GetProperty("passed").GetInt32(),
+            corsairModuleCreated = corsairDirect != null, serviceControlCreated = corsairOwnership != null };
     }
 
     static object ScanWireless()
@@ -191,7 +268,7 @@ public static unsafe class NativeExports
     }
     static void ValidateProperties(JsonElement request, string provider, string command)
     {
-        if (provider is not "wireless" and not "fan" and not "windows" and not "lianli" and not "inventory") throw new ArgumentException("Unbekannter Hardwarebereich.");
+        if (provider is not "wireless" and not "fan" and not "windows" and not "lianli" and not "inventory" and not "corsair-direct") throw new ArgumentException("Unbekannter Hardwarebereich.");
         string[] common = ["requestId", "provider", "command"];
         string[] specific = provider == "fan" && command == "manual" ? ["id", "duty", "fanConfirmed"]
             : provider == "fan" && command == "curve" ? ["id", "sensorId", "points", "fanConfirmed", "failsafeDuty"]
@@ -199,14 +276,18 @@ public static unsafe class NativeExports
             : provider == "wireless" && command == "take-control" ? ["confirmLConnectPause"]
             : provider == "windows" && command == "set" ? ["deviceId", "colors"]
             : provider == "windows" && command == "effect" ? ["deviceId", "modeId", "brightness", "speed", "colors", "direction"]
+            : provider == "corsair-direct" && (command is "take-control" or "enable") ? ["confirmICuePause", "hubId"]
+            : provider == "corsair-direct" && command == "manual" ? ["id", "duty", "fanConfirmed"]
+            : provider == "corsair-direct" && (command is "set" or "set-colors") ? ["deviceId", "colors"]
             : provider == "lianli" && command == "effect" ? ["deviceId", "effectId", "brightness", "speed", "colors", "direction", "controllerScope", "confirmWholeController"] : [];
         var allowed = common.Concat(specific).ToHashSet(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in request.EnumerateObject())
             if (!seen.Add(property.Name) || !allowed.Contains(property.Name)) throw new ArgumentException("Die Hardwareanfrage enthält ungültige oder doppelte Felder.");
-        bool known = command == "capabilities" || (command == "self-test" && (provider is "wireless" or "fan" or "lianli" or "inventory")) || (provider == "wireless"
+        bool known = command == "capabilities" || (command == "self-test" && (provider is "wireless" or "fan" or "lianli" or "inventory" or "corsair-direct")) || (provider == "wireless"
             ? command is "status" or "enumerate" or "animation" or "take-control" or "release-control" or "control-status" or "close" or "shutdown"
-            : provider == "windows" ? command is "status" or "enumerate" or "set" or "effect" or "release" or "close" or "show"
+            : provider == "windows" ? command is "status" or "enumerate" or "set" or "effect" or "release" or "close" or "show" or "suspend-corsair" or "resume-corsair"
+            : provider == "corsair-direct" ? command is "status" or "control-status" or "enumerate" or "enable" or "take-control" or "heartbeat" or "telemetry" or "manual" or "set" or "set-colors" or "release" or "release-control" or "close" or "shutdown"
             : provider == "lianli" ? command is "status" or "enumerate" or "effect" or "telemetry" or "close"
             : provider == "inventory" ? command is "status" or "platform" or "kingston" or "close"
             : command is "status" or "scan" or "enable" or "heartbeat" or "manual" or "curve" or "disable" or "shutdown");
@@ -215,7 +296,7 @@ public static unsafe class NativeExports
             && (!failsafe.TryGetInt32(out int duty) || duty != 100)) throw new ArgumentException("Die Lüfter-Notfallleistung muss 100 Prozent betragen.");
     }
     static object Capabilities() => new { abi = 1, inProcess = true, childProcesses = false, vendorServiceControlAvailable = true,
-        automaticVendorPause = false, providers = new[] { "wireless", "fan", "windows", "lianli", "inventory" }, maximumRequestBytes = MaximumRequestBytes, maximumResponseBytes = MaximumResponseBytes };
+        automaticVendorPause = false, providers = new[] { "wireless", "fan", "windows", "lianli", "inventory", "corsair-direct" }, maximumRequestBytes = MaximumRequestBytes, maximumResponseBytes = MaximumResponseBytes };
     static object LianLiSelfCheck()
     {
         var fixtures = JsonSerializer.SerializeToElement(LianLiModule.Fixtures(), Json);

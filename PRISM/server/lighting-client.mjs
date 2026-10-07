@@ -10,12 +10,13 @@ import { integratedClients, InProcessStrimerControl } from './in-process-lightin
 
 /** Independent sessions keep a missing manufacturer's service from hiding other devices. */
 export class LightingClient extends EventEmitter {
-  constructor({ clients, strimerControl, hardware } = {}) {
+  constructor({ clients, strimerControl, hardware, corsairDirectControl } = {}) {
     super();
-    this.clients = clients || (hardware ? integratedClients(hardware) : [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()]);
+    this.clients = clients || (hardware ? integratedClients(hardware,corsairDirectControl) : [new WindowsLightingClient(), new KingstonServiceClient(), new LianLiLightingClient(), new LianLiWirelessClient()]);
     this.backend = 'windows'; this.host = null; this.port = null; this.protocol = null;
     this.devices = []; this.details = {}; this.routes = new Map(); this.errors = new Map(); this.invalid = false;
     this.hardware = hardware; this.controlQueue = Promise.resolve(); this.quitting = false; this.hardwareQuitPromise = null;
+    this.windowsSuspended=false;
     this.strimerControl = strimerControl ?? (hardware ? new InProcessStrimerControl(hardware) : new StrimerControl());
     this.strimerControl.on('lost', error => {
       const provider=this.wirelessProvider();
@@ -67,6 +68,30 @@ export class LightingClient extends EventEmitter {
     } catch (error) { this.devices = []; this.routes.clear(); this.invalid = true; throw error; }
   }
   async connect() { return this.scan(); }
+  windowsProviders(){return this.clients.filter(client=>client instanceof WindowsLightingClient||client.nativeProvider==='windows');}
+  beginWindowsLightingSuspend(){
+    this.windowsSuspended=true;
+    const providers=this.windowsProviders(),ids=this.devices.filter(device=>providers.includes(this.routes.get(device.id))).map(device=>device.id);
+    for(const provider of providers)provider.beginCorsairSuspend?.();
+    if(ids.length)this.emit('providerDisconnected',{deviceIds:ids,message:'Die iCUE-Anbindung wird vor dem direkten Corsair-Zugriff freigegeben.'});
+    this.refresh();
+  }
+  async suspendWindowsLighting(){
+    this.beginWindowsLightingSuspend();
+    for(const provider of this.windowsProviders()){
+      try{if(!provider.suspendCorsair)throw new BridgeError('Diese Windows-Anbindung unterstützt keine sichere iCUE-Übergabe.','CORSAIR_SDK_UNSUPPORTED',422);await provider.suspendCorsair();this.errors.delete(provider);}
+      catch(error){this.errors.set(provider,error.message);this.refresh();throw error;}
+    }
+    this.windowsSuspended=false;this.refresh();return this.devices.map(publicController);
+  }
+  async resumeWindowsLighting(){
+    this.beginWindowsLightingSuspend();
+    for(const provider of this.windowsProviders()){
+      try{if(!provider.resumeCorsair)throw new BridgeError('Diese Windows-Anbindung unterstützt keine sichere iCUE-Rückgabe.','CORSAIR_SDK_UNSUPPORTED',422);await provider.resumeCorsair();this.errors.delete(provider);}
+      catch(error){this.errors.set(provider,error.message);this.refresh();throw error;}
+    }
+    this.windowsSuspended=false;this.refresh();return this.devices.map(publicController);
+  }
   wirelessProvider() { const values=this.clients.filter(client=>client instanceof LianLiWirelessClient||client.backend==='lianli-wireless');return values.length===1?values[0]:null; }
   setStrimerControl(enabled, confirmed=false) {
     if (typeof enabled !== 'boolean') return Promise.reject(new BridgeError('Bitte die Strimer-Steuerung ein- oder ausschalten.','INVALID_STRIMER_CONTROL',400));
@@ -166,8 +191,18 @@ export class LightingClient extends EventEmitter {
     this.refresh();
     return this.devices.map(publicController);
   }
+  async refreshCorsairDirect(){
+    const providers=this.clients.filter(client=>client.backend==='corsair-direct');
+    if(providers.length!==1)throw new BridgeError('Die gemeinsame Corsair-Anbindung ist nicht eindeutig verfügbar.','CORSAIR_CONTROL_MISSING',422);
+    const provider=providers[0],ids=this.devices.filter(device=>this.routes.get(device.id)===provider).map(device=>device.id);
+    if(ids.length)this.emit('providerDisconnected',{deviceIds:ids,message:'Die direkte Corsair-Geräteliste wird aktualisiert.'});
+    try{await provider.scan();this.errors.delete(provider);}
+    catch(error){this.errors.set(provider,error.message);provider.devices=[];this.refresh();throw error;}
+    this.refresh();return this.devices.map(publicController);
+  }
   owner(device) {
     const client = this.routes.get(device.id);
+    if(this.windowsSuspended&&this.windowsProviders().includes(client))throw new BridgeError('Die iCUE-Geräte werden gerade sicher übergeben.','CORSAIR_SDK_SUSPENDED',409);
     if (this.invalid || !client?.connected || !client.devices?.some(current => current === device)) throw new BridgeError('Dieses RGB-Gerät ist nicht mehr verbunden. Bitte erneut suchen.', 'DEVICE_NOT_FOUND', 404);
     assertDeviceAllowed(device);
     return client;

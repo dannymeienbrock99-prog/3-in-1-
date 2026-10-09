@@ -10,7 +10,8 @@
 }
 
 .pc-preview__base,
-.pc-preview__lighting {
+.pc-preview__lighting,
+.pc-preview__points {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -22,6 +23,47 @@
 .pc-preview__lighting {
   mix-blend-mode: screen;
 }
+
+.pc-preview__point {
+  position: absolute;
+  z-index: 1;
+  width: clamp(14px, 2.5%, 26px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  font: inherit;
+}
+.pc-preview__point:hover { box-shadow: 0 0 0 1px #ffffffa0; background: transparent; }
+.pc-preview__point:focus-visible { outline: 2px solid var(--accent, #d4ae5d); outline-offset: 1px; }
+.pc-preview__legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 25px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border, #24303c);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.pc-preview__legend span { display: inline-flex; align-items: center; gap: 8px; }
+.pc-preview__legend-dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #17212b;
+  border-radius: 50%;
+  background: #00def0;
+  box-shadow: 0 0 0 1px #f5f8ff, 0 0 5px #00def050;
+}
+.pc-preview__legend-dot--selected { background: #ff2525; box-shadow: 0 0 0 2px #f5f8ff; }
+.pc-preview__legend-dot--preview { background: #c684ff; box-shadow: 0 0 0 1px #f5f8ff, 0 0 5px #c684ff50; }
 
 .pc-preview__msi-board { position:absolute; left:12%; top:8%; width:52%; height:74%; object-fit:fill; clip-path:inset(2% 4% 1% 8%); pointer-events:none; }
 .pc-preview__msi-foreground { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }

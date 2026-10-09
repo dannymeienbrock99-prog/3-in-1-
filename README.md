@@ -1,4 +1,6 @@
-# Batto 3-in-1 · 1.18.2
+# Batto 3-in-1 · 1.18.3
+
+Die Setup-Vorschau zeigt RGB-Punkte direkt auf den Lüfterringen und Naben, RAM-Lichtleisten, dem Kühler-Rand, der Grafikkarten-Lichtleiste und dem unteren LED-Streifen. Das ASUS-Display bleibt frei. Bestätigte iCUE-Lüfterkanäle werden auch bei generischen RGB-Controllern in der Lüftervorschau berücksichtigt. Die Auswahl gilt weiterhin für den gemeldeten Controller. Ein Klick oder Enter markiert den Vorschaupunkt rot und wählt die zugehörige Komponente; Pfeiltasten wechseln den Punktfokus. Punkte folgen gespeicherten Positionen und Größen. Die Auswahl schaltet die Live-Ausgabe aus; eine Übertragung erfolgt weiterhin bewusst über „Auf Geräte anwenden“. Die Punktanordnung ist schematisch und enthält keine behaupteten Hardware-LED-Adressen.
 
 Die Reparatur gleicht die Desktop-/Workstation- und ASUS-/MSI-Erkennung zwischen Oberfläche und Geräteanbindung ab. Alte Lüftermesswerte und Anschlussbestätigungen werden nach einer Unterbrechung nicht weiter als aktuell verwendet; Fehlermeldungen bleiben lesbar. Die direkte Corsair-Steuerung weist unvollständige LED-Zuordnungen zurück. Im integrierten Windows-RGB-Modus wird keine nicht verfügbare separate Fensteraktion mehr angeboten.
 

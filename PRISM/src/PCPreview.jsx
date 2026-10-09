@@ -1,17 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createEffectSampler } from './effect-color.js';
 import { getMotherboardPreview } from './motherboard-preview.js';
 import { getMemoryPreview, getMsiDimmPositions } from './memory-preview.js';
+import { PC_COMPONENTS as COMPONENTS, getPreviewDeviceTypes, getPreviewPoints } from './pc-preview-points.js';
 import './pc-preview.css';
 
-const COMPONENTS = [
-  { type: 'fans', label: 'Lüfter', x: 82.2, y: 47.6, width: 21, height: 76 },
-  { type: 'motherboard', label: 'Mainboard', x: 37, y: 30, width: 16, height: 21 },
-  { type: 'ram', label: 'Arbeitsspeicher', x: 52.7, y: 29, width: 9, height: 33 },
-  { type: 'gpu', label: 'Grafikkarte', x: 39, y: 61.8, width: 57, height: 16 },
-  { type: 'strip', label: 'LED-Streifen', x: 41, y: 86.6, width: 61, height: 6 },
-  { type: 'strimer', label: 'Strimer-Kabel', x: 61, y: 69, width: 13, height: 32 },
-];
 const LAYOUT_KEY='batto.rgb.pc-layout.v1';
 const deviceIdentity=device=>`${device.provider||''}|${device.name||''}|${device.category||''}`;
 function readLayout(){try{const raw=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}');return Object.fromEntries(COMPONENTS.map(component=>{const value=raw[component.type]||{},next={};for(const [key,min,max]of [['x',0,100],['y',0,100],['width',2,100],['height',2,100]])next[key]=Number.isFinite(value[key])?Math.max(min,Math.min(max,value[key])):component[key];next.deviceId=['string','number'].includes(typeof value.deviceId)?value.deviceId:null;next.deviceIdentity=typeof value.deviceIdentity==='string'?value.deviceIdentity:null;return [component.type,next];}));}catch{return Object.fromEntries(COMPONENTS.map(component=>[component.type,{...component,deviceId:null,deviceIdentity:null}]));}}
@@ -114,13 +107,52 @@ function drawLighting(canvas, config, types, time, msiDimmPositions = null, layo
   context.shadowBlur = 0;
 }
 
-export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], running = true, onSelectType, onSelectDevice, system, devices = [], preview = false }) {
+function drawPreviewPoints(canvas, points, config, types, time, selectedId) {
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  const width = canvas.width, height = canvas.height;
+  const density = width / Math.max(1, canvas.getBoundingClientRect().width);
+  const radius = Math.max(3 * density, width * 0.0048);
+  const active = new Set(types), sample = createEffectSampler(config, time);
+  context.clearRect(0, 0, width, height);
+  for (const point of points) {
+    const x = point.x * width, y = point.y * height;
+    const selected = point.id === selectedId;
+    const value = active.has(point.type) ? sample(point.position, point.sampleIndex) : null;
+    const fill = selected ? '#ff2525' : value
+      ? `rgba(${value.color.join(',')},${value.alpha})` : '#66717b';
+    // A separate, normally blended canvas keeps the dark outlines readable on
+    // white hardware. The light-effect canvas deliberately uses screen blending.
+    context.shadowBlur = selected ? 4 * density : 2 * density;
+    context.shadowColor = selected ? '#ff252570' : '#ffffff60';
+    context.beginPath();
+    context.arc(x, y, radius + (selected ? 3 : 0.8) * density, 0, Math.PI * 2);
+    context.fillStyle = '#f6f8ff';
+    context.fill();
+    context.shadowBlur = 0;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fillStyle = '#18212b';
+    context.fill();
+    context.fillStyle = fill;
+    context.fill();
+    context.strokeStyle = '#18212b';
+    context.lineWidth = 1.2 * density;
+    context.stroke();
+  }
+}
+
+export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], running = true, onSelectType, onSelectDevice, onPreviewSelect, system, devices = [], preview = false }) {
   const canvasRef = useRef(null);
+  const pointsCanvasRef = useRef(null);
   const timeRef = useRef(0);
   const effectRef = useRef(config.effect);
   const [failedImage, setFailedImage] = useState(null);
   const [failedBoard, setFailedBoard] = useState(false);
   const [layout,setLayout]=useState(readLayout),[editing,setEditing]=useState(null),[arrange,setArrange]=useState(false),[storageError,setStorageError]=useState('');
+  const [selectedPointId, setSelectedPointId] = useState(null);
+  const [focusedPointId, setFocusedPointId] = useState(null);
+  const selectedPointIdentity = useRef(null);
   const drag=useRef(null),area=useRef(null);
   const motherboard = getMotherboardPreview(system);
   const memory = getMemoryPreview(system);
@@ -128,10 +160,29 @@ export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], r
   const dimmCount = isMsi ? memory.visibleModules.length : null;
   const chosenImage = motherboard.image;
   const usesFallback = failedImage === chosenImage;
-  const matching=component=>devices.filter(device=>component.type==='strimer'?/strimer/i.test(device.name||''):device.category===component.type&&!/strimer/i.test(device.name||''));
+  const matching=component=>devices.filter(device=>getPreviewDeviceTypes(device).includes(component.type));
   const assignedDevice=type=>devices.find(device=>String(device.id)===String(layout[type].deviceId)&&deviceIdentity(device)===layout[type].deviceIdentity);
   const visibleComponents=COMPONENTS.filter(component=>preview||matching(component).length||assignedDevice(component.type)||component.type==='motherboard'&&motherboard.modelName||component.type==='ram'&&memory.count||component.type==='gpu'&&Array.isArray(system?.gpus)&&system.gpus.length);
   const illuminatedTypes=visibleComponents.filter(component=>layout[component.type]?.deviceId!==null?assignedDevice(component.type)&&selectedIds.some(id=>String(id)===String(layout[component.type].deviceId)):selectedTypes.includes(component.type)).map(component=>component.type);
+  const visibleTypesKey = visibleComponents.map(component => component.type).join(',');
+  const illuminatedTypesKey = illuminatedTypes.join(',');
+  const points = useMemo(() => getPreviewPoints({
+    types: visibleTypesKey.split(',').filter(Boolean), layout,
+    dimmPositions: isMsi ? getMsiDimmPositions(dimmCount) : null,
+  }), [visibleTypesKey, layout, isMsi, dimmCount]);
+  const pointTabId = points.some(point => point.id === focusedPointId) ? focusedPointId : points[0]?.id;
+  const chosenPoint = points.find(point => point.id === selectedPointId);
+  function pointIdentity(type) {
+    const assigned = assignedDevice(type);
+    return (assigned ? [assigned] : matching({ type }))
+      .map(device => `${device.id}|${deviceIdentity(device)}`).sort().join('\n');
+  }
+  const currentPointIdentity = chosenPoint ? pointIdentity(chosenPoint.type) : null;
+  const activePointId = chosenPoint && illuminatedTypes.includes(chosenPoint.type)
+    && currentPointIdentity === selectedPointIdentity.current ? selectedPointId : null;
+  useEffect(() => {
+    if (selectedPointId && !activePointId) setSelectedPointId(null);
+  }, [selectedPointId, activePointId]);
   useEffect(()=>{try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(layout));setStorageError('');}catch{setStorageError('Positionen konnten nicht gespeichert werden.');}},[layout]);
   useEffect(()=>setFailedBoard(false),[motherboard.brand]);
   const imageSource = usesFallback ? '/pc-base.png' : chosenImage;
@@ -149,12 +200,18 @@ export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], r
     let lastTime;
     let lastPaint;
     let visible=true;
-    const render = () => drawLighting(canvas, config, illuminatedTypes, timeRef.current, isMsi ? getMsiDimmPositions(dimmCount) : null, layout);
+    const pointCanvas = pointsCanvasRef.current;
+    const render = () => {
+      drawLighting(canvas, config, illuminatedTypes, timeRef.current, isMsi ? getMsiDimmPositions(dimmCount) : null, layout);
+      drawPreviewPoints(pointCanvas, points, config, illuminatedTypes, timeRef.current, activePointId);
+    };
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const density = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.round(rect.width * density));
       canvas.height = Math.max(1, Math.round(rect.height * density));
+      pointCanvas.width = canvas.width;
+      pointCanvas.height = canvas.height;
       render();
     };
     const tick = (now) => {
@@ -185,9 +242,30 @@ export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], r
       reducedMotion.removeEventListener('change', updateAnimation);
       document.removeEventListener('visibilitychange',updateAnimation);
     };
-  }, [config, selectedTypes, selectedIds, running, isMsi, dimmCount, layout, devices, preview]);
+  }, [config, illuminatedTypesKey, running, isMsi, dimmCount, layout, points, activePointId]);
 
-  function select(component){setEditing(component.type);const device=assignedDevice(component.type);if(device)onSelectDevice?.(device.id);else onSelectType?.(component.type);}
+  function select(component, pointId = null){onPreviewSelect?.();selectedPointIdentity.current=pointId?pointIdentity(component.type):null;setSelectedPointId(pointId);setEditing(component.type);const device=assignedDevice(component.type);if(device)onSelectDevice?.(device.id);else onSelectType?.(component.type);}
+  function selectPoint(event, fallback) {
+    let point = fallback;
+    if (event.detail > 0) {
+      const bounds = area.current.getBoundingClientRect();
+      const distance = candidate => (candidate.x * bounds.width + bounds.left - event.clientX) ** 2
+        + (candidate.y * bounds.height + bounds.top - event.clientY) ** 2;
+      // Dense cable dots share generous click targets. Always select the dot
+      // nearest the pointer, rather than whichever overlapping button is on top.
+      point = points.reduce((nearest, candidate) => distance(candidate) < distance(nearest) ? candidate : nearest, fallback);
+      area.current.querySelector(`[data-point-id="${point.id}"]`)?.focus({ preventScroll: true });
+    }
+    select(COMPONENTS.find(component => component.type === point.type), point.id);
+  }
+  function focusPoint(event, index) {
+    const offsets = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    if (!(event.key in offsets) && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1
+      : (index + offsets[event.key] + points.length) % points.length;
+    area.current?.querySelector(`[data-point-id="${points[nextIndex].id}"]`)?.focus();
+  }
   function move(event){if(!drag.current||!arrange)return;const bounds=area.current.getBoundingClientRect(),start=drag.current;setLayout(current=>({...current,[start.type]:{...current[start.type],x:Math.max(0,Math.min(100,start.x+(event.clientX-start.clientX)/bounds.width*100)),y:Math.max(0,Math.min(100,start.y+(event.clientY-start.clientY)/bounds.height*100))}}));}
 
   return <>
@@ -203,13 +281,30 @@ export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], r
         {getMsiDimmPositions(dimmCount).map((position, index) => <span key={index} className="pc-preview__msi-dimm" style={{ left:`${position * 100}%` }} title={memory.visibleModules[index].modelName || memory.visibleModules[index].partNumber || 'Erkannter RAM-Riegel'} aria-hidden="true"/>)}
       </> : null}
       <canvas ref={canvasRef} className="pc-preview__lighting" aria-hidden="true" />
+      <canvas ref={pointsCanvasRef} className="pc-preview__points" aria-hidden="true" />
       {onSelectType && visibleComponents.map(component => {const {type,label}=component,{x,y,width,height}=layout[type];return (
         <button type="button" key={type} className="pc-preview__target"
           style={{ left: `${x - width / 2}%`, top: `${y - height / 2}%`, width: `${width}%`, height: `${height}%` }}
           aria-label={`${label} in der Vorschau auswählen`}
           aria-pressed={illuminatedTypes.includes(type)} title={label} onClick={()=>select(component)} onPointerDown={event=>{if(arrange){event.currentTarget.setPointerCapture(event.pointerId);drag.current={type,x,y,clientX:event.clientX,clientY:event.clientY};setEditing(type);}}} onPointerMove={move} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}><span>{arrange?label:null}</span></button>
       );})}
+      {!arrange && onSelectType ? points.map((point, index) => {
+        const label = COMPONENTS.find(component => component.type === point.type).label;
+        return <button key={point.id} type="button" className="pc-preview__point"
+          data-point-id={point.id} data-component={point.type} data-x={point.x} data-y={point.y}
+          style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+          tabIndex={point.id === pointTabId ? 0 : -1}
+          aria-label={`${label}: RGB-Punkt ${index + 1} in der Vorschau auswählen`}
+          aria-pressed={point.id === activePointId} title={`${label} · Vorschaupunkt auswählen`}
+          onFocus={() => setFocusedPointId(point.id)} onKeyDown={event => focusPoint(event, index)}
+          onClick={event => selectPoint(event, point)} />;
+      }) : null}
     </div>
+    {points.length ? <div className="pc-preview__legend" aria-label="RGB-Punkte in der Vorschau">
+      <span><i className="pc-preview__legend-dot" aria-hidden="true"/>RGB-Punkt</span>
+      <span><i className="pc-preview__legend-dot pc-preview__legend-dot--selected" aria-hidden="true"/>Ausgewählt</span>
+      <span><i className="pc-preview__legend-dot pc-preview__legend-dot--preview" aria-hidden="true"/>Vorschau</span>
+    </div> : null}
     <div className="pc-preview__board-caption">
       <span className="pc-preview__board-label">{previewLabel}</span>
       {motherboard.modelName ? <span className="pc-preview__board-model">Erkannt: {motherboard.modelName}</span> : null}
@@ -219,7 +314,7 @@ export function PCPreview({ config = {}, selectedTypes = [], selectedIds = [], r
       <span className="pc-preview__board-note">{preview?'Beispielaufbau.':'Nur erkannte oder ausdrücklich zugeordnete Komponenten sind auswählbar; das Hintergrundbild ist keine Stückliste.'}</span>
       <label className="pc-arrange-toggle"><input type="checkbox" checked={arrange} onChange={event=>setArrange(event.target.checked)}/>Komponenten verschieben</label>
     </div>
-    {editing&&visibleComponents.some(component=>component.type===editing)?<section className="pc-component-editor" aria-label="Vorschau-Komponente bearbeiten"><div className="pc-component-heading"><h3>{COMPONENTS.find(component=>component.type===editing).label} anordnen</h3><button className="secondary" onClick={()=>{setLayout(current=>({...current,[editing]:{...COMPONENTS.find(component=>component.type===editing),deviceId:null}}));}}>Position zurücksetzen</button></div><div className="pc-component-values">{[['x','Mitte links'],['y','Mitte oben'],['width','Breite'],['height','Höhe']].map(([key,label])=><label key={key}>{label} %<input type="number" aria-label={`${label} der PC-Komponente`} min={key==='width'||key==='height'?2:0} max="100" step=".5" value={Math.round(layout[editing][key]*10)/10} onChange={event=>setLayout(current=>({...current,[editing]:{...current[editing],[key]:Math.max(key==='width'||key==='height'?2:0,Math.min(100,+event.target.value))}}))}/></label>)}</div><label className="pc-device-mapping">Gerät zuordnen<select aria-label="Gerät der PC-Komponente" value={assignedDevice(editing)?.id??''} onChange={event=>{const value=event.target.value,device=devices.find(item=>String(item.id)===value);setLayout(current=>({...current,[editing]:{...current[editing],deviceId:device?.id??null,deviceIdentity:device?deviceIdentity(device):null}}));if(device)onSelectDevice?.(device.id);}}><option value="">Automatisch nach Komponententyp</option>{devices.map(device=><option key={device.id} value={device.id}>{device.name}</option>)}</select></label><p>Die Zuordnung wählt ein RGB-Gerät für die Effekteinstellungen aus. Position und Größe ändern ausschließlich die Vorschau.</p>{storageError?<p role="status">{storageError}</p>:null}</section>:null}
+    {editing&&visibleComponents.some(component=>component.type===editing)?<section className="pc-component-editor" aria-label="Vorschau-Komponente bearbeiten"><div className="pc-component-heading"><h3>{COMPONENTS.find(component=>component.type===editing).label} anordnen</h3><button className="secondary" onClick={()=>{setLayout(current=>({...current,[editing]:{...COMPONENTS.find(component=>component.type===editing),deviceId:null}}));}}>Position zurücksetzen</button></div><div className="pc-component-values">{[['x','Mitte links'],['y','Mitte oben'],['width','Breite'],['height','Höhe']].map(([key,label])=><label key={key}>{label} %<input type="number" aria-label={`${label} der PC-Komponente`} min={key==='width'||key==='height'?2:0} max="100" step=".5" value={Math.round(layout[editing][key]*10)/10} onChange={event=>setLayout(current=>({...current,[editing]:{...current[editing],[key]:Math.max(key==='width'||key==='height'?2:0,Math.min(100,+event.target.value))}}))}/></label>)}</div><label className="pc-device-mapping">Gerät zuordnen<select aria-label="Gerät der PC-Komponente" value={assignedDevice(editing)?.id??''} onChange={event=>{onPreviewSelect?.();const value=event.target.value,device=devices.find(item=>String(item.id)===value);setLayout(current=>({...current,[editing]:{...current[editing],deviceId:device?.id??null,deviceIdentity:device?deviceIdentity(device):null}}));if(device)onSelectDevice?.(device.id);}}><option value="">Automatisch nach Komponententyp</option>{devices.map(device=><option key={device.id} value={device.id}>{device.name}</option>)}</select></label><p>Die Zuordnung wählt ein RGB-Gerät für die Effekteinstellungen aus. Position und Größe ändern ausschließlich die Vorschau.</p>{storageError?<p role="status">{storageError}</p>:null}</section>:null}
   </>;
 }
 
